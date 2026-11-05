@@ -87,7 +87,7 @@
     const live = d.agr.filter((a) => a.active && mon(a.end_month) >= NOW), liveIds = new Set(live.map((a) => a.id));
     const fixedNow = K.fixed.get(NOW) || 0, rollNow = K.roll.get(NOW) || 0, incNow = fixedNow + rollNow, hpNow = K.hpMonth.get(NOW) || 0;
     const atRisk = K.expoAll.filter((x) => x.k !== 'fixed'), atRiskAmt = atRisk.reduce((t, x) => t + x.amt, 0);
-    const lapsed = K.expoAll.filter((x) => x.k === 'none' || x.k === 'expired');
+    const lapsed = K.expoAll.filter((x) => x.k === 'none' || x.k === 'expired'), unlinked = K.expoAll.filter((x) => x.k === 'unlinked');
     const hpEnding = live.filter((a) => mon(a.end_month) <= NOW + 12), hpFreed = hpEnding.reduce((t, a) => t + (+a.regular_payment || 0), 0);
     const endSoon = K.con.filter((c) => !c.rolling && c.end_date && mon(c.end_date) >= NOW && mon(c.end_date) <= NOW + 3);
 
@@ -107,6 +107,7 @@
     const concerns = [], focus = [], opps = [];
     if (idleHP.length) concerns.push({ h: `<b>${idleHP.length} units sat idle all month but are still on HP</b> – ${gbp(idleHPcost)}/month of finance with no hire behind it (biggest: ${idleHP.slice(0, 3).map((u) => esc(u.unit) + ' ' + gbp(u.hp)).join(', ')}).`, go: 'fleet', lk: 'Fleet' });
     if (lapsed.length) concerns.push({ h: `<b>${lapsed.length} assets on HP have no live contract term</b> (${K.expoAll.filter((x) => x.k === 'none').length} with no contract, ${K.expoAll.filter((x) => x.k === 'expired').length} with an expired term) – ${gbp(lapsed.reduce((t, x) => t + x.amt, 0))} of HP still to pay.`, go: 'hpvc', lk: 'Exposure by asset' });
+    if (unlinked.length) concerns.push({ h: `<b>${unlinked.length} financed assets are on hire in MCS but have no contract loaded here</b> (about ${gbp(unlinked.reduce((t, x) => t + x.rate, 0))}/month of hire). Their contract terms are missing, so the income and risk figures are understated until the MCS link is in.`, go: 'hpvc', lk: 'Exposure by asset' });
     if (incNow && rollNow / incNow > .4) concerns.push({ h: `<b>${pct(rollNow / incNow)} of contracted income is rolling hire</b> (${gbp(rollNow)}/month) – customers can end it on notice while the HP carries on.`, go: 'hpvc' });
     if (low && low.head < 0) concerns.push({ h: `<b>Cash dips below the ${gbp(M.s.min_buffer)} buffer in ${labL(rm(low.k))}</b> (${gbp(low.head)} headroom).`, go: 'cashflow', lk: 'Cash flow' });
     else if (low && low.head < 25000) concerns.push({ h: `<b>Cash headroom is thin in ${labL(rm(low.k))}</b> – only ${gbp(low.head)} above the buffer.`, go: 'cashflow', lk: 'Cash flow' });
