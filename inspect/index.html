@@ -329,16 +329,52 @@ function guideSVG(key){
 }
 
 /* =====================================================================
+   CLOUD (sends the inspection straight to the office portal)
+   Job links like  inspect/#c=<job id>  are created in the portal. Photos upload as they are taken.
+   ===================================================================== */
+const CLOUD_CFG={url:"https://swqpnumuqtsgwpqowxid.supabase.co",key:"sb_publishable_n25KLWM-u9E0t6whfWMgew_uYWquUJT"};
+let CLOUD=null, syncT=null;
+async function rpc(fn,body){
+  const r=await fetch(CLOUD_CFG.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:CLOUD_CFG.key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.message||"Request failed");
+  return j;
+}
+function dataToBlob(d){ return new Blob([dataToU8(d)],{type:"image/jpeg"}); }
+async function putFile(path,blob,type){
+  const r=await fetch(CLOUD_CFG.url+"/storage/v1/object/inspections/"+path,{method:"POST",headers:{apikey:CLOUD_CFG.key,"Content-Type":type,"x-upsert":"false"},body:blob});
+  if(!r.ok) throw new Error("upload "+r.status);
+}
+async function cloudUpload(key){
+  if(!CLOUD||!S) return true;
+  S.up=S.up||{}; if(S.up[key]) return true;
+  const d=PCACHE[key]||await DB.get(`photo|${JOB.id}|${key}`); if(!d) return false;
+  const path=`${CLOUD.id}/${key}_${Date.now().toString(36)}.jpg`;
+  try{ await putFile(path,dataToBlob(d),"image/jpeg"); S.up[key]=path; save(); return true; }catch(e){ return false; }
+}
+function cloudDirty(){ if(!CLOUD) return; clearTimeout(syncT); syncT=setTimeout(async()=>{ try{ await rpc("pub_save_job",{p_job:CLOUD.id,p_data:{state:S,up:S.up||{}},p_submit:false}); }catch(e){} },2500); }
+async function openCloud(id){
+  chrome(false); setHeader("Vehicle inspection"); $("app").innerHTML=`<div class="card"><div class="spin"></div><p class="muted small" style="text-align:center">Opening your job…</p></div>`;
+  try{
+    const j=await rpc("pub_get_job",{p_job:id});
+    if(!TYPES[j.vehicle_type]) throw new Error("type");
+    if(j.status==="submitted"||j.status==="reviewed"){ $("app").innerHTML=`<div class="card" style="text-align:center"><div class="big">✓</div><h1>Already sent</h1><p>The inspection for <b>${esc(j.reg)}</b> has been sent to the office. Thank you.</p></div>${footerHTML()}`; return; }
+    CLOUD={id:j.id};
+    await startJob({v:1,id:j.id,type:j.vehicle_type,reg:j.reg,stock:j.stock_ref||"",inspector:j.inspector||"",where:j.location||"",notes:j.notes||"",created:today()});
+  }catch(e){ renderBadLink(); }
+}
+/* =====================================================================
    ROUTING
    ===================================================================== */
 async function route(){
   const h=location.hash||"";
+  if(h.startsWith("#c=")) return openCloud(h.slice(3));
   if(h.startsWith("#j=")){ try{ await startJob(b64d(h.slice(3))); }catch(e){ renderBadLink(); } return; }
   if(h==="#admin") return renderAdmin();
   if(h==="#refs") return renderRefs();
   renderHome();
 }
-window.addEventListener("hashchange",()=>{ if(!(JOB && location.hash.startsWith("#j="))) route(); });
+window.addEventListener("hashchange",()=>{ if(!(JOB && (location.hash.startsWith("#j=")||location.hash.startsWith("#c=")))) route(); });
 
 function renderHome(){
   JOB=null; chrome(false); setHeader("Vehicle inspection");
@@ -440,7 +476,7 @@ function buildSteps(){
   STEPS.push({kind:"review",section:"Check & send"});
 }
 function fieldSet(){ const t=TYPES[JOB.type]; return new Set([...BASE_FIELDS,...t.fields].filter(k=>!FIELDS[k].cats||FIELDS[k].cats.includes(t.cat))); }
-function save(){ clearTimeout(saveT); saveT=setTimeout(()=>DB.set("state|"+JOB.id,S),250); }
+function save(){ clearTimeout(saveT); saveT=setTimeout(()=>DB.set("state|"+JOB.id,S),250); cloudDirty(); }
 function setA(id,v){ S.answers[id]=v; save(); }
 function toggleNA(id,on){ S.answers[id]=on?"N/A":""; save(); render(); }
 
@@ -521,7 +557,7 @@ async function onPhoto(key,inp){
   }catch(e){ $("photobusy").classList.add("hidden"); $("photobody").classList.remove("hidden"); $("steperr").innerHTML=`<div class="err">That photo couldn't be read. Please try again.</div>`; }
 }
 async function confirmPhoto(key,ok){
-  if(ok){ S.photos[key].status="ok"; S.photos[key].match=true; save(); S.step++; save(); render(); toast("Photo saved"); }
+  if(ok){ S.photos[key].status="ok"; S.photos[key].match=true; save(); S.step++; save(); render(); toast("Photo saved"); cloudUpload(key); }
   else { delete S.photos[key]; delete PCACHE[key]; await DB.del(`photo|${JOB.id}|${key}`); save(); render(); }
 }
 async function compress(file,max){
@@ -562,8 +598,13 @@ async function onVideo(inp){
   if(f.size>250*1048576){ $("steperr").innerHTML=`<div class="err">That video is ${(f.size/1048576).toFixed(0)} MB – too big to send. Please record a shorter one (about a minute).</div>`; return; }
   $("photobusy").classList.remove("hidden"); $("photobody").classList.add("hidden");
   await DB.set("video|"+JOB.id,f); if(VURL) URL.revokeObjectURL(VURL); VURL=URL.createObjectURL(f);
-  S.video={status:"ok",size:f.size,type:f.type||"video/mp4",name:f.name||"video.mp4"}; save(); render();
+  S.video={status:"ok",size:f.size,type:f.type||"video/mp4",name:f.name||"video.mp4"}; save(); render(); cloudVideo(f);
   if(f.size>100*1048576) toast("Large video – the pack may be slow to send");
+}
+async function cloudVideo(f){
+  if(!CLOUD) return; if(f.size>48*1048576){ S.video.cloud="too big to upload – please send it by WhatsApp"; save(); return; }
+  const ext=((f.name.match(/\.([a-z0-9]+)$/i)||[])[1]||(f.type.includes("quicktime")?"mov":"mp4")).toLowerCase();
+  try{ const path=`${CLOUD.id}/video_${Date.now().toString(36)}.${ext}`; await putFile(path,f,f.type||"video/mp4"); S.up=S.up||{}; S.up.video=path; save(); }catch(e){}
 }
 function skipVideo(){ const r=$("skipr").value.trim(); if(!r){ $("steperr").innerHTML=`<div class="err">Please say why the video can't be recorded.</div>`; return; } S.video={status:"skipped",reason:r}; save(); render(); }
 
@@ -617,7 +658,7 @@ function rDefects(){
     <div id="steperr"></div></div>`;
 }
 function hydrateDefectThumbs(){ (S.defects||[]).forEach(async (d,i)=>{ const v=PCACHE[d.key]||await DB.get(`photo|${JOB.id}|${d.key}`); if(v){ PCACHE[d.key]=v; const el=$("dthumb"+i); if(el) el.src=v; } }); }
-async function addDefect(inp){ const f=inp.files[0]; if(!f) return; const d=await compress(f,1600), key="defect_"+Date.now().toString(36); PCACHE[key]=d; await DB.set(`photo|${JOB.id}|${key}`,d); S.defects=S.defects||[]; S.defects.push({key,note:""}); save(); render(); }
+async function addDefect(inp){ const f=inp.files[0]; if(!f) return; const d=await compress(f,1600), key="defect_"+Date.now().toString(36); PCACHE[key]=d; await DB.set(`photo|${JOB.id}|${key}`,d); S.defects=S.defects||[]; S.defects.push({key,note:""}); save(); render(); cloudUpload(key); }
 async function delDefect(i){ const d=S.defects[i]; await DB.del(`photo|${JOB.id}|${d.key}`); S.defects.splice(i,1); save(); render(); }
 
 /* ---------- validation ---------- */
@@ -646,7 +687,7 @@ function rReview(){
     <h3>Photos</h3><ul class="list">${photoSteps.map(([s,i])=>{ const p=S.photos[s.key]; return `<li><img class="thumb" data-k="${s.key}" alt=""><span class="dot ${p?.status==="ok"?"ok":p?.status==="skipped"?"skip":"bad"}"></span><div class="grow">${esc(stepName(s))}${p?.status==="skipped"?`<div class="small muted">Skipped: ${esc(p.reason)}</div>`:""}</div><button class="btn link" onclick="goto(${i})">Edit</button></li>`; }).join("")}</ul>
     <h3>Walkaround video</h3><ul class="list"><li><span class="dot ${S.video?.status==="ok"?"ok":S.video?.status==="skipped"?"skip":"bad"}"></span><div class="grow">${S.video?.status==="ok"?`Recorded (${(S.video.size/1048576).toFixed(0)} MB)`:S.video?.status==="skipped"?`Skipped: ${esc(S.video.reason)}`:"Not recorded"}</div><button class="btn link" onclick="goto(${STEPS.findIndex(s=>s.kind==="video")})">Edit</button></li></ul>
     <h3>Details</h3><table class="t">${specRows().map(([g,l,v])=>`<tr><td class="muted small">${esc(l)}</td><td>${esc(v)}</td></tr>`).join("")}</table>
-    <p class="small muted" style="margin-top:14px">Tapping <b>Finish &amp; send</b> packs everything into one file (photos + report) for you to send to ${esc(BRAND.shortName)}.</p>
+    <p class="small muted" style="margin-top:14px">${CLOUD?"Tapping <b>Finish &amp; send</b> sends everything straight to the office.":`Tapping <b>Finish &amp; send</b> packs everything into one file (photos + report) for you to send to ${esc(BRAND.shortName)}.`}</p>
     <div id="steperr"></div><div id="sendout"></div></div>`;
 }
 function hydrateReviewThumbs(){ document.querySelectorAll("img[data-k]").forEach(async el=>{ const k=el.dataset.k; const v=PCACHE[k]||await DB.get(`photo|${JOB.id}|${k}`); if(v){ PCACHE[k]=v; el.src=v; } }); }
@@ -667,7 +708,7 @@ function specRows(){
   return rows;
 }
 function safeName(s){ return String(s).replace(/[^A-Za-z0-9_-]+/g,"_"); }
-async function submit(){
+async function submitZip(){
   const out=$("sendout"); out.innerHTML=`<div class="spin"></div><p class="muted small" style="text-align:center">Building your inspection pack…</p>`; $("nextbtn").disabled=true;
   try{
     const files=[], photoList=[]; let n=0;
@@ -685,6 +726,26 @@ async function submit(){
     await deliver(zip,fname,out,true);
   }catch(e){ out.innerHTML=`<div class="err">Something went wrong building the pack. Please try again.</div>`; }
   $("nextbtn").disabled=false;
+}
+async function submit(){
+  if(!CLOUD) return submitZip();
+  const out=$("sendout"); out.innerHTML=`<div class="spin"></div><p class="muted small" style="text-align:center">Sending to the office…</p>`; $("nextbtn").disabled=true;
+  try{
+    S.up=S.up||{}; const failed=[];
+    for(const st of STEPS.filter(x=>x.kind==="photo"&&S.photos[x.key]?.status==="ok")) if(!(await cloudUpload(st.key))) failed.push(st.key);
+    for(const d of (S.defects||[])) if(!(await cloudUpload(d.key))) failed.push(d.key);
+    if(S.video?.status==="ok"&&!S.up.video&&S.video.size<=48*1048576){ const v=await DB.get("video|"+JOB.id); if(v) await cloudVideo(v); }
+    if(failed.length){ out.innerHTML=`<div class="err">${failed.length} photo(s) didn't upload – check your signal and press Finish &amp; send again.</div>`; $("nextbtn").disabled=false; return; }
+    const photos=STEPS.filter(x=>x.kind==="photo").map(st=>({key:st.key,label:stepName(st),status:S.photos[st.key]?.status||"missing",reason:S.photos[st.key]?.reason||"",path:S.up[st.key]||null}));
+    const defects=(S.defects||[]).map((d,i)=>({key:d.key,note:d.note||"",path:S.up[d.key]||null}));
+    const data={state:S,up:S.up,rows:specRows(),photos,defects,video:S.video?{status:S.video.status,reason:S.video.reason||"",path:S.up.video||null,note:S.video.cloud||""}:null,submitted:new Date().toISOString()};
+    await rpc("pub_save_job",{p_job:CLOUD.id,p_data:data,p_submit:true});
+    S.submitted=new Date().toISOString(); DB.set("state|"+JOB.id,S);
+    chrome(false);
+    $("app").innerHTML=`<div class="card" style="text-align:center"><div class="big">✓</div><h1>Sent to the office</h1><p>Thank you. The inspection for <b>${esc(JOB.reg)}</b> has been sent – you can close this page.</p></div>
+      <div class="card"><p class="small muted">Want a copy for yourself? You can also download the whole inspection as a file.</p><button class="btn block" id="zipbtn">Download a copy</button><div id="sendout"></div></div>${footerHTML()}`;
+    $("zipbtn").onclick=()=>{ const t=CLOUD; CLOUD=null; submitZip().finally(()=>{CLOUD=t;}); };
+  }catch(e){ out.innerHTML=`<div class="err">Couldn't send: ${esc(e.message)}. Check your signal and try again.</div>`; $("nextbtn").disabled=false; }
 }
 async function deliver(blob,fname,box,isJob){
   const file=new File([blob],fname,{type:"application/zip"});
