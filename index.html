@@ -184,7 +184,8 @@ async function pageHPVC(el){
  const hpMonth=new Map();d.sch.filter(r=>r.m>=NOW&&live.has(r.agreement_id)).forEach(r=>hpMonth.set(r.m,(hpMonth.get(r.m)||0)+r.amount));
  const last=Math.max(...hpMonth.keys(),NOW+36);
  const horizon=Math.min(last,NOW+60);
- const con=d.con.filter(c=>c.active);
+ const hpKeys=[...hpUnit.keys()];const mapU=u=>{const k=String(u).replace(/\s+/g,'').toUpperCase();return hpKeys.find(h=>{const hk=h.replace(/\s+/g,'').toUpperCase();return hk===k||(k.length>=4&&hk.startsWith(k))})||u};
+ const con=d.con.filter(c=>c.active).map(c=>Object.assign({},c,{unit:mapU(c.unit),mcsUnit:c.unit}));
  const fixed=new Map(),roll=new Map();
  con.forEach(c=>{const s=c.start_date?mon(c.start_date):NOW;const e=c.end_date?mon(c.end_date):(c.rolling?horizon:horizon);
   for(let m=Math.max(s,NOW);m<=Math.min(e,horizon);m++){const tgt=(c.rolling||!c.end_date)?roll:fixed;tgt.set(m,(tgt.get(m)||0)+ +c.monthly_rate)}});
@@ -197,6 +198,8 @@ async function pageHPVC(el){
   const after=[...mm.entries()].filter(([m])=>ce==null?true:(ce==='rolling'?false:m>ce));
   return{u,ce,hpEnd,months:after.length,amt:after.reduce((s,[,v])=>s+v,0),monthly:mm.get(NOW)||[...mm.values()][0]||0}}).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
  const totExpo=expo.reduce((s,x)=>s+x.amt,0);
+ const rollRows=[...hpUnit.entries()].filter(([u])=>cEnd.get(u)==='rolling').map(([u,mm])=>{const c=con.filter(x=>x.unit===u&&(x.rolling||!x.end_date))[0]||{};return{u,cust:c.customer,rate:+c.monthly_rate||0,hp:mm.get(NOW)||[...mm.values()][0]||0,left:mm.size,rem:[...mm.values()].reduce((t,v)=>t+v,0),notes:c.notes}}).sort((a,b)=>b.rem-a.rem);
+ const rollHP=rollRows.reduce((t,r)=>t+r.rem,0);
  const noCon=expo.filter(x=>x.ce==null).length;
  const gapNow=(fixed.get(NOW)||0)+(roll.get(NOW)||0)-(hpMonth.get(NOW)||0);
  const worst=months.reduce((w,x)=>(x.fx-x.hp<w.v?{v:x.fx-x.hp,m:x.m}:w),{v:Infinity,m:NOW});
@@ -206,10 +209,11 @@ async function pageHPVC(el){
   {l:'Committed revenue this month',v:gbp(fixed.get(NOW)||0),s:'fixed-term contracts',c:'g'},
   {l:'Rolling revenue this month',v:gbp(roll.get(NOW)||0),s:'not guaranteed'},
   {l:'HP uncovered by contract',v:gbp(totExpo),s:'payments falling after a contract ends',c:'r'},
-  {l:'Assets with HP and no fixed term',v:expo.length,s:noCon+' with no contract recorded'},
+  {l:'HP on rolling hire',v:gbp(rollHP),s:rollRows.length+' assets with no fixed end – not guaranteed',c:'o'},{l:'Assets with HP and no fixed term',v:expo.length,s:noCon+' with no contract recorded'},
   {l:'Tightest month',v:hasCon?monLong(worst.m):'–',s:hasCon?(worst.v<0?'shortfall ':'surplus ')+gbp(Math.abs(worst.v)):''}])+
  `<div class="card"><h3>HP payments vs committed revenue</h3><div class="hint">Bars are HP due each month. The solid line is fixed-term contract revenue, the dashed line adds rolling hire.</div><div class="legend"><span><i style="background:${C.blue2}"></i>HP payments</span><span><i style="background:${C.good}"></i>Committed (fixed)</span><span><i style="background:${C.orange}"></i>Incl. rolling</span></div><div id="ch2"></div></div>`+
  `<div class="card"><h3>Exposure by asset</h3><div class="hint">HP payments that fall due after the asset's fixed contract ends (or with no contract at all). This is the risk when hire ends but finance continues.</div>${expo.length?`<div class="box2"><table><thead><tr><th>Asset</th><th>Contract ends</th><th>HP ends</th><th class="n">Months uncovered</th><th class="n">Monthly HP</th><th class="n">Uncovered HP</th></tr></thead><tbody>${expo.map(x=>`<tr><td><b>${esc(x.u)}</b></td><td>${x.ce==null?'<span class="pill r">No contract</span>':x.ce==='rolling'?'<span class="pill a">Rolling</span>':monLong(x.ce)}</td><td>${monLong(x.hpEnd)}</td><td class="n">${x.months}</td><td class="n">${gbp(x.monthly)}</td><td class="n">${gbp(x.amt)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="hint">Nothing uncovered.</div>'}</div>`+
+ `<div class="card"><h3>Assets on rolling hire</h3><div class="hint">Hire has no fixed end date, so the income isn't guaranteed while the HP continues. Notice terms from MCS are shown where recorded.</div>${rollRows.length?`<div class="box2"><table><thead><tr><th>Asset</th><th>Customer</th><th class="n">Hire £/month</th><th class="n">HP £/month</th><th class="n">Cover</th><th class="n">HP months left</th><th class="n">HP remaining</th></tr></thead><tbody>${rollRows.map(r=>`<tr><td><b>${esc(r.u)}</b></td><td>${esc(r.cust||'')}${r.notes?`<div class="small muted">${esc(r.notes)}</div>`:''}</td><td class="n">${gbp(r.rate)}</td><td class="n">${gbp(r.hp)}</td><td class="n"><span class="pill ${r.hp&&r.rate<r.hp?'r':'g'}">${r.hp?(r.rate/r.hp).toFixed(1)+'x':'–'}</span></td><td class="n">${r.left}</td><td class="n">${gbp(r.rem)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="hint">None.</div>'}</div>`+
  `<div class="card"><h3>Month by month</h3><div class="box2"><table><thead><tr><th>Month</th><th class="n">HP</th><th class="n">Committed</th><th class="n">Rolling</th><th class="n">Net (committed – HP)</th></tr></thead><tbody>${months.slice(0,36).map(x=>{const n=x.fx-x.hp;return `<tr><td>${monLong(x.m)}</td><td class="n">${gbp(x.hp)}</td><td class="n">${gbp(x.fx)}</td><td class="n">${gbp(x.rl)}</td><td class="n" style="color:${hasCon?(n<0?C.bad:C.good):C.mut}">${hasCon?gbp(n):'–'}</td></tr>`}).join('')}</tbody></table></div></div>`+
  `<div class="card"><h3>Add a contract</h3><div class="hint">Manual entry for now. Leave the end date blank (or tick rolling) for rolling hire.</div><div class="form"><div><label>Asset (e.g. TR512)</label><input id="c_u"></div><div><label>Customer</label><input id="c_c"></div><div><label>Monthly rate £</label><input id="c_r" type="number" step="0.01"></div><div><label>Start</label><input id="c_s" type="date"></div><div><label>End (fixed term)</label><input id="c_e" type="date"></div><div><label>Rolling?</label><select id="c_o"><option value="false">Fixed</option><option value="true">Rolling</option></select></div><button id="c_add" type="button">Add contract</button></div><div class="err" id="c_err"></div></div>`;
  // chart
