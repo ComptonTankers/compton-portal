@@ -53,7 +53,7 @@
 
     el.innerHTML = X.head('Overview', 'Cash, HP, contracts and stock at a glance') +
       X.tiles([
-        { l: 'Cash at ' + (lastClosed ? lastClosed.k : 'start'), v: gbp(cash), s: 'actual, last closed month', c: 'g' },
+        { l: 'Cash at ' + (lastClosed ? lab(mi(lastClosed.k + '-01')) + ' close' : 'start'), v: gbp(cash), s: 'actual, last closed month', c: 'g' },
         { l: 'Lowest headroom ahead', v: low ? gbp(low.head) : '–', s: low ? 'in ' + lab(mi(low.k + '-01')) + (low.head < 0 ? ' · below buffer' : ' · above buffer') : '', c: low && low.head < 0 ? 'r' : '' },
         { l: 'Contracted hire / month', v: gbp(incNow), s: con.filter((c) => inM(c, NOW)).length + ' contracts running now' },
         { l: 'HP / month', v: gbp(hpNow), s: live.length + ' live agreements' },
