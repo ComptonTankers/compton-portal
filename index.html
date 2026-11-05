@@ -52,6 +52,26 @@ iframe.emb{width:100%;border:0;height:calc(100vh - 20px);margin:-24px -28px;widt
 .mb{display:none;position:sticky;top:0;background:var(--blue);color:#fff;padding:10px 14px;z-index:30;align-items:center;gap:10px}
 .mb button{background:none;border:1px solid #fff5;color:#fff;border-radius:8px;padding:4px 10px;font:inherit}
 @media(max-width:820px){aside{transform:translateX(-100%);transition:.2s}aside.open{transform:none}main{margin-left:0;padding:16px}.mb{display:flex}iframe.emb{margin:-16px;width:calc(100% + 32px)}}
+
+.cfwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px;max-height:78vh}
+table.cf{border-collapse:separate;border-spacing:0;font-size:13px;width:max-content;min-width:100%}
+table.cf th,table.cf td{padding:3px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.cf thead th{position:sticky;top:0;background:#fafbfd;z-index:3}
+table.cf thead th{height:34px;padding-top:0;padding-bottom:0;line-height:1.2;box-sizing:border-box}table.cf thead tr:nth-child(2) th{top:34px}
+table.cf .lab{position:sticky;left:0;background:#fff;z-index:2;min-width:210px;font-weight:500;border-right:1px solid var(--line)}
+table.cf thead .lab{z-index:5;background:#fafbfd}
+table.cf th.mh{text-align:center;border-left:2px solid var(--line);font-size:13px;color:var(--fg);text-transform:none;letter-spacing:0}
+table.cf td.in{padding:1px 2px;min-width:92px}
+table.cf td.in:nth-child(3n+2){border-left:2px solid var(--line)}
+table.cf input{width:92px;text-align:right;border:1px solid transparent;border-radius:6px;padding:5px 6px;font-size:13px;background:transparent;font-variant-numeric:tabular-nums}
+table.cf input:hover{border-color:var(--line)}table.cf input:focus{outline:2px solid var(--blue2);background:#fff}
+table.cf input.auto::placeholder{color:#8a93a3;font-style:italic}table.cf input::placeholder{color:#b9c0cc}
+table.cf tr.sec td{background:#eef2f9;font-weight:700;color:var(--blue);font-size:12px;text-transform:uppercase;letter-spacing:.5px}table.cf tr.sec td.lab{background:#eef2f9;font-weight:700}
+table.cf tr.tot td{font-weight:700;background:#fafbfd}table.cf tr.tot .lab{background:#fafbfd}
+table.cf tr.bal td{font-weight:600}table.cf tr.big td{background:#eef2f9;font-size:14px}table.cf tr.big .lab{background:#eef2f9}
+table.cf td.var{font-size:12px;min-width:54px}table.cf td.var.g{color:var(--good)}table.cf td.var.b{color:var(--bad)}
+table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--mut)}
+.mini{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer;color:var(--blue)}.mini.pri2{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:600}
 </style></head><body>
 <div id="gate"><div class="box"><h2>Compton Tankers</h2><p>Staff portal – please sign in</p>
 <label for="em">Email</label><input id="em" type="email" autocomplete="username">
@@ -64,6 +84,7 @@ iframe.emb{width:100%;border:0;height:calc(100vh - 20px);margin:-24px -28px;widt
 <div class="grp">Finance</div>
 <a class="sub" href="#/hp" data-r="hp">HP overview</a>
 <a class="sub" href="#/hpvc" data-r="hpvc">HP vs Contracts</a>
+<a class="sub" href="#/cashflow" data-r="cashflow">Cash flow</a>
 <div class="grp">Stock</div>
 <a class="sub" href="#/inspections" data-r="inspections">Inspections</a>
 <button class="out" id="out" type="button">Sign out</button></aside>
@@ -212,7 +233,9 @@ function pageInspections(el){
  `<div class="card"><h3>Yard link</h3><div class="hint">This link needs no login and is safe to send. Open it, create a job, and share the job link with whoever is in the yard.</div><input readonly value="${location.origin}${location.pathname.replace(/[^/]*$/,'')}inspect/" onclick="this.select()"></div>
  <iframe class="emb" style="margin:0;width:100%;height:calc(100vh - 220px);border:1px solid var(--line);border-radius:12px" src="inspect/"></iframe>`}
 /* ---------- router ---------- */
+window.CT={api,all,gbp,esc,T,C,head,tiles,loadFinance,routes:null};
 const routes={fleet:el=>embed(el,'dashboard/'),hp:pageHP,hpvc:pageHPVC,inspections:pageInspections};
+window.CT.routes=routes;
 async function route(){
  const r=(location.hash.replace(/^#\/?/,'')||'hp').split('?')[0];const fn=routes[r]||routes.hp;
  document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.r===(routes[r]?r:'hp')));
@@ -229,4 +252,5 @@ $('menu').onclick=()=>$('side').classList.toggle('open');
 addEventListener('hashchange',()=>{if($('app').style.display==='block')route()});
 start();
 })();
-</script></body></html>
+</script>
+<script src="cashflow.js"></script></body></html>
