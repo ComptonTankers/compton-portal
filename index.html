@@ -248,7 +248,7 @@ $('pw').addEventListener('keydown',e=>{if(e.key==='Enter')$('go').click()});
 $('out').onclick=()=>{store.clear();D=null;location.hash='';location.reload()};
 $('menu').onclick=()=>$('side').classList.toggle('open');
 addEventListener('hashchange',()=>{if($('app').style.display==='block')route()});
-start();
+if(document.readyState==='complete')start();else addEventListener('load',start);
 })();
 </script>
 <script src="cashflow.js"></script>
