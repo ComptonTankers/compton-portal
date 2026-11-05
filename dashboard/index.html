@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta name="robots" content="noindex,nofollow">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compton Tankers – Hire Fleet Dashboard</title>
+<link rel="stylesheet" href="js/theme.css">
+<script src="js/d3.min.js"></script>
+<script src="js/dash-runtime.js"></script>
+</head>
+<body>
+<div id="dash-root">
+<style>
+.ct{--ct-blue:#164698;--ct-orange:#E3641D;--ct-blue-soft:#8FA9D6;font-family:var(--font-anthropic-sans);color:var(--color-fg);display:flex;flex-direction:column;gap:var(--cds-gap-lg)}
+.ct-head{display:flex;flex-wrap:wrap;align-items:center;gap:var(--cds-gap-lg);justify-content:space-between;border-bottom:4px solid var(--ct-blue);padding-bottom:var(--cds-pad-md)}
+.ct-brand{display:flex;align-items:center;gap:var(--cds-gap-lg);flex-wrap:wrap}
+.ct-logo{height:56px;width:auto;background:#FDFEFF;border-radius:var(--cds-radius);padding:6px 10px}
+.ct-title{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);margin:0;color:var(--color-fg)}
+.ct-sub{margin:4px 0 0;color:var(--color-fg-muted);font-size:var(--cds-font-size-body)}
+.ct-controls{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center}
+.ct-seg{display:inline-flex;border:1px solid var(--color-border-line);border-radius:var(--cds-radius);overflow:hidden}
+.ct-seg button{font:inherit;font-size:var(--cds-font-size-caption);background:var(--color-panel);color:var(--color-fg);border:0;padding:6px 12px;cursor:pointer}
+.ct-seg button[aria-pressed=true]{background:var(--ct-blue);color:#fff}
+.ct select,.ct input[type=search]{font:inherit;font-size:var(--cds-font-size-caption);padding:6px 8px;border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-panel);color:var(--color-fg)}
+.ct-takeaway{font-size:var(--cds-font-size-body);margin:0;line-height:1.5}
+.ct-takeaway b{font-weight:600}
+.ct-tabs{display:flex;gap:4px;border-bottom:1px solid var(--color-border-line);flex-wrap:wrap}
+.ct-tabs button{font:inherit;background:none;border:0;border-bottom:3px solid transparent;padding:8px 14px;color:var(--color-fg-muted);cursor:pointer;font-size:var(--cds-font-size-body)}
+.ct-tabs button[aria-selected=true]{color:var(--color-fg);border-bottom-color:var(--ct-orange);font-weight:600}
+.ct-page{display:flex;flex-direction:column;gap:var(--cds-gap-md)}
+.ct-page[hidden]{display:none}
+.ct-col{display:flex;flex-direction:column;gap:var(--cds-gap-md)}
+.ct-col[hidden]{display:none}
+.ct [hidden]{display:none !important}
+.ct-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--cds-gap-md)}
+.ct-tile{background:var(--color-panel);border:1px solid var(--color-border-line);border-top:4px solid var(--ct-blue);border-radius:var(--cds-radius);padding:var(--cds-pad-md);display:flex;flex-direction:column;gap:4px}
+.ct-tile.or{border-top-color:var(--ct-orange)}
+.ct-tile .lab{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ct-tile .big{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);font-variant-numeric:tabular-nums;line-height:1.15}
+.ct-tile .note{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ct-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:var(--cds-gap-md)}
+.ct-card{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);display:flex;flex-direction:column;gap:var(--cds-gap-sm);position:relative;min-width:0}
+.ct-card h3{margin:0;font-size:var(--cds-font-size-heading);font-weight:var(--cds-font-weight-medium)}
+.ct-card .note{margin:0;font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ct-chart{position:relative;min-height:120px}
+.ct-legend{display:flex;gap:var(--cds-gap-md);font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);flex-wrap:wrap}
+.ct-sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.ct-tip{position:absolute;pointer-events:none;background:var(--cds-surface-popover);border:1px solid var(--cds-border);border-radius:var(--cds-radius);box-shadow:var(--cds-shadow-popover);padding:var(--cds-pad-xs) var(--cds-pad-sm);font-size:var(--cds-font-size-caption);white-space:nowrap;z-index:5}
+.ct-tip .k{color:var(--cds-text-secondary)}
+.ct-tablebox{max-height:560px;overflow:auto}
+.ct table{border-collapse:collapse;width:100%;font-size:var(--cds-font-size-caption);font-variant-numeric:tabular-nums}
+.ct th{position:sticky;top:0;background:var(--color-panel);text-align:left;padding:6px 8px;border-bottom:2px solid var(--ct-blue);white-space:nowrap}
+.ct th button{font:inherit;font-weight:600;background:none;border:0;color:var(--color-fg);cursor:pointer;padding:0}
+.ct td{padding:5px 8px;border-bottom:1px solid var(--color-border-line);white-space:nowrap}
+.ct td.n,.ct th.n{text-align:right}
+.ct .bar{display:inline-block;height:8px;border-radius:2px;background:var(--ct-blue);vertical-align:middle;margin-right:6px}
+.ct .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:var(--cds-font-size-caption)}
+.ct .off{background:color-mix(in srgb,var(--ct-orange) 18%,transparent)}
+.ct .part{background:color-mix(in srgb,var(--ct-blue-soft) 30%,transparent)}
+.ct .full{background:color-mix(in srgb,var(--ct-blue) 14%,transparent)}
+.ct .up{color:var(--color-ok)} .ct .down{color:var(--color-bad)}
+.ct-stack{display:flex;height:28px;gap:2px;border-radius:var(--cds-radius);overflow:hidden}
+.ct-foot{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin:0}
+[data-dash-source-state=empty]{color:transparent}
+[data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
+</style>
+<div class="ct">
+  <header class="ct-head" id="top">
+    <div class="ct-brand">
+      <img class="ct-logo" alt="Compton Tankers" src="data:image/png;base64,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">
+      <div>
+        <h1 class="ct-title">Hire fleet dashboard</h1>
+        <p class="ct-sub">Tanker Rent UK Ltd · <span data-draw="period-label" data-source="periods">—</span></p>
+      </div>
+    </div>
+    <div class="ct-controls">
+      <div class="ct-seg" role="group" aria-label="Period type">
+        <button type="button" class="ct-kind" data-kind="month" aria-pressed="true">Month</button>
+        <button type="button" class="ct-kind" data-kind="quarter" aria-pressed="false">Quarter</button>
+        <button type="button" class="ct-kind" data-kind="year" aria-pressed="false">Financial year</button>
+      </div>
+      <select data-draw="period-select" data-source="periods" aria-label="Period"></select>
+    </div>
+  </header>
+
+  <p class="ct-takeaway" id="takeaway"><span data-draw="period-name" data-source="periods">—</span>: turnover of <b data-draw="kpi" data-source="summary" data-field="turnover" data-fmt="gbp">—</b>, with the fleet <b data-draw="kpi" data-source="summary" data-field="utilisation" data-fmt="pct">—</b> utilised by time. <b data-draw="kpi" data-source="summary" data-field="units_idle" data-fmt="int">—</b> of <b data-draw="kpi" data-source="summary" data-field="units" data-fmt="int">—</b> units were off hire for the whole of the latest month. <span data-draw="coverage" data-source="summary">—</span></p>
+
+  <nav class="ct-tabs" role="tablist" aria-label="Pages">
+    <button type="button" role="tab" class="ct-tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button type="button" role="tab" class="ct-tab" data-tab="utilisation" aria-selected="false">Utilisation</button>
+    <button type="button" role="tab" class="ct-tab" data-tab="revenue" aria-selected="false">Revenue &amp; customers</button>
+    <button type="button" role="tab" class="ct-tab" data-tab="units" aria-selected="false">Units</button>
+    <button type="button" role="tab" class="ct-tab" data-tab="hp" aria-selected="false">HP &amp; finance</button>
+  </nav>
+
+  <section class="ct-page" id="overview" data-page="overview">
+    <div class="ct-tiles">
+      <div class="ct-tile or" id="tile-turnover"><span class="lab">Turnover</span><span class="big" data-draw="kpi" data-source="summary" data-field="turnover" data-fmt="gbp">—</span><span class="note" data-draw="delta" data-source="summary" data-field="turnover_change">—</span></div>
+      <div class="ct-tile" id="tile-util"><span class="lab">Time utilisation</span><span class="big" data-draw="kpi" data-source="summary" data-field="utilisation" data-fmt="pct">—</span><span class="note" data-draw="delta" data-source="summary" data-field="utilisation_change">—</span></div>
+      <div class="ct-tile" id="tile-onhire"><span class="lab">Units on hire (latest month)</span><span class="big" data-draw="kpi" data-source="summary" data-field="units_on_hire" data-fmt="int">—</span><span class="note">of <span data-draw="kpi" data-source="summary" data-field="units" data-fmt="int">—</span> units in the fleet</span></div>
+      <div class="ct-tile or" id="tile-idle"><span class="lab">Units off hire all month</span><span class="big" data-draw="kpi" data-source="summary" data-field="units_idle" data-fmt="int">—</span><span class="note">Latest month in the period</span></div>
+      <div class="ct-tile" id="tile-customers"><span class="lab">Customers billed</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="customers" data-fmt="int">—</span><span class="note">Top customer: <span data-draw="kpi" data-source="customer_stats" data-field="top1_share" data-fmt="pct">—</span> of turnover</span></div>
+      <div class="ct-tile" id="tile-ytd"><span class="lab">Hire revenue, financial year to date</span><span class="big" data-draw="kpi" data-source="summary" data-field="mcs_ytd_revenue" data-fmt="gbp">—</span><span class="note">From MCS year-to-date figures · <span data-draw="kpi" data-source="summary" data-field="mcs_ytd_utilisation" data-fmt="pct">—</span> utilised</span></div>
+    </div>
+    <div class="ct-grid">
+      <div class="ct-card" id="card-turnover-type"><h3>Turnover by equipment type</h3><p class="note">Hire and sales turnover for the selected period, from the Equipment Turnover report.</p><div class="ct-chart" data-draw="chart-turnover-type" data-source="type_summary"></div></div>
+      <div class="ct-card" id="card-trend"><h3>Monthly turnover</h3><p class="note">Every month loaded so far; the selected period is in orange.</p><div class="ct-chart" data-draw="chart-trend" data-source="months"></div></div>
+      <div class="ct-card" id="card-trend-util"><h3>Monthly time utilisation</h3><p class="note">Days on hire ÷ chargeable days, each unit capped at 100%.</p><div class="ct-chart" data-draw="chart-trend-util" data-source="summary"></div></div>
+    </div>
+  </section>
+
+  <section class="ct-page" id="utilisation" data-page="utilisation" hidden>
+    <div class="ct-card" id="card-fleet-status"><h3>Where the fleet was in the latest month</h3><p class="note">Units on hire every chargeable day, part of the month, or not at all.</p>
+      <div class="ct-stack" data-draw="fleet-stack" data-source="summary"></div>
+      <div class="ct-legend"><span><span class="ct-sw" style="background:var(--ct-blue)"></span>On hire all month: <b data-draw="kpi" data-source="summary" data-field="units_full" data-fmt="int">—</b></span><span><span class="ct-sw" style="background:var(--ct-blue-soft)"></span>Part of the month: <b data-draw="kpi" data-source="summary" data-field="units_part" data-fmt="int">—</b></span><span><span class="ct-sw" style="background:var(--ct-orange)"></span>Off hire all month: <b data-draw="kpi" data-source="summary" data-field="units_idle" data-fmt="int">—</b></span></div>
+    </div>
+    <div class="ct-card" id="card-util-type"><h3>Time utilisation by equipment type</h3><p class="note">Selected period against the MCS financial-year-to-date figure. Number of units in brackets.</p>
+      <div class="ct-legend"><span><span class="ct-sw" style="background:var(--ct-orange)"></span>Selected period</span><span><span class="ct-sw" style="background:var(--ct-blue)"></span>Financial year to date (MCS)</span></div>
+      <div class="ct-chart" data-draw="chart-util-type" data-source="type_summary"></div>
+    </div>
+    <div class="ct-card" id="card-offhire"><h3>Units with no hire days in the period</h3><p class="note">Sorted by financial-year-to-date utilisation, lowest first.</p>
+      <div class="ct-tablebox"><table data-source="unit_summary" data-row-key="period,unit"><thead><tr><th data-field="unit">Unit</th><th data-field="type">Type</th><th class="n" data-field="chargeable_days">Chargeable days</th><th class="n" data-field="ytd_utilisation">FY to date</th><th class="n" data-field="ytd_revenue">FY revenue</th></tr></thead><tbody data-draw="offhire-rows" data-source="unit_summary"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="ct-page" id="revenue" data-page="revenue" hidden>
+    <div class="ct-tiles">
+      <div class="ct-tile or" id="tile-top1"><span class="lab">Largest customer's share</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="top1_share" data-fmt="pct">—</span><span class="note" data-draw="kpi" data-source="customer_stats" data-field="top1_name" data-fmt="text">—</span></div>
+      <div class="ct-tile" id="tile-top3"><span class="lab">Top 3 customers' share</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="top3_share" data-fmt="pct">—</span></div>
+      <div class="ct-tile" id="tile-top10"><span class="lab">Top 10 customers' share</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="top10_share" data-fmt="pct">—</span></div>
+      <div class="ct-tile" id="tile-rpu"><span class="lab">Hire revenue per unit per month</span><span class="big" data-draw="kpi" data-source="summary" data-field="revenue_per_unit_month" data-fmt="gbp0">—</span><span class="note">Across every unit, idle ones included</span></div>
+    </div>
+    <div class="ct-grid">
+      <div class="ct-card" id="card-customers"><h3>Top 10 customers by turnover</h3><p class="note">Selected period, all equipment types combined.</p><div class="ct-chart" data-draw="chart-customers" data-source="customer_summary"></div></div>
+      <div class="ct-card" id="card-rpu"><h3>Hire revenue per unit per month, by type</h3><p class="note">Revenue ÷ units in that type ÷ months in the period.</p><div class="ct-chart" data-draw="chart-rpu" data-source="type_summary"></div></div>
+      <div class="ct-card" id="card-ytd-type"><h3>Hire revenue by type, financial year to date</h3><p class="note">From the MCS year-to-date figures for the latest month in the period.</p><div class="ct-chart" data-draw="chart-ytd-type" data-source="type_summary"></div></div>
+    </div>
+  </section>
+
+  <section class="ct-page" id="units" data-page="units" hidden>
+    <div class="ct-card" id="card-units"><h3>Every unit</h3><p class="note">Click a column heading to sort. Utilisation is capped at 100% per unit.</p>
+      <input type="search" class="ct-search" placeholder="Search unit or type" aria-label="Search units">
+      <div class="ct-tablebox"><table data-source="unit_summary" data-row-key="period,unit"><thead><tr>
+        <th data-field="unit"><button type="button" class="ct-sort" data-col="unit">Unit</button></th>
+        <th data-field="type"><button type="button" class="ct-sort" data-col="type">Type</button></th>
+        <th data-field="status"><button type="button" class="ct-sort" data-col="status">Status</button></th>
+        <th class="n" data-field="chargeable_days"><button type="button" class="ct-sort" data-col="chargeable_days">Chargeable days</button></th>
+        <th class="n" data-field="on_hire_days"><button type="button" class="ct-sort" data-col="on_hire_days">Days on hire</button></th>
+        <th data-field="utilisation"><button type="button" class="ct-sort" data-col="utilisation">Utilisation</button></th>
+        <th class="n" data-field="revenue"><button type="button" class="ct-sort" data-col="revenue">Hire revenue</button></th>
+        <th class="n" data-field="ytd_utilisation"><button type="button" class="ct-sort" data-col="ytd_utilisation">FY to date util.</button></th>
+        <th class="n" data-field="ytd_revenue"><button type="button" class="ct-sort" data-col="ytd_revenue">FY revenue</button></th>
+      </tr></thead><tbody data-draw="unit-rows" data-source="unit_summary"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="ct-page" id="hp" data-page="hp" hidden>
+    <div class="ct-card" id="hp-empty" hidden><h3>No HP data loaded yet</h3><p class="note">Fill in the HP schedule template (one row per unit, with its monthly payment and agreement dates) and upload it. This tab will then show what each unit costs on finance against what it earns.</p></div>
+    <div class="ct-col" id="hp-body">
+      <div class="ct-tiles">
+        <div class="ct-tile" id="tile-hp-revenue"><span class="lab">Hire revenue</span><span class="big" data-draw="kpi" data-source="hp_summary" data-field="revenue" data-fmt="gbp">—</span><span class="note">Selected period, all units</span></div>
+        <div class="ct-tile or" id="tile-hp-cost"><span class="lab">HP cost</span><span class="big" data-draw="kpi" data-source="hp_summary" data-field="hp_cost" data-fmt="gbp">—</span><span class="note"><span data-draw="kpi" data-source="hp_summary" data-field="hp_share" data-fmt="pct">—</span> of hire revenue</span></div>
+        <div class="ct-tile" id="tile-hp-net"><span class="lab">Revenue after HP</span><span class="big" data-draw="kpi" data-source="hp_summary" data-field="revenue_after_hp" data-fmt="gbp">—</span><span class="note">Hire revenue minus HP payments</span></div>
+        <div class="ct-tile" id="tile-hp-commit"><span class="lab">Monthly HP commitment</span><span class="big" data-draw="kpi" data-source="hp_summary" data-field="monthly_commitment" data-fmt="gbp">—</span><span class="note">Across <span data-draw="kpi" data-source="hp_summary" data-field="units_hp" data-fmt="int">—</span> units on finance</span></div>
+        <div class="ct-tile" id="tile-hp-balance"><span class="lab">HP payments still to make</span><span class="big" data-draw="kpi" data-source="hp_summary" data-field="balance_outstanding" data-fmt="gbp">—</span><span class="note">Monthly payment × months left, excluding any balloon</span></div>
+        <div class="ct-tile or" id="tile-hp-under"><span class="lab">Units not covering their HP</span><span class="big" data-draw="kpi" data-source="hp_summary" data-field="units_not_covering" data-fmt="int">—</span><span class="note"><span data-draw="kpi" data-source="hp_summary" data-field="units_idle_on_hp" data-fmt="int">—</span> of them earned nothing</span></div>
+      </div>
+      <div class="ct-grid">
+        <div class="ct-card" id="card-hp-type"><h3>Hire revenue against HP cost, by type</h3><p class="note">Selected period. Owned units add revenue with no HP cost.</p>
+          <div class="ct-legend"><span><span class="ct-sw" style="background:var(--ct-blue)"></span>Hire revenue</span><span><span class="ct-sw" style="background:var(--ct-orange)"></span>HP cost</span></div>
+          <div class="ct-chart" data-draw="chart-hp-type" data-source="hp_type"></div></div>
+        <div class="ct-card" id="card-hp-ending"><h3>HP agreements ending</h3><p class="note">Months from the latest month loaded to each agreement's end date, and the monthly payments that stop.</p>
+          <div class="ct-tablebox"><table data-source="hp_ending" data-row-key="band"><thead><tr><th data-field="band">Ending in</th><th class="n" data-field="units">Units</th><th class="n" data-field="monthly_payment">Monthly payments freed</th><th class="n" data-field="balance_outstanding">Payments still to make</th></tr></thead><tbody data-draw="hp-ending-rows" data-source="hp_ending"></tbody></table></div></div>
+      </div>
+      <div class="ct-card" id="card-hp-units"><h3>HP against each unit</h3><p class="note">Click a heading to sort. Cover = hire revenue ÷ HP cost (below 1.0× the unit isn't paying for itself). Break-even = the utilisation the unit needs just to cover its HP at its current earning rate.</p>
+        <input type="search" class="ct-hpsearch" placeholder="Search unit, type or finance company" aria-label="Search HP units">
+        <div class="ct-tablebox"><table data-source="hp_units" data-row-key="period,unit"><thead><tr>
+          <th data-field="unit"><button type="button" class="ct-hpsort" data-col="unit">Unit</button></th>
+          <th data-field="type"><button type="button" class="ct-hpsort" data-col="type">Type</button></th>
+          <th data-field="status"><button type="button" class="ct-hpsort" data-col="status">Finance</button></th>
+          <th data-field="finance_company"><button type="button" class="ct-hpsort" data-col="finance_company">Finance company</button></th>
+          <th class="n" data-field="monthly_payment"><button type="button" class="ct-hpsort" data-col="monthly_payment">Monthly HP</button></th>
+          <th class="n" data-field="hp_cost"><button type="button" class="ct-hpsort" data-col="hp_cost">HP cost</button></th>
+          <th class="n" data-field="revenue"><button type="button" class="ct-hpsort" data-col="revenue">Hire revenue</button></th>
+          <th class="n" data-field="revenue_after_hp"><button type="button" class="ct-hpsort" data-col="revenue_after_hp">After HP</button></th>
+          <th class="n" data-field="cover"><button type="button" class="ct-hpsort" data-col="cover">Cover</button></th>
+          <th class="n" data-field="utilisation"><button type="button" class="ct-hpsort" data-col="utilisation">Utilisation</button></th>
+          <th class="n" data-field="breakeven_utilisation"><button type="button" class="ct-hpsort" data-col="breakeven_utilisation">Break-even</button></th>
+          <th data-field="end_date"><button type="button" class="ct-hpsort" data-col="end_date">HP ends</button></th>
+        </tr></thead><tbody data-draw="hp-unit-rows" data-source="hp_units"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="ct-foot">Source: MCS reports for Tanker Rent UK Ltd (Equipment Turnover, Utilisation By Time, Utilisation By Value). Financial year runs October to September. Utilisation is days on hire ÷ chargeable days, with each unit capped at 100%. Value utilisation uses actual hire revenue only. HP figures come from the HP schedule and exclude VAT.</p>
+</div>
+</div>
+<script src="js/calcs.js"></script>
+<script src="js/app.js"></script>
+<script src="js/hp.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/supabase-loader.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+/* Design tokens the dashboard uses. Change colours, fonts and spacing here. */
+:root{
+  --font-anthropic-sans: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-anthropic-serif: Georgia, "Times New Roman", serif;
+  --color-fg:#1b2430; --color-fg-muted:#5b6675; --color-bg:#f4f6f9; --color-panel:#ffffff; --color-border-line:#dde2ea;
+  --color-ok:#1d7a3e; --color-warn:#a35c00; --color-bad:#b42318;
+  --cds-font-size-caption:12px; --cds-font-size-body:15px; --cds-font-size-heading:17px; --cds-font-size-title:30px; --cds-font-weight-medium:600;
+  --cds-gap-xs:4px; --cds-gap-sm:8px; --cds-gap-md:16px; --cds-gap-lg:24px; --cds-gap-xl:32px;
+  --cds-pad-xs:4px; --cds-pad-sm:8px; --cds-pad-md:16px; --cds-pad-lg:20px; --cds-pad-xl:32px;
+  --cds-radius:8px; --cds-chart-grid:#e6e9ef; --cds-chart-axis:#9aa3af; --cds-chart-muted:#c3cad4; --cds-chart-reference:#6b7280;
+  --cds-surface-popover:#ffffff; --cds-border:#dde2ea; --cds-shadow-popover:0 4px 16px rgba(0,0,0,.12); --cds-text-secondary:#5b6675;
+  --cds-dur-slow:300ms; --cds-ease-out:cubic-bezier(.2,.8,.2,1);
+}
+html,body{margin:0;background:var(--color-bg);color:var(--color-fg);font-family:var(--font-anthropic-sans)}
+#dash-root{max-width:1400px;margin:0 auto;padding:24px}
+@media (max-width:600px){#dash-root{padding:12px}}
