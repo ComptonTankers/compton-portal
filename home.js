@@ -122,7 +122,13 @@
     if (awaiting) focus.push({ h: `<b>${awaiting} vehicle${awaiting > 1 ? 's' : ''} awaiting inspection</b> in the yard.`, go: 'stock', lk: 'Stock' });
     if (K.expoAll[0]) focus.push({ h: `<b>Biggest HP exposure:</b> ${K.expoAll.filter((x) => x.k !== 'fixed').slice(0, 3).map((x) => esc(x.u) + ' (' + gbp(x.amt) + ')').join(', ')}.`, go: 'hpvc', lk: 'Exposure by asset' });
 
-    if (idleOwned.length) opps.push({ h: `<b>${idleOwned.length} owned units with no HP are off hire</b> – at the fleet's average of ${gbp(revPerOn)}/month each that is up to ${gbp(idleOwned.length * revPerOn)}/month if they were working.`, go: 'fleet' });
+    if (idleOwned.length) {
+      const avgT = {}; fTypes.forEach((t) => { const on = (+t.units || 0) - (+t.units_idle || 0); if (on > 0 && +t.revenue > 0) avgT[t.type] = t.revenue / on; });
+      const g = {}; idleOwned.forEach((u) => { const a = avgT[u.type]; const k = u.type || 'Unknown'; (g[k] = g[k] || { n: 0, avg: a, v: 0 }); g[k].n++; if (a) g[k].v += a; });
+      const rows = Object.entries(g).sort((a, b) => b[1].v - a[1].v), tot = rows.reduce((t, [, x]) => t + x.v, 0);
+      const noAvg = rows.filter(([, x]) => !x.avg).reduce((t, [, x]) => t + x.n, 0);
+      opps.push({ h: `<b>${idleOwned.length} owned units with no HP are off hire</b> – at what each type earns when it is on hire, that is up to ${gbp(tot)}/month: ` + rows.slice(0, 4).map(([k, x]) => `${x.n} × ${esc(k)}${x.avg ? ' (' + gbp(x.avg) + ' each)' : ' (no hire this month to price)'}`).join(', ') + (rows.length > 4 ? ' and others' : '') + (noAvg ? `. ${noAvg} units are of types with no revenue this month, so they're not counted.` : '.'), go: 'fleet' });
+    }
     if (hpEnding.length) opps.push({ h: `<b>${hpEnding.length} HP agreements finish within 12 months</b>, freeing ${gbp(hpFreed)}/month.`, go: 'hp', lk: 'HP overview' });
     if (rollNow) opps.push({ h: `<b>${gbp(rollNow)}/month is on rolling hire</b> – offering fixed terms to those customers secures the income against the HP.`, go: 'hpvc' });
     if (ready.length) opps.push({ h: `<b>${ready.length} vehicle${ready.length > 1 ? 's' : ''} ready to sell</b> – asking ${gbp(readyAsk)}.`, go: 'stock', lk: 'Stock' });
