@@ -80,7 +80,9 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <div id="app">
 <div class="mb"><button id="menu" type="button">Menu</button><b>Compton Tankers</b></div>
 <aside id="side"><div class="brand">COMPTON <span>TANKERS</span></div>
-<a href="#/fleet" data-r="fleet">Fleet performance</a>
+<a href="#/home" data-r="home">Overview</a>
+<div class="grp">Fleet</div>
+<a class="sub" href="#/fleet" data-r="fleet">Fleet performance</a>
 <div class="grp">Finance</div>
 <a class="sub" href="#/hp" data-r="hp">HP overview</a>
 <a class="sub" href="#/hpvc" data-r="hpvc">HP vs Contracts</a>
@@ -239,8 +241,8 @@ window.CT={api,all,gbp,esc,T,C,head,tiles,loadFinance,routes:null};
 const routes={fleet:el=>embed(el,'dashboard/'),hp:pageHP,hpvc:pageHPVC,inspections:pageInspections};
 window.CT.routes=routes;
 async function route(){
- const r=(location.hash.replace(/^#\/?/,'')||'hp').split('?')[0];const fn=routes[r]||routes.hp;
- document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.r===(routes[r]?r:'hp')));
+ const r=(location.hash.replace(/^#\/?/,'')||'home').split('?')[0];const fn=routes[r]||routes.home;
+ document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.r===(routes[r]?r:'home')));
  $('side').classList.remove('open');
  try{await fn($('main'))}catch(e){if(e.auth){store.clear();gate('Session expired – please sign in again.')}else $('main').innerHTML='<div class="empty">Something went wrong: '+esc(e.message)+'</div>'}}
 function gate(msg){$('app').style.display='none';$('gate').style.display='flex';$('err').textContent=msg||''}
@@ -256,4 +258,5 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 })();
 </script>
 <script src="cashflow.js"></script>
-<script src="stock.js"></script></body></html>
+<script src="stock.js"></script>
+<script src="home.js"></script></body></html>

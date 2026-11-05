@@ -235,5 +235,6 @@
       .on('mousemove', (e, d) => T.show(e, `<b>${mlong(d.k)}</b> ${d.closed ? '(actual)' : '(forecast)'}<br>Cash ${gbp(d.eff)}<br>Headroom ${gbp(d.head)}<br>Net flow ${gbp(d.closed ? d.netA : d.netF)}`)).on('mouseleave', T.hide);
   }
 
+  X.cf = { load, compute };
   X.routes.cashflow = async (el) => { window.__hpSched = await hpSchedule(); return page(el); };
 })();
