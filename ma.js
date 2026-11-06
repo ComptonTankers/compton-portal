@@ -36,20 +36,23 @@
   function sched(a) {
     const anch = a.cost && a.nbv_open != null && a.nbv_open_date;
     if (!a.cost || (!a.purchase_date && !anch)) return null;
-    const p = FA.pol[a.category] || { life_years: 5, residual_pct: 0 };
+    const p = FA.pol[a.description] || FA.pol[a.category] || { life_years: 5, residual_pct: 0 };
+    const method = p.method === 'reducing' ? 'reducing' : 'straight', rate = Math.min(0.99, Math.max(0, (+p.rate_pct || 0) / 100));
     const life = num(a.life_years) != null ? +a.life_years : +p.life_years, res = num(a.residual_pct) != null ? +a.residual_pct : +p.residual_pct;
-    const Lf = Math.max(1, Math.round(life * 12)), cost = +a.cost, mc = cost * (1 - res / 100) / Lf, disp = a.disposed_date ? mon(a.disposed_date) : null;
-    if (anch) { /* known book value at a date (e.g. the fixed asset register) – depreciate on from there */
-      const open = +a.nbv_open, floor = cost * res / 100, s = mon(a.nbv_open_date) + 1, L = Math.max(0, Math.ceil((open - floor) / mc - 1e-9));
-      return { s, e: Math.min(s + L - 1, disp != null ? disp - 1 : 1e9), mc, L, cost, disp, life, res, pre: cost - open, open };
-    }
-    const L = Lf, s = mon(a.purchase_date), e = Math.min(s + L - 1, disp != null ? disp - 1 : 1e9);
-    return { s, e, mc, L, cost, disp, life, res, pre: 0 };
+    const Lf = Math.max(1, Math.round(life * 12)), cost = +a.cost, floor = cost * res / 100, mc = cost * (1 - res / 100) / Lf, disp = a.disposed_date ? mon(a.disposed_date) : null;
+    const open = anch ? +a.nbv_open : cost, s = anch ? mon(a.nbv_open_date) + 1 : mon(a.purchase_date);
+    /* f(n) = book value after n months of charge */
+    const f = method === 'reducing' ? (n) => Math.max(floor, open * Math.pow(1 - rate, n / 12)) : (n) => Math.max(floor, open - n * mc);
+    const L = method === 'reducing' ? 1e9 : Math.max(0, Math.ceil((open - floor) / mc - 1e-9));
+    return { s, e: Math.min(s + L - 1, disp != null ? disp - 1 : 1e9), mc, L, cost, disp, life, res, open, f, method, rate };
   }
-  const chargeAt = (a, m) => { const q = sched(a); return q && m >= q.s && m <= q.e ? q.mc : 0; };
-  const accAt = (a, m) => { const q = sched(a); if (!q) return 0; const n = Math.max(0, Math.min(m, q.e) - q.s + 1); return Math.min((q.pre || 0) + Math.min(n, q.L) * q.mc, q.cost * (1 - q.res / 100)); };
-  const nbvAt = (a, m) => { const q = sched(a); if (!q) return 0; if (m < q.s) return q.open != null ? q.open : 0; if (q.disp != null && m >= q.disp) return 0; return q.cost - accAt(a, m); };
+  const nAt = (q, m) => Math.max(0, Math.min(m, q.e) - q.s + 1);
+  const chargeAt = (a, m) => { const q = sched(a); if (!q || m < q.s || m > q.e) return 0; const n = nAt(q, m); return q.f(n - 1) - q.f(n); };
+  const accAt = (a, m) => { const q = sched(a); return q ? q.cost - nbvAt(a, m) : 0; };
+  const nbvAt = (a, m) => { const q = sched(a); if (!q) return 0; if (q.disp != null && m >= q.disp) return 0; return q.f(nAt(q, m)); };
   const depMonth = (m) => FA ? FA.assets.filter((a) => a.active).reduce((t, a) => t + chargeAt(a, m), 0) : 0;
+
+  X.fa = { load: faLoad, sched: (a) => sched(a), nbvAt: (a, m) => nbvAt(a, m) };
 
   /* ===================== management accounts + budget ===================== */
   let MA = null;
@@ -308,27 +311,27 @@
       { l: 'HP still owed on these', v: gbp(hpAll), s: 'gross remaining payments' },
       { l: 'Book value less HP owed', v: gbp(nbv - hpAll), s: 'rough equity in the fleet', c: nbv - hpAll < 0 ? 'r' : 'g' }]);
     const row1 = (a) => { const q = sched(a), im = !a.cost ? implFor(a.ref) : null, p = FA.pol[a.category] || {};
-      return `<tr><td><b>${esc(a.ref)}</b></td><td>${esc(a.description || '')}</td>
-        <td><select data-id="${a.id}" data-f="category">${cats.map((c) => `<option ${c === a.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
+      return `<tr><td><b>${esc(a.ref)}</b></td>
+        <td><select data-id="${a.id}" data-f="description">${[...new Set([...cats, a.description].filter(Boolean))].map((c) => `<option ${c === a.description ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
         <td class="n"><input class="mi" data-id="${a.id}" data-f="cost" value="${a.cost == null ? '' : +a.cost}" placeholder="${im ? '~' + Math.round(im.cost) : ''}"></td>
         <td><input type="date" data-id="${a.id}" data-f="purchase_date" value="${a.purchase_date ? String(a.purchase_date).slice(0, 10) : ''}" style="font:inherit;border:1px solid transparent;width:130px" title="${im ? 'HP agreement started ' + String(im.date).slice(0, 10) : ''}"></td>
         <td class="n"><input class="mi" style="width:50px" data-id="${a.id}" data-f="life_years" value="${a.life_years == null ? '' : +a.life_years}" placeholder="${p.life_years || ''}"></td>
-        <td class="n">${q ? gbp(q.mc) : '–'}</td><td class="n">${q ? gbp(accAt(a, NOW)) : '–'}</td><td class="n">${q ? gbp(nbvAt(a, NOW)) : '–'}</td><td class="n">${gbp(owed(a.ref))}</td>
+        <td class="n">${q ? gbp(chargeAt(a, NOW)) : '–'}</td><td class="n">${q ? gbp(accAt(a, NOW)) : '–'}</td><td class="n">${q ? gbp(nbvAt(a, NOW)) : '–'}</td><td class="n">${gbp(owed(a.ref))}</td>
         <td data-g="${status(a)}"><span class="pill ${status(a) === 'Depreciating' ? 'g' : status(a) === 'Needs cost / date' ? 'a' : 'b'}">${status(a)}</span></td>
         <td><input type="date" data-id="${a.id}" data-f="disposed_date" value="${a.disposed_date ? String(a.disposed_date).slice(0, 10) : ''}" style="font:inherit;border:1px solid transparent;width:130px"></td>
         <td style="white-space:nowrap">${a.disposed_date ? `<button class="mini" data-unsell="${a.id}">Reinstate</button>` : `<button class="mini" data-sold="${a.id}">Sold</button>`}</td></tr>`; };
     el.innerHTML = X.head('Fixed assets & depreciation', 'Cost, depreciation and book value of the fleet · feeds the management accounts') + tiles +
       (missing.length ? `<div class="empty"><b>${missing.length} assets need a cost and purchase date</b> before they depreciate.${canFill ? ` I can estimate ${canFill} of them from their HP agreements (present value of the payments plus any deposit) – a starting point to check against the invoices. <button id="fa_fill" type="button" class="lnk" style="border:0;background:none;color:${C.blue};text-decoration:underline;cursor:pointer;font:inherit">Fill ${canFill} from HP</button>` : ''}</div>` : '') +
-      `<div class="row"><div class="card"><h3>Book value by category</h3><div class="hint">Bar = net book value, thin line = original cost.</div><div id="a1"></div></div>
+      `<div class="row"><div class="card"><h3>Book value by description</h3><div class="hint">Bar = net book value, thin line = original cost.</div><div id="a1"></div></div>
         <div class="card"><h3>Book value against HP owed</h3><div class="hint">Bar = net book value, thin line = HP still to pay. Where HP is higher, the asset is worth less than we owe.</div><div id="a2"></div></div></div>
-      <div class="card"><h3>Depreciation charge, next 24 months</h3><div class="hint">By category. This is what goes into the management accounts.</div><div id="a3"></div></div>
-      <div class="card"><h3>Depreciation policy</h3><div class="hint">Straight line over the life to the residual value, from the month of purchase. Defaults are a starting point – confirm with the accountant. An asset can have its own life (override in the register).</div>
-        <div class="box2"><table><thead><tr><th>Category</th><th class="n">Life (years)</th><th class="n">Residual %</th></tr></thead><tbody>${FA.polRows.map((p) => `<tr><td>${esc(p.category)}</td><td class="n"><input class="mi" style="width:60px" data-pol="${esc(p.category)}" data-f="life_years" value="${+p.life_years}"></td><td class="n"><input class="mi" style="width:60px" data-pol="${esc(p.category)}" data-f="residual_pct" value="${+p.residual_pct}"></td></tr>`).join('')}</tbody></table></div></div>
+      <div class="card"><h3>Depreciation charge, next 24 months</h3><div class="hint">By description. This is what goes into the management accounts.</div><div id="a3"></div></div>
+      <div class="card"><h3>Depreciation by description</h3><div class="hint">Set how each description depreciates. Straight line: cost less residual over the life. Reducing balance: a fixed % of the remaining book value each year (monthly), never below the residual. Change a row and every asset with that description follows. An asset can still have its own life (override in the register, straight line only).</div>
+        <div class="box2"><table><thead><tr><th>Description</th><th>Method</th><th class="n">Life (years)</th><th class="n">Rate % a year</th><th class="n">Residual %</th><th class="n">Assets</th></tr></thead><tbody>${FA.polRows.map((p) => { const red = p.method === 'reducing'; return `<tr><td>${esc(p.category)}</td><td><select data-pm="${esc(p.category)}"><option value="straight" ${red ? '' : 'selected'}>Straight line</option><option value="reducing" ${red ? 'selected' : ''}>Reducing balance</option></select></td><td class="n"><input class="mi" style="width:60px" ${red ? 'disabled' : ''} data-pol="${esc(p.category)}" data-f="life_years" value="${+p.life_years}"></td><td class="n"><input class="mi" style="width:60px" ${red ? '' : 'disabled'} data-pol="${esc(p.category)}" data-f="rate_pct" value="${+p.rate_pct}"></td><td class="n"><input class="mi" style="width:60px" data-pol="${esc(p.category)}" data-f="residual_pct" value="${+p.residual_pct}"></td><td class="n">${A.filter((x) => x.description === p.category).length}</td></tr>`; }).join('')}</tbody></table></div></div>
       <div class="card"><h3>Asset register</h3><div class="hint">Type a cost and purchase date to start depreciating. Faded numbers in the cost box are the HP-implied estimate.</div>
-        <div class="box2" style="max-height:640px"><table id="fa_tab"><thead><tr><th>Asset</th><th>Description</th><th>Category</th><th class="n">Cost £</th><th>Purchased</th><th class="n">Life (yrs)</th><th class="n">Per month</th><th class="n">Acc. dep.</th><th class="n">NBV</th><th class="n">HP owed</th><th>Status</th><th>Disposed</th><th></th></tr></thead><tbody>${A.map(row1).join('')}</tbody></table></div></div>
-      <div class="card"><h3>Add an asset</h3><div class="form"><div><label>Reference</label><input id="fa_r"></div><div><label>Description</label><input id="fa_d"></div><div><label>Category</label><select id="fa_c">${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div><div><label>Cost £</label><input id="fa_k" type="number" step="0.01"></div><div><label>Purchased</label><input id="fa_p" type="date"></div><div><button id="fa_add" type="button">Add asset</button></div></div></div>`;
+        <div class="box2" style="max-height:640px"><table id="fa_tab"><thead><tr><th>Asset</th><th>Description</th><th class="n">Cost £</th><th>Purchased</th><th class="n">Life (yrs)</th><th class="n">Per month</th><th class="n">Acc. dep.</th><th class="n">NBV</th><th class="n">HP owed</th><th>Status</th><th>Disposed</th><th></th></tr></thead><tbody>${A.map(row1).join('')}</tbody></table></div></div>
+      <div class="card"><h3>Add an asset</h3><div class="form"><div><label>Reference</label><input id="fa_r"></div><div><label>Description</label><select id="fa_c">${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div><div><label>Cost £</label><input id="fa_k" type="number" step="0.01"></div><div><label>Purchased</label><input id="fa_p" type="date"></div><div><button id="fa_add" type="button">Add asset</button></div></div></div>`;
     // charts
-    const cat = {}; A.forEach((a) => { const c = a.category || 'Other'; (cat[c] = cat[c] || { cost: 0, nbv: 0, owed: 0, n: 0 }); cat[c].n++; cat[c].owed += owed(a.ref); if (a.cost && a.purchase_date) { cat[c].cost += +a.cost; cat[c].nbv += nbvAt(a, NOW); } });
+    const cat = {}; A.forEach((a) => { const c = a.category || 'Other'; (cat[c] = cat[c] || { cost: 0, nbv: 0, owed: 0, n: 0 }); cat[c].n++; cat[c].owed += owed(a.ref); if (a.cost && (a.purchase_date || a.nbv_open != null)) { cat[c].cost += +a.cost; cat[c].nbv += nbvAt(a, NOW); } });
     const cr = Object.entries(cat).filter(([, x]) => x.cost || x.owed);
     if (cr.length) {
       hbars($('a1'), cr.map(([k, x]) => ({ l: k, v: x.nbv, v2: x.cost, tip: `<b>${esc(k)}</b>` + row('Assets', x.n) + row('Cost', gbp(x.cost)) + row('Net book value', gbp(x.nbv)) + row('Depreciated', x.cost ? pct(1 - x.nbv / x.cost) : '–') })), { title: 'NBV by category', fmt: gbp, left: 150 });
@@ -337,7 +340,7 @@
     const PALC = [C.blue, C.orange, C.blue2, C.good, '#7d5ba6', '#8a8f98'], mm = Array.from({ length: 24 }, (_, i) => NOW + i);
     cols($('a3'), mm.map((m) => ({ l: lab(m), parts: cats.map((c, i) => ({ v: A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0), c: PALC[i % PALC.length], n: c })),
       tip: `<b>${labL(m)}</b>` + cats.map((c) => [c, A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0)]).filter(([, v]) => v).map(([c, v]) => row(c, gbp(v))).join('') + row('Total', gbp(depMonth(m))) })), { title: 'Depreciation charge', h: 220 });
-    X.enhance($('fa_tab'), { filters: ['Description', 'Category', 'Status'], group: 'Description', sum: 'NBV' });
+    X.enhance($('fa_tab'), { filters: ['Description', 'Status'], group: 'Description', sum: 'NBV' });
     // wiring
     const redraw = () => faDraw(el, d);
     const refresh = async () => { await faLoad(); faDraw(el, await X.loadFinance()); };
@@ -351,15 +354,16 @@
     el.querySelectorAll('[data-id]').forEach((inp) => inp.addEventListener('change', async () => {
       const f = inp.dataset.f; let v = inp.value;
       if (['cost', 'life_years'].includes(f)) { v = parse(v); if (v === undefined) { inp.value = ''; return; } } else if (v === '') v = null;
-      try { await api('fa_assets?id=eq.' + inp.dataset.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ [f]: v }) }); FA.assets.find((a) => a.id == inp.dataset.id)[f] = v; redraw(); } catch (e) { inp.style.outline = '2px solid ' + C.bad; }
+      try { await api('fa_assets?id=eq.' + inp.dataset.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(f === 'description' ? { description: v, category: v } : { [f]: v }) }); FA.assets.find((a) => a.id == inp.dataset.id)[f] = v; if (f === 'description') FA.assets.find((a) => a.id == inp.dataset.id).category = v; redraw(); } catch (e) { inp.style.outline = '2px solid ' + C.bad; }
     }));
+    el.querySelectorAll('[data-pm]').forEach((sel) => sel.addEventListener('change', async () => { await api('fa_policies?category=eq.' + encodeURIComponent(sel.dataset.pm), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ method: sel.value }) }); FA.pol[sel.dataset.pm].method = sel.value; redraw(); }));
     el.querySelectorAll('[data-pol]').forEach((inp) => inp.addEventListener('change', async () => { const v = parse(inp.value); if (v == null) return;
       await api('fa_policies?category=eq.' + encodeURIComponent(inp.dataset.pol), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ [inp.dataset.f]: v }) }); FA.pol[inp.dataset.pol][inp.dataset.f] = v; redraw(); }));
     if ($('fa_fill')) $('fa_fill').onclick = async () => { const todo = missing.map((a) => [a, implFor(a.ref)]).filter(([, im]) => im);
       await Promise.all(todo.map(([a, im]) => { const body = {}; if (!a.cost) body.cost = Math.round(im.cost * 100) / 100; if (!a.purchase_date) body.purchase_date = String(im.date).slice(0, 10); return api('fa_assets?id=eq.' + a.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); }));
       await faLoad(); redraw(); };
     $('fa_add').onclick = async () => { const ref = $('fa_r').value.trim().toUpperCase(); if (!ref) return;
-      await api('fa_assets', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ref, description: $('fa_d').value.trim() || null, category: $('fa_c').value, cost: parse($('fa_k').value) || null, purchase_date: $('fa_p').value || null }) }); await faLoad(); redraw(); };
+      await api('fa_assets', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ref, description: $('fa_c').value, category: $('fa_c').value, cost: parse($('fa_k').value) || null, purchase_date: $('fa_p').value || null }) }); await faLoad(); redraw(); };
     window.scrollTo(0, keepY);
   }
 })();

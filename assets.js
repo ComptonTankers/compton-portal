@@ -9,8 +9,7 @@
   let ROWS = [], META = {};
 
   async function build() {
-    const [d, fa, pol] = await Promise.all([X.loadFinance(), all('fa_assets', 'ref.asc').catch(() => []), api('fa_policies?select=*').catch(() => [])]);
-    const P = {}; pol.forEach((p) => { P[p.category] = p; });
+    await X.fa.load(); const d = await X.loadFinance(), fa = await all('fa_assets', 'ref.asc').catch(() => []);
     const live = d.agr.filter((a) => a.active && !a.settled_date && mon(a.end_month) >= NOW), liveIds = new Set(live.map((a) => a.id));
     const rate = (g) => { const r = g.interest_rate != null ? +g.interest_rate / (+g.interest_rate > 1 ? 100 : 1) : 0.08; return Math.pow(1 + r, 1 / 12) - 1; };
     const U = new Map(); // unit -> {owed, settle, pm, lenders:Set, ends}
@@ -27,8 +26,7 @@
     ROWS = d.fleet.map((f) => {
       const k = norm(f.unit), h = hpFor(k), a = faFor(k), cs = cFor(k);
       let cost = null, nbv = null, resid = null, age = null;
-      if (a && a.cost && (a.purchase_date || a.nbv_open != null)) { const p = P[a.category] || { life_years: 5, residual_pct: 0 }, life = a.life_years != null ? +a.life_years : +p.life_years, res = a.residual_pct != null ? +a.residual_pct : +p.residual_pct, Lf = Math.max(1, Math.round(life * 12)); cost = +a.cost; resid = cost * res / 100; const mc = cost * (1 - res / 100) / Lf;
-        if (a.nbv_open != null && a.nbv_open_date) { nbv = Math.max(resid, +a.nbv_open - mc * Math.max(0, NOW - mon(a.nbv_open_date))); age = a.purchase_date ? (NOW - mon(a.purchase_date)) / 12 : null; } else { const s = mon(a.purchase_date); nbv = NOW < s ? cost : Math.max(resid, cost - Math.min(NOW - s + 1, Lf) * mc); age = (NOW - s) / 12; } }
+      if (a) { const q = X.fa.sched(a); if (q) { cost = q.cost; resid = q.cost * q.res / 100; nbv = X.fa.nbvAt(a, NOW); age = a.purchase_date ? (NOW - mon(a.purchase_date)) / 12 : null; } }
       const chd = +f.chargeable_days || 0, ytdc = +f.ytd_chargeable_days || 0;
       const rowx = { unit: f.unit, type: f.type || 'Other', onHire: (+f.on_hire_days || 0) > 0, util: chd ? Math.min(1, (+f.on_hire_days || 0) / chd) : null, fyUtil: ytdc ? Math.min(1, (+f.ytd_on_hire_days || 0) / ytdc) : null, rev: +f.ytd_revenue || 0, mrev: +f.revenue || 0,
         cust: [...new Set(cs.map((c) => c.customer))].join(', '), crate: cs.reduce((t, c) => t + (+c.monthly_rate || 0), 0), hasHP: !!h, owed: h ? h.owed : 0, settle: h ? h.settle : 0, pm: h ? h.pm : 0, lender: h ? [...h.lenders].join(', ') : '', hpEnd: h && h.end ? h.end : null,
