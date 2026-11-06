@@ -277,7 +277,36 @@ async function pageHPVC(el){
   try{await api('contracts',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({unit:u,customer:$('c_c').value.trim()||null,monthly_rate:r,start_date:$('c_s').value||null,end_date:$('c_e').value||null,rolling:$('c_o').value==='true',source:'manual'})});D=null;route()}catch(e){$('c_err').textContent='Could not save: '+e.message}};
 }
 /* ---------- embedded pages ---------- */
-function pageAnalyser(el){const U='https://fleetrate-hgv-analyzer.paul-merchant47.chatgpt.site/';el.innerHTML=head('Deal analyser','FleetRate – price an HGV hire deal: weekly rate, cash, profit and finance over five years')+`<div class="card" style="padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span class="hint" style="margin:0;flex:1">Saved deals are kept in this browser. If the tool doesn't appear below, open it in its own tab.</span><a class="mini pri2" href="${U}" target="_blank" rel="noopener" style="text-decoration:none">Open in new tab</a></div><iframe class="emb" src="${U}" style="height:calc(100vh - 190px);min-height:600px;width:100%;border:0;border-radius:10px;background:#fff;margin:0" allow="clipboard-write; fullscreen"></iframe>`}
+async function pageAnalyser(el){
+ el.innerHTML=head('Deal analyser','FleetRate – price an HGV hire deal: weekly rate, cash, profit and finance. Saved deals are shared across the team.')+'<div class="empty">Loading…</div>';
+ let src,rows;
+ try{[src,rows]=await Promise.all([api('app_sources?name=eq.fleetrate&select=html'),api('fleet_deals?select=*&order=updated_at.desc')])}catch(e){el.innerHTML=head('Deal analyser','')+'<div class="empty">Could not load the analyser: '+esc(e.message)+'</div>';return}
+ if(!src.length){el.innerHTML=head('Deal analyser','')+'<div class="empty">The analyser has not been loaded yet.</div>';return}
+ const seed=JSON.stringify(rows.map(r=>r.payload));
+ const shim='<script>(function(){var dk="fleetrateDealsV1";try{localStorage.setItem(dk,'+JSON.stringify(seed).replace(/</g,'\\u003c')+')}catch(e){}'
+  +'var o=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){o.apply(this,arguments);if(k===dk){try{var g=function(i){var e=document.getElementById(i);return e?e.textContent:""};'
+  +'setTimeout(function(){parent.postMessage({fleetrate:1,deals:JSON.parse(v),kpi:{rate:g("suggested"),upfront:g("upfront"),cash:g("cashTotal"),pnl:g("pnlTotal"),health:g("statusValue")}},"*")},50)}catch(e){}}};})();<\/script>';
+ let html=src[0].html.replace('<head>','<head>'+shim);
+ const fmt=v=>v==null||v===''?'–':v;
+ const list=()=>{const d=window.__deals||rows;return d.length?`<div class="box2"><table id="fd_tab"><thead><tr><th>Deal</th><th>Customer</th><th>Saved</th><th class="n">Suggested rate</th><th class="n">Upfront cash</th><th class="n">Cash surplus</th><th>Health</th><th></th></tr></thead><tbody>${d.map(r=>{const p=r.payload||{},k=r.summary||{};return `<tr><td>${esc(p.vehicleName||r.name)}</td><td>${esc(p.customerName||'')}</td><td>${p.savedAt?new Date(p.savedAt).toLocaleDateString('en-GB'):''}</td><td class="n">${esc(fmt(k.rate))}</td><td class="n">${esc(fmt(k.upfront))}</td><td class="n">${esc(fmt(k.cash))}</td><td data-g="${esc(k.health||'')}">${esc(fmt(k.health))}</td><td><button class="mini" data-ord="${esc(r.local_id)}">Add to orders</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No saved deals yet – save one in the tool below and it appears here for everyone.</div>'};
+ el.innerHTML=head('Deal analyser','FleetRate – price an HGV hire deal: weekly rate, cash, profit and finance. Saved deals are shared across the team.')
+  +'<div class="card"><h3>Saved deals</h3><div class="hint">Everyone signed in sees the same list. “Add to orders” puts the vehicle on the New assets on order page, so its finance flows into the forecast.</div><div id="fd_list">'+list()+'</div><div id="fd_msg" class="hint"></div></div>'
+  +'<iframe class="emb" id="fr_if" style="height:calc(100vh - 120px);min-height:700px;width:100%;border:0;border-radius:10px;background:#061427;margin:0"></iframe>';
+ const f=document.getElementById('fr_if');f.srcdoc=html;
+ const wire=()=>{const t=document.getElementById('fd_tab');if(t)enhance(t,{filters:['Customer','Health'],group:'Health'});document.querySelectorAll('[data-ord]').forEach(b=>b.onclick=async()=>{
+  const r=(window.__deals||rows).find(x=>x.local_id===b.dataset.ord);if(!r)return;const v=(r.payload||{}).values||{},price=parseFloat(v.price)||0;
+  const dp=v.cashBuy?100:(parseFloat(v.depositPct)||(price&&parseFloat(v.deposit)?parseFloat(v.deposit)/price*100:0));
+  try{await api('asset_orders',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({description:(r.payload.vehicleName||r.name),category:'Tanker trailers',qty:1,unit_price:price,deposit_pct:Math.round(dp*10)/10,term_months:Math.round((parseFloat(v.term)||5)*12),rate_pct:parseFloat(v.rate)||0,status:'Ordered',notes:'From deal analyser'+(r.payload.customerName?' – customer '+r.payload.customerName:'')})});
+   document.getElementById('fd_msg').textContent='Added "'+(r.payload.vehicleName||r.name)+'" to New assets on order – set the delivery month and category there.'}catch(e){document.getElementById('fd_msg').textContent='Could not add: '+e.message}})};
+ wire();
+ if(window.__frListener)removeEventListener('message',window.__frListener);
+ window.__frListener=async ev=>{const d=ev.data;if(!d||!d.fleetrate||ev.source!==f.contentWindow)return;
+  try{const arr=d.deals||[];const keep=arr.map(x=>x.id);
+   if(arr.length)await api('fleet_deals?on_conflict=local_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(arr.map(x=>({local_id:x.id,name:x.vehicleName||'Deal',customer:x.customerName||null,payload:x,updated_at:new Date().toISOString()})))});
+   if(arr[0])await api('fleet_deals?local_id=eq.'+encodeURIComponent(arr[0].id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({summary:d.kpi})});
+   await api('fleet_deals?local_id='+(keep.length?'not.in.('+keep.map(k=>'"'+k+'"').join(',')+')':'not.is.null'),{method:'DELETE',headers:{Prefer:'return=minimal'}});
+   const nr=await api('fleet_deals?select=*&order=updated_at.desc');window.__deals=nr;document.getElementById('fd_list').innerHTML=list();wire()}catch(e){const m=document.getElementById('fd_msg');if(m)m.textContent='Could not sync deals: '+e.message}};
+ addEventListener('message',window.__frListener)}
 function embed(el,src){el.innerHTML=`<iframe class="emb" src="${src}"></iframe>`;const f=el.firstChild;f.onload=()=>{try{const d=f.contentDocument;const s=d.createElement('style');s.textContent='#ct-signout{display:none!important}';d.head.appendChild(s)}catch(e){}}}
 function pageInspections(el){ embed(el,'inspect/#refs'); }
 /* ---------- router ---------- */
