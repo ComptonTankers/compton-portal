@@ -359,3 +359,46 @@ dash.draw('unit-rows', (tb) => {
     tb.append(tr);
   }
 });
+
+// ---------- time utilisation by type: expandable groups with every unit ----------
+CT.ug = CT.ug || { open: new Set(), q: '', status: '', wired: false };
+dash.draw('util-groups', (box) => {
+  const rows = CT.rowsFor('unit_summary'), types = CT.rowsFor('type_summary') || [];
+  box.replaceChildren();
+  if (!rows) return;
+  const U = CT.ug, redraw = () => dash.draw('util-groups');
+  if (!U.wired) {
+    U.wired = true;
+    const q = document.querySelector('.ct-search2'); if (q) q.addEventListener('input', () => { U.q = q.value.trim().toLowerCase(); redraw(); });
+    const st = document.getElementById('ug-status'); if (st) st.addEventListener('change', () => { U.status = st.value; redraw(); });
+    document.getElementById('ug-open')?.addEventListener('click', () => { document.querySelectorAll('#card-util-groups tr.ug-g').forEach((tr) => U.open.add(tr.dataset.t)); redraw(); });
+    document.getElementById('ug-shut')?.addEventListener('click', () => { U.open.clear(); redraw(); });
+  }
+  const base = rows.filter((r) => (!U.status || r.status === U.status) && (!U.q || (r.unit + ' ' + r.type).toLowerCase().includes(U.q)));
+  const gm = new Map();
+  base.forEach((r) => { const k = r.type || 'Other'; if (!gm.has(k)) gm.set(k, { units: [], cd: 0, od: 0, rev: 0, ytd: 0, off: 0 }); const g = gm.get(k); g.units.push(r); g.cd += +r.chargeable_days || 0; g.od += +r.on_hire_days || 0; g.rev += +r.revenue || 0; g.ytd += +r.ytd_revenue || 0; if (r.status === 'Off hire') g.off++; });
+  const fy = (name, g) => { const t = types.find((x) => x.type === name); if (t && t.ytd_utilisation != null && !U.q && !U.status) return t.ytd_utilisation; const v = g.units.map((u) => u.ytd_utilisation).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const t = document.createElement('table'), hr = document.createElement('tr');
+  ['Type / unit', 'Status', 'Chargeable days', 'Days on hire', 'Utilisation', 'FY to date', 'Hire revenue', 'FY revenue'].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 1) th.className = 'n'; hr.append(th); });
+  const thd = document.createElement('thead'); thd.append(hr); const tb = document.createElement('tbody');
+  const utilCell = (tr, v, off) => { const td = CT.cell(tr, '', 'n'); const bar = document.createElement('span'); bar.className = 'bar'; bar.style.width = Math.round(60 * (v || 0)) + 'px'; if (off) bar.style.background = CT.orange; td.append(bar, document.createTextNode(CT.fmt.pct(v))); };
+  [...gm.entries()].sort((a, b) => b[1].rev - a[1].rev).forEach(([name, g]) => {
+    const open = U.open.has(name) || (!!U.q && g.units.length > 0);
+    const tr = document.createElement('tr'); tr.className = 'ug-g'; tr.dataset.t = name; tr.tabIndex = 0;
+    const tog = () => { if (U.open.has(name)) U.open.delete(name); else U.open.add(name); redraw(); };
+    tr.addEventListener('click', tog); tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') tog(); });
+    CT.cell(tr, (open ? '▾ ' : '▸ ') + name + ' (' + g.units.length + ')');
+    CT.cell(tr, g.units.length - g.off + ' on hire' + (g.off ? ' · ' + g.off + ' off' : ''), g.off ? 'down' : '');
+    CT.cell(tr, CT.fmt.int(g.cd), 'n'); CT.cell(tr, CT.fmt.int(g.od), 'n'); utilCell(tr, g.cd ? Math.min(1, g.od / g.cd) : null);
+    CT.cell(tr, CT.fmt.pct(fy(name, g)), 'n'); CT.cell(tr, CT.fmt.gbp0(g.rev), 'n'); CT.cell(tr, CT.fmt.gbp0(g.ytd), 'n'); tb.append(tr);
+    if (open) g.units.slice().sort((a, b) => (b.revenue || 0) - (a.revenue || 0) || a.unit.localeCompare(b.unit)).forEach((r) => {
+      const u = document.createElement('tr'); u.className = 'ug-u';
+      CT.cell(u, r.unit);
+      const st = CT.cell(u, ''); const pill = document.createElement('span'); pill.className = 'pill ' + (r.status === 'Off hire' ? 'off' : r.status === 'Part' ? 'part' : 'full'); pill.textContent = r.status; st.append(pill);
+      CT.cell(u, CT.fmt.int(r.chargeable_days), 'n'); CT.cell(u, CT.fmt.int(r.on_hire_days), 'n'); utilCell(u, r.utilisation, r.status === 'Off hire');
+      CT.cell(u, CT.fmt.pct(r.ytd_utilisation), 'n'); CT.cell(u, CT.fmt.gbp0(r.revenue), 'n'); CT.cell(u, CT.fmt.gbp0(r.ytd_revenue), 'n'); tb.append(u);
+    });
+  });
+  if (!gm.size) { const tr = document.createElement('tr'); const td = CT.cell(tr, 'No units match.'); td.colSpan = 8; tb.append(tr); }
+  t.append(thd, tb); box.append(t);
+});

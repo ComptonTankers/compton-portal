@@ -53,7 +53,7 @@
       <div class="row">
         <div class="card"><h3>HP payments by lender</h3><div class="hint">This month's payments, by finance company.</div><div id="f5"></div></div>
         <div class="card"><h3>HP still to pay</h3><div class="hint">Remaining payments at each quarter; the balance shrinks as agreements end.</div><div id="f6"></div></div>
-      </div>` + '<div id="ma_fin"></div>';
+      </div>` + '<div id="vat_trk"></div><div id="ma_fin"></div>';
     cols($('f1'), R.map((r) => ({ l: lab(mi(r.k)), parts: [{ v: r.closed ? r.inA : r.inF, c: C.blue2 }, { v: -(r.closed ? r.outA : r.outF), c: C.orange }], line: { v: r.closed ? r.netA : r.netF },
       tip: `<b>${labL(mi(r.k))}</b> ${r.closed ? '(actual)' : '(forecast)'}` + row('Money in', gbp(r.closed ? r.inA : r.inF)) + row('Money out', gbp(r.closed ? r.outA : r.outF)) + row('Net', gbp(r.closed ? r.netA : r.netF)) })), { title: 'Money in and out' });
     cols($('f2'), R.map((r) => ({ l: lab(mi(r.k)), parts: [{ v: r.eff, c: r.closed ? C.blue : '#7fa1e0' }], line: { v: r.closeF },
@@ -63,9 +63,37 @@
     hbars($('f4'), mix.slice(0, 10).map((x, i) => ({ l: x.l, v: x.v, c: PAL[i % PAL.length], tip: `<b>${esc(x.l)}</b>` + row('Spend', gbp(x.v)) + row('Share', pct(x.v / mixTot, 1)) + row('Per month', gbp(x.v / win.length)) })), { title: 'Spend mix', fmt: gbp, left: 170 });
     hbars($('f5'), lendRows.map(([k, v], i) => ({ l: k, v, c: PAL[i % PAL.length], tip: `<b>${esc(k)}</b>` + row('This month', gbp(v)) + row('Share of HP', pct(v / (hpNowTot(lendRows) || 1), 1)) })), { title: 'HP by lender', fmt: gbp, left: 190 });
     cols($('f6'), run.map((x) => ({ l: lab(x.m), parts: [{ v: x.v, c: C.blue2 }], tip: `<b>${labL(x.m)}</b>` + row('Still to pay from here', gbp(x.v)) })), { title: 'HP still to pay', h: 220 });
+    vatTracker($('vat_trk'), R, M.s);
     if (X.ma) X.ma.finance($('ma_fin'));
     function hpNowTot(a) { return a.reduce((t, [, v]) => t + v, 0); }
   };
+
+
+  /* ===================== VAT tracker ===================== */
+  function vatTracker(box, R, s) {
+    if (!box || !R.length) return;
+    const qEnd = mi(String(s.vat_quarter_end).slice(0, 7)), lag = +s.vat_pay_lag || 0;
+    const qOf = (m) => m + ((((qEnd - m) % 3) + 3) % 3);
+    const v = (r, c) => { const w = r.w[c]; return (r.closed || r.posActual) ? (w.a || 0) : (w.f || 0); };
+    const mrows = R.map((r) => { const out = v(r, 'vat_sales'), pur = -v(r, 'vat_purch'), cap = -v(r, 'vat_capex'); return { r, m: mi(r.k), out, pur, cap, net: out - pur - cap, act: r.closed || r.posActual }; });
+    const g = new Map(); mrows.forEach((x) => { const q = qOf(x.m); if (!g.has(q)) g.set(q, []); g.get(q).push(x); });
+    const qs = [...g.entries()].sort((a, b) => a[0] - b[0]).map(([q, ms]) => { const sum = (k) => ms.reduce((t, x) => t + x[k], 0); return { q, ms, out: sum('out'), pur: sum('pur'), cap: sum('cap'), net: sum('net'), settle: q + lag, full: ms.length === 3, act: ms.every((x) => x.act) }; });
+    const tot = (k) => mrows.reduce((t, x) => t + x[k], 0), next = R.find((r) => !r.closed && r.vatAuto);
+    let ord = 0; if (X.orders) R.forEach((r) => { ord += (X.orders.cash(r.k).vat || 0); });
+    const nq = qs.filter((x) => x.settle >= NOW && x.full);
+    box.innerHTML = `<h2 style="margin:22px 0 4px;font-size:24px">VAT tracker</h2><div class="hint" style="margin-bottom:8px">VAT on income and on what we buy, month by month and by VAT return. Actual where entered, otherwise the Cash flow forecast (including ordered assets). Quarters end ${labL(qEnd).split(' ')[0]}-based; payment or refund lands ${lag} month(s) after quarter end.</div>` +
+      X.tiles([
+        { l: 'VAT on income', v: gbp(tot('out')), s: mrows.length + ' months in view', c: 'o' },
+        { l: 'VAT reclaimable', v: gbp(tot('pur') + tot('cap')), s: 'purchases ' + gbp(tot('pur')) + ' · capex ' + gbp(tot('cap')) },
+        { l: 'Net position in view', v: gbp(Math.abs(tot('net'))), s: tot('net') >= 0 ? 'payable to HMRC' : 'refundable from HMRC', c: tot('net') >= 0 ? 'r' : 'g' },
+        { l: 'Next VAT return', v: next ? gbp(Math.abs(next.vatAuto.net)) : '–', s: next ? (next.vatAuto.net < 0 ? 'refund ' : 'pay ') + labL(mi(next.k)) + ' · quarter ' + lab(mi(next.vatAuto.qk[0])) + '–' + lab(mi(next.vatAuto.qk[1])) : 'needs a full quarter on file', c: next && next.vatAuto.net < 0 ? 'g' : 'o' },
+        { l: 'Purchase VAT on new orders', v: gbp(ord), s: 'paid up front, comes back with the return', c: ord ? 'o' : '' }]) +
+      `<div class="row"><div class="card"><h3>VAT in and out each month</h3><div class="hint">Above the line: VAT on income we collect. Below: VAT we pay on purchases and capex. Line = net.</div><div id="vt1"></div></div>
+      <div class="card"><h3>Each VAT return</h3><div class="hint">Net for the quarter. Orange = we pay, green = HMRC refunds us.</div><div id="vt2"></div></div></div>
+      <div class="card"><h3>VAT returns by quarter</h3><div class="hint">“Part-quarter” means only some of the quarter is inside the Cash flow forecast yet.</div><div class="box2"><table><thead><tr><th>Quarter</th><th class="n">VAT on income</th><th class="n">VAT on purchases</th><th class="n">VAT on capex</th><th class="n">Net</th><th>Settles</th><th>Basis</th></tr></thead><tbody>${qs.map((x) => `<tr><td>${lab(x.q - 2)} – ${lab(x.q)}</td><td class="n">${gbp(x.out)}</td><td class="n">${gbp(x.pur)}</td><td class="n">${gbp(x.cap)}</td><td class="n"><b class="${x.net < 0 ? 'fav' : ''}">${x.net < 0 ? 'refund ' : 'pay '}${gbp(Math.abs(x.net))}</b></td><td>${labL(x.settle)}</td><td><span class="pill ${x.act ? 'g' : x.full ? 'b' : 'a'}">${x.act ? 'Actual' : x.full ? 'Forecast' : 'Part-quarter'}</span></td></tr>`).join('')}</tbody></table></div></div>`;
+    cols($('vt1'), mrows.map((x) => ({ l: lab(x.m), parts: [{ v: x.out, c: C.orange, n: 'VAT on income' }, { v: -(x.pur + x.cap), c: C.blue, n: 'VAT on purchases & capex' }], line: { v: x.net }, tip: `<b>${labL(x.m)}</b> ${x.act ? '(actual)' : '(forecast)'}` + row('VAT on income', gbp(x.out)) + row('VAT on purchases', gbp(x.pur)) + row('VAT on capex', gbp(x.cap)) + row('Net', (x.net < 0 ? 'refund ' : 'pay ') + gbp(Math.abs(x.net))) })), { title: 'VAT in and out', h: 220 });
+    if (nq.length || qs.length) cols($('vt2'), qs.map((x) => ({ l: lab(x.q - 2) + '–' + lab(x.q), parts: [{ v: x.net, c: x.net < 0 ? C.good : C.orange }], tip: `<b>${lab(x.q - 2)} – ${lab(x.q)}</b>` + row('VAT on income', gbp(x.out)) + row('Reclaimable', gbp(x.pur + x.cap)) + row(x.net < 0 ? 'Refund' : 'Payable', gbp(Math.abs(x.net))) + row('Settles', labL(x.settle)) })), { title: 'VAT returns', h: 220 });
+  }
 
   /* ===================== Spend tracker ===================== */
   let SP = null;

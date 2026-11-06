@@ -148,11 +148,12 @@
         { l: 'HP at risk', v: gbp(atRiskAmt), s: atRisk.length + ' assets without a secured term', c: 'r' },
         { l: 'Cash · ' + (lastClosed ? lab(rm(lastClosed.k)) + ' close' : 'start'), v: gbp(cash), s: low ? 'tightest: ' + lab(rm(low.k)) + ' (' + gbp(low.head) + ' over buffer)' : '', c: low && low.head < 0 ? 'r' : 'g' },
         { l: 'Sales stock held', v: held.length, s: 'asking ' + gbp(held.reduce((t, s) => t + (+s.asking_price || 0), 0)) }]) +
-      '<div id="ma_ov"></div>' + `<div class="row">
+      `<div class="row">
         <div class="card" style="border-top:4px solid ${C.bad}"><h3>Concerns</h3><div class="hint">Things losing money or exposed to risk.</div>${list(concerns, 'Nothing flagged.')}</div>
         <div class="card" style="border-top:4px solid ${C.blue}"><h3>Where to focus</h3><div class="hint">What needs doing now.</div>${list(focus, 'Nothing pending.')}</div>
       </div>
       <div class="card" style="border-top:4px solid ${C.good}"><h3>Opportunities</h3><div class="hint">Where there is money to be made or saved.</div>${list(opps, 'Nothing flagged.')}</div>
+      <div id="ma_ov"></div>
       <div class="row">
         <div class="card"><h3>Cash position</h3><div class="hint">Month-end cash (actual where closed, forecast after). Hover a month for the detail.</div><div id="h1"></div></div>
         <div class="card"><h3>Contracted income against HP</h3><div class="hint">Next 12 months. Rolling hire is lighter – it can end on notice.</div><div class="legend"><span><i style="background:${C.blue}"></i>Fixed term</span><span><i style="background:#9fb6e0"></i>Rolling</span><span><i style="background:${C.orange}"></i>HP</span></div><div id="h2"></div></div>
