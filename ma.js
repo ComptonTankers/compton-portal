@@ -54,6 +54,7 @@
     const lastK = Object.keys(E).filter((k) => Object.values(E[k]).some((x) => x.a != null)).sort().pop();
     const fy = MA ? MA.fy : (lastK ? fyOf(mi(lastK)) : fyOf(NOW));
     if (X.orders) {   // estimated finance on assets on order, forecast months only
+      lines.push({ code: 'ord_rev', label: 'Hire income – ordered assets (est.)', section: 'income', sort: 905, virtual: true, note: 'Estimate from the Orders page (confirmed orders only)' });
       lines.push({ code: 'ord_int', label: 'HP interest – ordered assets (est.)', section: 'cos', sort: 905, virtual: true, note: 'Estimate from the Orders page (Fleet → New assets on order)' });
       lines.push({ code: 'ord_dep', label: 'Depreciation – ordered assets (est.)', section: 'cos', sort: 906, virtual: true, note: 'Estimate from the Orders page (Fleet → New assets on order)' });
     }
@@ -61,7 +62,7 @@
     MA = { lines, E, fy, la: lastK ? mi(lastK) : NOW };
   }
   const cell = (l, m, w) => {   // {v, auto}
-    if (l.virtual) { if (w !== 'b' || m <= MA.la || !X.orders) return { v: null, auto: false }; const o = X.orders.impact(m), v = l.code === 'ord_int' ? o.int : o.dep; return { v: v ? Math.round(v) : null, auto: true, virtual: true }; }
+    if (l.virtual) { if (w !== 'b' || m <= MA.la || !X.orders) return { v: null, auto: false }; const o = X.orders.impact(m), v = l.code === 'ord_int' ? o.int : l.code === 'ord_rev' ? o.rev : o.dep; return { v: v ? Math.round(v) : null, auto: true, virtual: true }; }
     const k = kOf(m), e = MA.E[k] && MA.E[k][l.code], own = e ? (w === 'a' ? e.a : e.b) : null;
     if (own != null) return { v: own, auto: false };
     if (l.auto === 'fa' && FA && (w === 'b' || m <= NOW)) { const c = depMonth(m); if (c) return { v: Math.round(c * 100) / 100, auto: true }; }

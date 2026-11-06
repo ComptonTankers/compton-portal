@@ -17,7 +17,7 @@
   async function load() {
     const [set, lines, months, ent] = await Promise.all([
       api('cf_settings?select=*&limit=1'), api('cf_lines?select=*&order=section.asc,sort.asc'),
-      all('cf_months', 'month.asc'), all('cf_entries', 'month.asc,line.asc')]);
+      all('cf_months', 'month.asc'), all('cf_entries', 'month.asc,line.asc'), X.orders ? X.orders.load() : null]);
     const E = {};
     ent.forEach((r) => { const k = mkey(r.month); (E[k] = E[k] || {})[r.line] = { f: num(r.forecast), a: num(r.actual) }; });
     return { s: set[0], lines, months: months.map((m) => ({ k: mkey(m.month), closed: m.closed, of: num(m.opening_forecast), oa: num(m.opening_actual) })), E };
@@ -37,7 +37,8 @@
       const k = mo.k, r = { k, closed: mo.closed, i };
       // VAT workings
       const sumF = (codes) => codes.reduce((t, c) => t + n0(get(k, c, 'f')), 0);
-      const autoW = { vat_sales: sumF(salesL) / 6, vat_purch: -sumF(purch) / 6, vat_capex: -n0(get(k, 'capex', 'f')) / 6 };
+      const oc = (!mo.closed && X.orders) ? X.orders.cash(k) : { inflow: 0, out: 0 }; r.oc = oc;
+      const autoW = { vat_sales: (sumF(salesL) + oc.inflow) / 6, vat_purch: -sumF(purch) / 6, vat_capex: -n0(get(k, 'capex', 'f')) / 6 };
       r.w = {}; let posF = 0, posA = 0, anyA = false;
       ['vat_sales', 'vat_purch', 'vat_capex'].forEach((c) => {
         const mf = get(k, c, 'f'), ma = get(k, c, 'a');
@@ -68,7 +69,7 @@
       };
       r.val = val;
       const tot = (sec, w) => by(sec).reduce((t, l) => t + n0(val(l.code, w)), 0);
-      r.inF = tot('in', 'f'); r.inA = tot('in', 'a'); r.outF = tot('out', 'f'); r.outA = tot('out', 'a');
+      r.inF = tot('in', 'f') + r.oc.inflow; r.inA = tot('in', 'a'); r.outF = tot('out', 'f') + r.oc.out; r.outA = tot('out', 'a');
       r.netF = r.inF - r.outF; r.netA = r.inA - r.outA;
       r.openF = mo.of != null ? mo.of : (i === 0 ? s.opening_forecast : prevEff);
       r.openA = mo.oa != null ? mo.oa : (i === 0 ? s.opening_actual : prevA);
@@ -167,6 +168,7 @@
       return `<td class="n var ${good ? 'g' : 'b'}">${d > 0 ? '+' : ''}${Math.round(d).toLocaleString('en-GB')}</td>`;
     };
     const lineRow = (l, inflow) => `<tr><td class="lab" title="${esc(l.hint || '')}">${esc(l.label)}</td>${R.map((r) => cell(r, l, 'f') + cell(r, l, 'a') + vcell(r, l, inflow)).join('')}</tr>`;
+    const ordRow = (label, key, tip) => (R.some((r) => r.oc[key]) ? `<tr class="note"><td class="lab" title="${tip}">${label}</td>${R.map((r) => `<td class="n">${r.oc[key] ? fmt(r.oc[key]) : ''}</td><td class="n"></td><td class="n"></td>`).join('')}</tr>` : '');
     const tot = (label, kF, kA, cls, inflow) => `<tr class="${cls}"><td class="lab">${label}</td>${R.map((r) => { const d = r[kA] - r[kF]; const show = r.closed || (M.E[r.k] && Object.values(M.E[r.k]).some((e) => e.a != null)); const good = inflow ? d > 0 : d < 0; return `<td class="n">${fmt(r[kF])}</td><td class="n">${show ? fmt(r[kA]) : ''}</td><td class="n var ${show && d ? (good ? 'g' : 'b') : ''}">${show && d ? (d > 0 ? '+' : '') + Math.round(d).toLocaleString('en-GB') : ''}</td>`; }).join('')}</tr>`;
     const bal = (label, kF, kA, cls) => `<tr class="${cls}"><td class="lab">${label}</td>${R.map((r) => `<td class="n">${fmt(r[kF])}</td><td class="n">${r.closed || Object.values(M.E[r.k] || {}).some((e) => e.a != null) ? fmt(r[kA]) : ''}</td><td class="n"></td>`).join('')}</tr>`;
     const section = (t) => `<tr class="sec"><td class="lab">${t.split(' (')[0]}</td><td colspan="${R.length * 3}" style="font-weight:400;text-transform:none;letter-spacing:0;color:#5B6675">${t.includes(' (') ? '(' + t.split(' (').slice(1).join(' (') : ''}</td></tr>`;
@@ -177,8 +179,8 @@
 
     const table = `<div class="cfwrap"><table class="cf"><thead><tr><th class="lab"></th>${cols}</tr><tr><th class="lab">Line item</th>${sub}</tr></thead><tbody>
       ${bal('Opening cash balance', 'openF', 'openA', 'bal')}
-      ${section('Cash inflows')}${by('in').map((l) => lineRow(l, true)).join('')}${tot('Total cash inflows', 'inF', 'inA', 'tot', true)}
-      ${section('Cash outflows')}${by('out').map((l) => lineRow(l, false)).join('')}${tot('Total cash outflows', 'outF', 'outA', 'tot', false)}
+      ${section('Cash inflows')}${by('in').map((l) => lineRow(l, true)).join('')}${ordRow('New assets – hire income (incl VAT, est.)', 'inflow', 'From confirmed orders on the New assets on order page')}${tot('Total cash inflows', 'inF', 'inA', 'tot', true)}
+      ${section('Cash outflows')}${by('out').map((l) => lineRow(l, false)).join('')}${ordRow('New assets – deposits &amp; HP payments (est.)', 'out', 'From confirmed orders on the New assets on order page')}${tot('Total cash outflows', 'outF', 'outA', 'tot', false)}
       ${tot('Net cash flow', 'netF', 'netA', 'tot', true)}${bal('Closing cash balance', 'closeF', 'closeA', 'bal big')}${headroom}
       ${section('VAT workings (enter actual VAT on sales / purchases / capex; forecast fills itself)')}${by('vat').map((l) => lineRow(l, true)).join('')}${posRow}${vatNote}${actions}
       </tbody></table></div>`;
