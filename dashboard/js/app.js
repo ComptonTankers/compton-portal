@@ -16,10 +16,10 @@ CT.label = (p, long) => {
   const fy = 2000 + +p.slice(2, 4);
   const q = p.match(/Q(\d)$/);
   if (q) {
-    const r = [['Oct', 'Dec', fy - 1], ['Jan', 'Mar', fy], ['Apr', 'Jun', fy], ['Jul', 'Sep', fy]][+q[1] - 1];
-    return 'Q' + q[1] + ' FY' + p.slice(2, 4) + (long ? ' (' + r[0] + '–' + r[1] + ' ' + r[2] + ')' : '');
+    const r = [['May', 'Jul', fy - 1], ['Aug', 'Oct', fy - 1], ['Nov', 'Jan', null], ['Feb', 'Apr', fy]][+q[1] - 1];
+    return 'Q' + q[1] + ' FY' + p.slice(2, 4) + (long ? ' (' + r[0] + '–' + r[1] + ' ' + (r[2] || (fy - 1) + '/' + String(fy).slice(2)) + ')' : '');
   }
-  return 'FY' + p.slice(2, 4) + (long ? ' (Oct ' + (fy - 1) + ' – Sep ' + fy + ')' : '');
+  return 'FY' + p.slice(2, 4) + (long ? ' (May ' + (fy - 1) + ' – Apr ' + fy + ')' : '');
 };
 CT.current = () => {
   const ps = dash.data('periods');
@@ -213,8 +213,9 @@ dash.draw('chart-util-type', (el) => {
   if (!CT.statusOk(el, ['types'])) return;
   const rows = CT.rowsFor('type_summary').filter((r) => r.units > 0).sort((a, b) => b.units - a.units || (b.utilisation || 0) - (a.utilisation || 0));
   if (!rows.length) return CT.empty(el, 'No units in this period.');
-  CT.hbar(el, rows.map((r) => ({ label: r.type + ' (' + r.units + ')', values: [r.utilisation || 0, r.ytd_utilisation || 0], colors: [CT.orange, CT.blue], names: ['Selected period', 'On record'] })),
+  CT.hbar(el, rows.map((r) => ({ label: r.type + ' (' + r.units + ')', values: [r.utilisation || 0, r.ytd_utilisation || 0], colors: [CT.blue, CT.orange], names: ['Selected period', 'On record since Sep 2026'] })),
     { fmt: (v) => d3.format('.0%')(v), max: 1, axis: (t) => d3.format('.0%')(t), aria: 'Time utilisation by equipment type' });
+  el.insertAdjacentHTML('afterbegin', '<div style="display:flex;gap:16px;font-size:12px;margin-bottom:6px"><span><i style="display:inline-block;width:12px;height:10px;border-radius:2px;background:' + CT.blue + ';margin-right:5px"></i>Selected period</span><span><i style="display:inline-block;width:12px;height:10px;border-radius:2px;background:' + CT.orange + ';margin-right:5px"></i>On record since Sep 2026</span></div>');
 });
 dash.draw('fleet-stack', (el) => {
   const cur = CT.current(), d = dash.data('summary');

@@ -40,15 +40,16 @@
 
   /* horizontal bars: rows [{l, v, v2, tip, c}] */
   function hbars(el, rows, o) {
-    const W = 720, rh = 30, L = o.left || 190, H = rows.length * rh + 8, max = Math.max(o.max || 0, ...rows.map((r) => Math.max(r.v, r.v2 || 0)), 1e-9);
+    const W = 720, rh = 30, L = o.left || 190, H = rows.length * rh + 8 + (o.legend ? 22 : 0), max = Math.max(o.max || 0, ...rows.map((r) => Math.max(r.v, r.v2 || 0)), 1e-9);
     let s = svgOpen(W, H, o.title);
     rows.forEach((r, i) => {
       const y = 4 + i * rh, w = (v) => Math.max(2, (W - L - 70) * v / max);
       s += `<text x="${L - 8}" y="${y + 17}" text-anchor="end" font-size="12.5" fill="#1b2430">${esc(r.l.length > 28 ? r.l.slice(0, 27) + '…' : r.l)}</text>`;
-      if (r.v2 != null) s += `<rect x="${L}" y="${y + 17}" width="${w(r.v2)}" height="5" rx="2.5" fill="${C.blue}" opacity=".35"/>`;
+      if (r.v2 != null) s += `<rect x="${L}" y="${y + 17}" width="${w(r.v2)}" height="5" rx="2.5" fill="${C.orange}"/>`;
       s += `<rect x="${L}" y="${y + 4}" width="${w(r.v)}" height="${r.v2 != null ? 13 : 16}" rx="3" fill="${r.c || C.blue2}"/><text x="${L + w(r.v) + 6}" y="${y + 15}" font-size="12" fill="${C.mut}">${o.fmt(r.v)}</text>`;
       s += `<rect class="hit" data-i="${i}" x="0" y="${y}" width="${W}" height="${rh}" fill="transparent"/>`;
     });
+    if (o.legend) { const ly = rows.length * rh + 18; s += `<rect x="${L}" y="${ly - 9}" width="12" height="10" rx="2" fill="${C.blue2}"/><text x="${L + 18}" y="${ly}" font-size="12" fill="${C.mut}">${esc(o.legend[0])}</text><rect x="${L + 150}" y="${ly - 9}" width="12" height="10" rx="2" fill="${C.orange}"/><text x="${L + 168}" y="${ly}" font-size="12" fill="${C.mut}">${esc(o.legend[1])}</text>`; }
     el.innerHTML = s + '</svg>';
     el.querySelectorAll('.hit').forEach((h) => { const i = +h.dataset.i; h.addEventListener('mousemove', (e) => T.show(e, rows[i].tip)); h.addEventListener('mouseleave', T.hide); });
   }
@@ -179,7 +180,7 @@
       { title: 'Contracted income against HP' });
     stackBar(document.getElementById('h3'), [{ n: 'On hire all month', v: F.units_on_hire - F.units_part || 0, c: C.blue }, { n: 'Part of the month', v: F.units_part || 0, c: '#8fb0e8' }, { n: 'Off hire all month', v: F.units_idle || 0, c: C.orange }].filter((s) => s.v > 0));
     hbars(document.getElementById('h4'), fTypes.filter((t) => +t.chargeable_days > 0).map((t) => ({ l: t.type, v: t.on_hire_days / t.chargeable_days, v2: t.ytd_chargeable_days ? t.ytd_on_hire_days / t.ytd_chargeable_days : null,
-      tip: `<b>${esc(t.type)}</b>` + row('Units', t.units) + row('Utilisation', pct(t.on_hire_days / t.chargeable_days, 1)) + row('On record', t.ytd_chargeable_days ? pct(t.ytd_on_hire_days / t.ytd_chargeable_days, 1) : '–') + row('Off hire all month', t.units_idle) + row('Hire revenue', gbp(t.revenue)) + row('Year-to-date revenue', gbp(t.ytd_revenue)) })), { title: 'Utilisation by type', max: 1, fmt: (v) => pct(v), left: 180 });
+      tip: `<b>${esc(t.type)}</b>` + row('Units', t.units) + row('Utilisation', pct(t.on_hire_days / t.chargeable_days, 1)) + row('On record', t.ytd_chargeable_days ? pct(t.ytd_on_hire_days / t.ytd_chargeable_days, 1) : '–') + row('Off hire all month', t.units_idle) + row('Hire revenue', gbp(t.revenue)) + row('Year-to-date revenue', gbp(t.ytd_revenue)) })), { title: 'Utilisation by type', legend: ['This month', 'On record since Sep 2026'], max: 1, fmt: (v) => pct(v), left: 180 });
     hbars(document.getElementById('h5'), fCust.slice(0, 10).map((c) => ({ l: c.customer, v: +c.revenue, tip: `<b>${esc(c.customer)}</b>` + row('Hire revenue', gbp(c.revenue)) + row('Share of month', pct(c.revenue / custTot, 1)) })), { title: 'Top customers', fmt: gbp });
     if (document.getElementById('h6')) cols(document.getElementById('h6'), months.map((m) => ({ l: lab(mon(m.month + '-01')), parts: [{ v: +m.hire_revenue, c: C.blue }],
       tip: `<b>${labL(mon(m.month + '-01'))}</b>` + row('Hire revenue', gbp(m.hire_revenue)) + row('Sales', gbp(m.sales_turnover)) + row('Utilisation', m.chargeable_days ? pct(m.on_hire_days / m.chargeable_days, 1) : '–') + row('Units on hire', m.units_on_hire + ' / ' + m.units) + row('Customers', m.customers) })), { title: 'Monthly hire revenue', h: 200 });

@@ -1,11 +1,11 @@
 dash.calc('periods', {
   inputs: ['months'],
   title: 'Reporting periods',
-  description: 'Each month, financial quarter and financial year (October to September) with at least one month loaded.',
+  description: 'Each month, financial quarter and financial year (May to April) with at least one month loaded.',
   fn: (months) => {
     const keys = (m) => {
-      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 10 ? y + 1 : y;
-      const q = mo >= 10 ? 1 : mo <= 3 ? 2 : mo <= 6 ? 3 : 4, f = 'FY' + String(fy).slice(2);
+      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 5 ? y + 1 : y;
+      const q = mo >= 5 && mo <= 7 ? 1 : mo >= 8 && mo <= 10 ? 2 : mo >= 11 || mo === 1 ? 3 : 4, f = 'FY' + String(fy).slice(2);
       return [['month', m], ['quarter', f + ' Q' + q], ['year', f]];
     };
     const out = new Map();
@@ -24,8 +24,8 @@ dash.calc('summary', {
   description: 'Monthly totals added up for each month, quarter and financial year; unit counts are from the latest month in the period.',
   fn: (months) => {
     const keys = (m) => {
-      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 10 ? y + 1 : y;
-      const q = mo >= 10 ? 1 : mo <= 3 ? 2 : mo <= 6 ? 3 : 4, f = 'FY' + String(fy).slice(2);
+      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 5 ? y + 1 : y;
+      const q = mo >= 5 && mo <= 7 ? 1 : mo >= 8 && mo <= 10 ? 2 : mo >= 11 || mo === 1 ? 3 : 4, f = 'FY' + String(fy).slice(2);
       return [['month', m], ['quarter', f + ' Q' + q], ['year', f]];
     };
     const groups = new Map();
@@ -73,8 +73,8 @@ dash.calc('type_summary', {
   description: 'Turnover, revenue and days on hire per equipment type for each month, quarter and financial year.',
   fn: (types) => {
     const keys = (m) => {
-      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 10 ? y + 1 : y;
-      const q = mo >= 10 ? 1 : mo <= 3 ? 2 : mo <= 6 ? 3 : 4, f = 'FY' + String(fy).slice(2);
+      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 5 ? y + 1 : y;
+      const q = mo >= 5 && mo <= 7 ? 1 : mo >= 8 && mo <= 10 ? 2 : mo >= 11 || mo === 1 ? 3 : 4, f = 'FY' + String(fy).slice(2);
       return [['month', m], ['quarter', f + ' Q' + q], ['year', f]];
     };
     const g = new Map();
@@ -104,8 +104,8 @@ dash.calc('unit_summary', {
   description: 'Chargeable days, days on hire and hire revenue per unit for each month, quarter and financial year.',
   fn: (units) => {
     const keys = (m) => {
-      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 10 ? y + 1 : y;
-      const q = mo >= 10 ? 1 : mo <= 3 ? 2 : mo <= 6 ? 3 : 4, f = 'FY' + String(fy).slice(2);
+      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 5 ? y + 1 : y;
+      const q = mo >= 5 && mo <= 7 ? 1 : mo >= 8 && mo <= 10 ? 2 : mo >= 11 || mo === 1 ? 3 : 4, f = 'FY' + String(fy).slice(2);
       return [['month', m], ['quarter', f + ' Q' + q], ['year', f]];
     };
     const g = new Map();
@@ -133,8 +133,8 @@ dash.calc('customer_summary', {
   description: 'Turnover per customer for each month, quarter and financial year, with its share and rank.',
   fn: (customers) => {
     const keys = (m) => {
-      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 10 ? y + 1 : y;
-      const q = mo >= 10 ? 1 : mo <= 3 ? 2 : mo <= 6 ? 3 : 4, f = 'FY' + String(fy).slice(2);
+      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 5 ? y + 1 : y;
+      const q = mo >= 5 && mo <= 7 ? 1 : mo >= 8 && mo <= 10 ? 2 : mo >= 11 || mo === 1 ? 3 : 4, f = 'FY' + String(fy).slice(2);
       return [['month', m], ['quarter', f + ' Q' + q], ['year', f]];
     };
     const g = new Map();

@@ -5,8 +5,8 @@ dash.calc('hp_units', {
   description: 'Each unit\'s hire revenue set against its HP payments for each month, quarter and financial year. A month counts an HP payment when it falls between the agreement\'s start and end dates.',
   fn: (units, hp) => {
     const keys = (m) => {
-      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 10 ? y + 1 : y;
-      const q = mo >= 10 ? 1 : mo <= 3 ? 2 : mo <= 6 ? 3 : 4, f = 'FY' + String(fy).slice(2);
+      const y = +m.slice(0, 4), mo = +m.slice(5, 7), fy = mo >= 5 ? y + 1 : y;
+      const q = mo >= 5 && mo <= 7 ? 1 : mo >= 8 && mo <= 10 ? 2 : mo >= 11 || mo === 1 ? 3 : 4, f = 'FY' + String(fy).slice(2);
       return [['month', m], ['quarter', f + ' Q' + q], ['year', f]];
     };
     const H = new Map(hp.filter((h) => h.unit).map((h) => [String(h.unit).trim().toUpperCase(), h]));
