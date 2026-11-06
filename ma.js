@@ -179,7 +179,7 @@
       { l: 'Profit to date vs budget', v: gbp(yA('net') - yB('net')), s: gbp(yA('net')) + ' actual vs ' + gbp(yB('net')) + ' budget · ' + ytd.length + ' months', c: yA('net') >= yB('net') ? 'g' : 'r' },
       { l: 'Full-year outlook', v: gbp(outlook('net')), s: gbp(outlook('net') - fyB('net')) + ' vs budget', c: outlook('net') >= fyB('net') ? 'g' : 'r' },
       { l: 'Profit needed per month', v: gbp(rest.length ? (fyB('net') - yA('net')) / rest.length : 0), s: 'over the remaining ' + rest.length + ' months to hit budget' },
-      { l: 'Budget months left', v: rest.length, s: 'draft forecast, ' + rest.length ? 'edit below' : '' }]);
+      { l: 'Budget months left', v: rest.length, s: 'draft forecast – edit in the grid below' }]);
 
     // forecast check: where actual run-rate differs from the forecast month
     const chk = MA.lines.map((l) => { const a = ytd.map((m) => cell(l, m, 'a').v || 0); const avg = a.length ? a.reduce((t, v) => t + v, 0) / a.length : 0; const fc = rest.length ? sum((m) => cell(l, m, 'b').v || 0, rest) / rest.length : 0; const cost = l.section !== 'income'; return { l, avg, fc, d: cost ? avg - fc : fc - avg }; })
