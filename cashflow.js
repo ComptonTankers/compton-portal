@@ -38,7 +38,7 @@
       // VAT workings
       const sumF = (codes) => codes.reduce((t, c) => t + n0(get(k, c, 'f')), 0);
       const oc = (!mo.closed && X.orders) ? X.orders.cash(k) : { inflow: 0, out: 0 }; r.oc = oc;
-      const autoW = { vat_sales: (sumF(salesL) + oc.inflow) / 6, vat_purch: -sumF(purch) / 6, vat_capex: -n0(get(k, 'capex', 'f')) / 6 };
+      const autoW = { vat_sales: (sumF(salesL) + oc.inflow) / 6, vat_purch: -sumF(purch) / 6, vat_capex: -n0(get(k, 'capex', 'f')) / 6 - (oc.vat || 0) };
       r.w = {}; let posF = 0, posA = 0, anyA = false;
       ['vat_sales', 'vat_purch', 'vat_capex'].forEach((c) => {
         const mf = get(k, c, 'f'), ma = get(k, c, 'a');
@@ -180,7 +180,7 @@
     const table = `<div class="cfwrap"><table class="cf"><thead><tr><th class="lab"></th>${cols}</tr><tr><th class="lab">Line item</th>${sub}</tr></thead><tbody>
       ${bal('Opening cash balance', 'openF', 'openA', 'bal')}
       ${section('Cash inflows')}${by('in').map((l) => lineRow(l, true)).join('')}${ordRow('New assets – hire income (incl VAT, est.)', 'inflow', 'From confirmed orders on the New assets on order page')}${tot('Total cash inflows', 'inF', 'inA', 'tot', true)}
-      ${section('Cash outflows')}${by('out').map((l) => lineRow(l, false)).join('')}${ordRow('New assets – deposits &amp; HP payments (est.)', 'out', 'From confirmed orders on the New assets on order page')}${tot('Total cash outflows', 'outF', 'outA', 'tot', false)}
+      ${section('Cash outflows')}${by('out').map((l) => lineRow(l, false)).join('')}${ordRow('New assets – deposits, HP payments &amp; purchase VAT (est.)', 'out', 'From confirmed orders on the New assets on order page')}${tot('Total cash outflows', 'outF', 'outA', 'tot', false)}
       ${tot('Net cash flow', 'netF', 'netA', 'tot', true)}${bal('Closing cash balance', 'closeF', 'closeA', 'bal big')}${headroom}
       ${section('VAT workings (enter actual VAT on sales / purchases / capex; forecast fills itself)')}${by('vat').map((l) => lineRow(l, true)).join('')}${posRow}${vatNote}${actions}
       </tbody></table></div>`;
