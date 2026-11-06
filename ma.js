@@ -34,16 +34,21 @@
     FA = { assets, pol: Object.fromEntries(pol.map((p) => [p.category, p])), polRows: pol };
   }
   function sched(a) {
-    if (!a.cost || !a.purchase_date) return null;
+    const anch = a.cost && a.nbv_open != null && a.nbv_open_date;
+    if (!a.cost || (!a.purchase_date && !anch)) return null;
     const p = FA.pol[a.category] || { life_years: 5, residual_pct: 0 };
     const life = num(a.life_years) != null ? +a.life_years : +p.life_years, res = num(a.residual_pct) != null ? +a.residual_pct : +p.residual_pct;
-    const L = Math.max(1, Math.round(life * 12)), s = mon(a.purchase_date), cost = +a.cost, mc = cost * (1 - res / 100) / L;
-    const disp = a.disposed_date ? mon(a.disposed_date) : null, e = Math.min(s + L - 1, disp != null ? disp - 1 : 1e9);
-    return { s, e, mc, L, cost, disp, life, res };
+    const Lf = Math.max(1, Math.round(life * 12)), cost = +a.cost, mc = cost * (1 - res / 100) / Lf, disp = a.disposed_date ? mon(a.disposed_date) : null;
+    if (anch) { /* known book value at a date (e.g. the fixed asset register) – depreciate on from there */
+      const open = +a.nbv_open, floor = cost * res / 100, s = mon(a.nbv_open_date) + 1, L = Math.max(0, Math.ceil((open - floor) / mc - 1e-9));
+      return { s, e: Math.min(s + L - 1, disp != null ? disp - 1 : 1e9), mc, L, cost, disp, life, res, pre: cost - open, open };
+    }
+    const L = Lf, s = mon(a.purchase_date), e = Math.min(s + L - 1, disp != null ? disp - 1 : 1e9);
+    return { s, e, mc, L, cost, disp, life, res, pre: 0 };
   }
   const chargeAt = (a, m) => { const q = sched(a); return q && m >= q.s && m <= q.e ? q.mc : 0; };
-  const accAt = (a, m) => { const q = sched(a); if (!q) return 0; const n = Math.max(0, Math.min(m, q.e) - q.s + 1); return Math.min(n, q.L) * q.mc; };
-  const nbvAt = (a, m) => { const q = sched(a); if (!q || m < q.s) return q ? 0 : 0; if (q.disp != null && m >= q.disp) return 0; return q.cost - accAt(a, m); };
+  const accAt = (a, m) => { const q = sched(a); if (!q) return 0; const n = Math.max(0, Math.min(m, q.e) - q.s + 1); return Math.min((q.pre || 0) + Math.min(n, q.L) * q.mc, q.cost * (1 - q.res / 100)); };
+  const nbvAt = (a, m) => { const q = sched(a); if (!q) return 0; if (m < q.s) return q.open != null ? q.open : 0; if (q.disp != null && m >= q.disp) return 0; return q.cost - accAt(a, m); };
   const depMonth = (m) => FA ? FA.assets.filter((a) => a.active).reduce((t, a) => t + chargeAt(a, m), 0) : 0;
 
   /* ===================== management accounts + budget ===================== */
@@ -290,7 +295,7 @@
     const agrUnits = new Map(); d.ass.forEach((x) => { if (!agrUnits.has(x.agreement_id)) agrUnits.set(x.agreement_id, []); agrUnits.get(x.agreement_id).push(x); });
     hpFut.forEach((r) => { const as = agrUnits.get(r.agreement_id) || []; const tot = as.reduce((t, x) => t + (+x.share || 1), 0) || 1; as.forEach((x) => { const k = norm(x.unit); hpOwed[k] = (hpOwed[k] || 0) + r.amount * ((+x.share || 1) / tot); }); });
     const owed = (ref) => { const k = norm(ref); if (hpOwed[k] != null) return hpOwed[k]; const h = Object.keys(hpOwed).find((x) => k.length >= 4 && x.startsWith(k)); return h ? hpOwed[h] : 0; };
-    const priced = A.filter((a) => a.cost && a.purchase_date), missing = A.filter((a) => !a.cost || !a.purchase_date);
+    const priced = A.filter((a) => a.cost && (a.purchase_date || a.nbv_open != null)), missing = A.filter((a) => !a.cost || !(a.purchase_date || a.nbv_open != null));
     const cost = priced.reduce((t, a) => t + +a.cost, 0), acc = priced.reduce((t, a) => t + accAt(a, NOW), 0), nbv = priced.reduce((t, a) => t + nbvAt(a, NOW), 0), charge = depMonth(NOW);
     const hpAll = A.reduce((t, a) => t + owed(a.ref), 0);
     const canFill = missing.filter((a) => implFor(a.ref)).length;
@@ -340,7 +345,7 @@
     el.querySelectorAll('[data-sold]').forEach((b) => b.onclick = () => {
       const a = FA.assets.find((x) => x.id == b.dataset.sold), k = norm(a.ref);
       const agreements = [...new Set(d.ass.filter((x) => { const u = norm(x.unit); return u === k || (k.length >= 4 && u.startsWith(k)); }).map((x) => x.agreement_id))].map((id) => d.agr.find((g) => g.id === id)).filter((g) => g && g.active).map((g) => { const as = d.ass.filter((x) => x.agreement_id === g.id), tot = as.reduce((t, x) => t + (+x.share || 1), 0) || 1, mine = as.filter((x) => norm(x.unit) === k || (k.length >= 4 && norm(x.unit).startsWith(k))).reduce((t, x) => t + (+x.share || 1), 0); return { a: g, est: pvEst(g) * (as.length > 1 ? mine / tot : 1), shared: as.length > 1 }; });
-      X.dispose.sold(a, { nbv: a.cost && a.purchase_date ? nbvAt(a, NOW) : 0, agreements }, refresh);
+      X.dispose.sold(a, { nbv: sched(a) ? nbvAt(a, NOW) : 0, agreements }, refresh);
     });
     el.querySelectorAll('[data-unsell]').forEach((b) => b.onclick = () => { if (confirm('Put this asset back as not sold?')) X.dispose.unsell(FA.assets.find((x) => x.id == b.dataset.unsell), refresh); });
     el.querySelectorAll('[data-id]').forEach((inp) => inp.addEventListener('change', async () => {
