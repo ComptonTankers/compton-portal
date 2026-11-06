@@ -337,7 +337,7 @@
     const PALC = [C.blue, C.orange, C.blue2, C.good, '#7d5ba6', '#8a8f98'], mm = Array.from({ length: 24 }, (_, i) => NOW + i);
     cols($('a3'), mm.map((m) => ({ l: lab(m), parts: cats.map((c, i) => ({ v: A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0), c: PALC[i % PALC.length], n: c })),
       tip: `<b>${labL(m)}</b>` + cats.map((c) => [c, A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0)]).filter(([, v]) => v).map(([c, v]) => row(c, gbp(v))).join('') + row('Total', gbp(depMonth(m))) })), { title: 'Depreciation charge', h: 220 });
-    X.enhance($('fa_tab'), { filters: ['Category', 'Status'], group: 'Category', sum: 'NBV' });
+    X.enhance($('fa_tab'), { filters: ['Description', 'Category', 'Status'], group: 'Description', sum: 'NBV' });
     // wiring
     const redraw = () => faDraw(el, d);
     const refresh = async () => { await faLoad(); faDraw(el, await X.loadFinance()); };
