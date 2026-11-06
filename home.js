@@ -61,6 +61,7 @@
     el.querySelectorAll('.hit').forEach((h) => { const g = segs[+h.dataset.i]; h.addEventListener('mousemove', (e) => T.show(e, `<b>${g.n}</b><br>${g.v} units · ${pct(g.v / tot)} of the fleet`)); h.addEventListener('mouseleave', T.hide); });
   }
 
+  X.charts = { cols, hbars, row, pct, lab, labL, svgOpen };
   const list = (items, empty) => items.length ? '<ul style="margin:0;padding:0;list-style:none">' + items.map((i) => `<li style="padding:9px 0;border-bottom:1px solid ${C.line};font-size:14px;line-height:1.4">${i.h}${i.go ? ` <a href="#/${i.go}" style="color:${C.blue};white-space:nowrap">${i.lk || 'Open'} →</a>` : ''}</li>`).join('') + '</ul>' : `<div class="hint">${empty}</div>`;
 
   X.routes.home = async (el) => {
