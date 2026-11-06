@@ -53,7 +53,7 @@ iframe.emb{width:100%;border:0;height:calc(100vh - 20px);margin:-24px -28px;widt
 .mb button{background:none;border:1px solid #fff5;color:#fff;border-radius:8px;padding:4px 10px;font:inherit}
 @media(max-width:820px){aside{transform:translateX(-100%);transition:.2s}aside.open{transform:none}main{margin-left:0;padding:16px}.mb{display:flex}iframe.emb{margin:-16px;width:calc(100% + 32px)}}
 
-.flt{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 10px}.flt input,.flt select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}.flt .lnk{border:0;background:none;color:var(--blue);cursor:pointer;font:inherit;text-decoration:underline}.flt .cnt{margin-left:auto;color:var(--mut);font-size:13px}.grp{margin:0 0 12px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px}.grow{cursor:pointer}.grow:hover td{background:#eef3fb}.grow.on td{background:#fdeadd;font-weight:600}
+.flt{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 10px}.flt input,.flt select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}.flt .lnk{border:0;background:none;color:var(--blue);cursor:pointer;font:inherit;text-decoration:underline}.flt .cnt{margin-left:auto;color:var(--mut);font-size:13px}.egrp{margin:0 0 12px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px}.grow{cursor:pointer}.grow:hover td{background:#eef3fb}.grow.on td{background:#fdeadd;font-weight:600}
 .cfwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px;max-height:78vh}
 table.cf{border-collapse:separate;border-spacing:0;font-size:13px;width:max-content;min-width:100%}
 table.cf th,table.cf td{padding:3px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -151,7 +151,7 @@ function enhance(table,o){if(!table||table.dataset.enh)return;table.dataset.enh=
  const q=document.createElement('input');q.type='search';q.placeholder='Search…';bar.append(q);
  const sels=fi.map(i=>{const s=document.createElement('select');const vals=[...new Set(rows.map(r=>val(r,i)).filter(Boolean))].sort();s.innerHTML='<option value="">All '+esc(th[i].toLowerCase())+'</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('');s.onchange=()=>{F[i]=s.value;go()};bar.append(s);return s});
  const clr=document.createElement('button');clr.type='button';clr.textContent='Clear';clr.className='lnk';const cnt=document.createElement('span');cnt.className='cnt';bar.append(clr,cnt);
- const grp=document.createElement('div');grp.className='grp';
+ const grp=document.createElement('div');grp.className='egrp';
  const box=table.closest('.box2')||table;box.before(bar);if(gi>=0)bar.after(grp);
  const drawG=()=>{if(gi<0)return;const m=new Map();rows.forEach(r=>{if(!pass(r,gi)||false)return;const k=val(r,gi)||'–';if(!m.has(k))m.set(k,{n:0,s:0});const g=m.get(k);g.n++;g.s+=si>=0?num(r,si):0});
   grp.innerHTML='<table><thead><tr><th>'+esc(th[gi])+'</th><th class="n">Assets</th>'+(si>=0?'<th class="n">'+esc(th[si])+'</th>':'')+'</tr></thead><tbody>'+[...m.entries()].sort((a,b)=>b[1].s-a[1].s||b[1].n-a[1].n).map(([k,g])=>`<tr class="grow${F[gi]===k?' on':''}" data-k="${esc(k)}"><td>${esc(k)}</td><td class="n">${g.n}</td>${si>=0?'<td class="n">'+gbp(g.s)+'</td>':''}</tr>`).join('')+'</tbody></table>';
@@ -286,12 +286,13 @@ async function pageAnalyser(el){
  const shim='<script>(function(){var dk="fleetrateDealsV1";try{localStorage.setItem(dk,'+JSON.stringify(seed).replace(/</g,'\\u003c')+')}catch(e){}'
   +'var o=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){o.apply(this,arguments);if(k===dk){try{var g=function(i){var e=document.getElementById(i);return e?e.textContent:""};'
   +'setTimeout(function(){parent.postMessage({fleetrate:1,deals:JSON.parse(v),kpi:{rate:g("suggested"),upfront:g("upfront"),cash:g("cashTotal"),pnl:g("pnlTotal"),health:g("statusValue")}},"*")},50)}catch(e){}}};})();<\/script>';
- let html=src[0].html.replace('<head>','<head>'+shim);
+ let css='';try{css=await fetch('fleetrate-theme.css?v=2').then(r=>r.text())}catch(e){}
+ let html=src[0].html.replace('<head>','<head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap">'+shim).replace('</head>','<style>'+css+'</style></head>');
  const fmt=v=>v==null||v===''?'–':v;
  const list=()=>{const d=window.__deals||rows;return d.length?`<div class="box2"><table id="fd_tab"><thead><tr><th>Deal</th><th>Customer</th><th>Saved</th><th class="n">Suggested rate</th><th class="n">Upfront cash</th><th class="n">Cash surplus</th><th>Health</th><th></th></tr></thead><tbody>${d.map(r=>{const p=r.payload||{},k=r.summary||{};return `<tr><td>${esc(p.vehicleName||r.name)}</td><td>${esc(p.customerName||'')}</td><td>${p.savedAt?new Date(p.savedAt).toLocaleDateString('en-GB'):''}</td><td class="n">${esc(fmt(k.rate))}</td><td class="n">${esc(fmt(k.upfront))}</td><td class="n">${esc(fmt(k.cash))}</td><td data-g="${esc(k.health||'')}">${esc(fmt(k.health))}</td><td><button class="mini" data-ord="${esc(r.local_id)}">Add to orders</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No saved deals yet – save one in the tool below and it appears here for everyone.</div>'};
  el.innerHTML=head('Deal analyser','FleetRate – price an HGV hire deal: weekly rate, cash, profit and finance. Saved deals are shared across the team.')
   +'<div class="card"><h3>Saved deals</h3><div class="hint">Everyone signed in sees the same list. “Add to orders” puts the vehicle on the New assets on order page, so its finance flows into the forecast.</div><div id="fd_list">'+list()+'</div><div id="fd_msg" class="hint"></div></div>'
-  +'<iframe class="emb" id="fr_if" style="height:calc(100vh - 120px);min-height:700px;width:100%;border:0;border-radius:10px;background:#061427;margin:0"></iframe>';
+  +'<iframe class="emb" id="fr_if" style="height:calc(100vh - 120px);min-height:700px;width:100%;border:0;background:#F4F6F9;margin:0"></iframe>';
  const f=document.getElementById('fr_if');f.srcdoc=html;
  const wire=()=>{const t=document.getElementById('fd_tab');if(t)enhance(t,{filters:['Customer','Health'],group:'Health'});document.querySelectorAll('[data-ord]').forEach(b=>b.onclick=async()=>{
   const r=(window.__deals||rows).find(x=>x.local_id===b.dataset.ord);if(!r)return;const v=(r.payload||{}).values||{},price=parseFloat(v.price)||0;

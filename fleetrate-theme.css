@@ -1,0 +1,42 @@
+:root{--bg:#F4F6F9;--panel:#fff;--panel2:#fff;--ink:#16202D;--muted:#5B6675;--line:#dde3ec;--accent:#E3641D;--gold:#164698;--red:#b3261e}
+html,body{background:#F4F6F9!important;color:#16202D!important;font-family:Barlow,system-ui,sans-serif!important}
+main{padding:0 0 40px!important;max-width:none!important}
+.eyebrow{display:none}.top{display:none!important}
+.card,.comparisonSection,.forecastSection,.yearCashBreakdown,.masterDefaults,.decisionChart,.coverChart,.timelineChart,.lineChart,.rateCashChart,.recoveryGraph,.optionSection,.operatingYearGrid,.cashChart,.chart,.inputRow>.section,.financeOutputs div,.lookup,.dealItem,.metric,.statusMetric,.forecastTile,.rateTile,.graphCell,.balanceCell,.timelineCell,.rateCashCell,.coverTrack,.savedDashboard .card{background:#fff!important;border-color:#dde3ec!important;color:#16202D!important;box-shadow:none!important}
+.card{border-radius:12px!important}
+.metric.accent{border-top:3px solid #E3641D!important}.metric .value,.forecastTile .tileValue,.rateTileValue,.financeOutputs strong{color:#164698!important}
+.metric.accent .value{color:#E3641D!important}
+.statusMetric.good{background:#e8f5ee!important;border-color:#1b7f4b!important}.statusMetric.good .value{color:#1b7f4b!important}
+.statusMetric.review{background:#fdf3e1!important;border-color:#b7791f!important}.statusMetric.review .value{color:#b7791f!important}
+.statusMetric.bad{background:#fbe9e7!important;border-color:#b3261e!important}.statusMetric.bad .value{color:#b3261e!important}
+.forecastTile.good,.optionGood td,.comparisonGood{background:#e8f5ee!important;border-color:#1b7f4b!important}.forecastTile.bad,.optionBad td,.comparisonBad{background:#fbe9e7!important;border-color:#b3261e!important}
+.metric .label,.note,.sub,.footer,.dealMeta,.field label,.optionInputs label,.masterDefaults label,.rateTile label,.yearLabel,.operatingYearGrid .yearLabel,.chartLabel,.timelineLabel,.timelineNote,.coverLegend,.coverMeta,.rateCashLabel,.rateCashFoot,.rateTileSub,.rateMethod,.checks p,.checks ul,.toggle,.chartLegend,.lineLegend,.rateCashLegend,.tileLine,.breakdownHead,.lookup,.rateTile .rateTileMeta,.coverMeta,.recoveryGraph .hint{color:#5B6675!important}
+.tileLine strong,.coverMeta strong,.rateTileMeta,.breakdownTitle,.chartTitle,.analysisTitle,h2,h3,h4,.card h2,.forecastSection h3,.decisionChart h4,.coverChart h4,.timelineChart h4,.lineChart h4,.rateCashChart h4,.masterDefaults h2,.comparisonSection h3,.lookup strong,.graphNumber,.rateCashNumber,.coverValue,.timelineValue,.balanceValue{color:#16202D!important}
+.section h3,.inputRow>.section h3,.forecastSubhead{color:#164698!important}
+.inputRow>.section{background:#fff!important}
+input,select,textarea,.field input,.optionInputs input,.masterDefaults input,.masterDefaults select,.rateTile input,.comparisonTable input,.yearGrid input,.operatingYearGrid input,.operatingRow input,.savedSearch{background:#fff!important;color:#16202D!important;border:1px solid #cdd5e0!important;border-radius:8px!important}
+input:focus,select:focus{outline:2px solid #2f6ad0!important;border-color:#2f6ad0!important}
+.yearHead,.operatingHeader .yearHead,.operatingYearGrid .yearHead,.yearGrid .yearHead,.chartHead,.balanceHead,.timelineHead,.rateCashHead,.cashYearHead span,.coverYear{background:#eef3fb!important;color:#164698!important}
+.btn{background:#E3641D!important;color:#fff!important}.btn.secondary,.tab{background:#fff!important;color:#164698!important;border:1px solid #cdd5e0!important}.tab.active,.operatingCashControls .tab.active{background:#164698!important;color:#fff!important;border-color:#164698!important}
+.operatingCashControls .tab{background:#fff!important;color:#164698!important;border:1px solid #cdd5e0!important}
+.financeExport button{background:#E3641D!important;border-color:#E3641D!important}
+table th,.card table th,.optionTable th,.comparisonTable th{color:#5B6675!important;border-bottom-color:#dde3ec!important}
+td,.optionTable td,.comparisonTable td{color:#16202D!important;border-bottom-color:#eef1f6!important}
+.optionTable td,.comparisonTable td{background:#f6f8fc!important;border-color:#dde3ec!important}
+td.pos,.card table td.pos,.balanceGap.good,.coverMeta .good{color:#1b7f4b!important}td.neg,.card table td.neg,.balanceGap.bad,.coverMeta .bad{color:#b3261e!important}
+.scenarioName{color:#164698!important}
+.tileYear,.rateTileTitle{color:#E3641D!important}
+.cmpYearCell small{color:#5B6675!important}
+.graphTrack,.balanceTrack,.timelineTrack,.rateCashTrack,.coverTrack{background:#eef1f6!important}
+.hpTooltip,.recoveryGraph .recoveryTip{background:#16202D!important;color:#fff!important}
+.lineChart .axisText,.recoveryGraph text{fill:#5B6675!important}
+.recoveryGraph .axis{stroke:#cdd5e0!important}
+.savedHead h2{color:#16202D!important}
+.checks{border-top-color:#dde3ec!important}
+.inputRow>.section:nth-child(n){background:#fff!important}
+table td{background:#f6f8fc!important;color:#16202D!important}
+table th{background:#eef3fb!important;color:#164698!important}
+td.buyoutPositive,td.buyoutRecommended,tr.good td{background:#e8f5ee!important;color:#1b7f4b!important}
+.badge{display:none}
+h5,small,.recoveryGraph h5{color:#16202D!important}
+.cmpYearCell small,.analysisCard th small{color:#5B6675!important}
