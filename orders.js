@@ -52,7 +52,7 @@
       const m = NOW + i, hire = A(m - 1, 'rev'), out = hire * 0.2, inp = A(m, 'vat'), q = m - lag;
       let settle = 0, note = '', vIn = 0, vOut = 0;
       if (((q - qe) % 3 + 3) % 3 === 0) { let o2 = 0, i2 = 0; for (let j = q - 2; j <= q; j++) { o2 += A(j, 'rev') * 0.2; i2 += A(j, 'vat'); } settle = i2 - o2; vIn = i2; vOut = o2; note = lab(q - 2) + ' – ' + lab(q); }
-      rows.push({ m, dep: A(m, 'deposit'), hp: A(m, 'pay'), vatPaid: inp, hireIn: hire + out, hireIn0: 0, settle, note });
+      rows.push({ m, dep: A(m, 'deposit'), hp: A(m, 'pay'), vatPaid: inp, hireIn: hire + out, hireIn0: 0, settle, note, vatIn: note ? vIn : 0, vatOut: note ? vOut : 0 });
     }
     let cum = 0; rows.forEach((r) => { r.net = r.hireIn - r.dep - r.hp - r.vatPaid + r.settle; cum += r.net; r.cum = cum; });
     const low = rows.reduce((a, r) => (r.cum < a.cum ? r : a), rows[0]);
