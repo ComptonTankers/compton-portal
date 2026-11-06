@@ -1,7 +1,7 @@
 /* New asset orders: what is on order, estimated HP finance, and the effect on the forecast. */
 (function () {
   const X = window.CT; if (!X) return;
-  const { api, all, gbp, esc, C, NOW, mon } = X;
+  const { api, all, gbp, esc, C, NOW, mon, T } = X;
   const { cols, row } = X.charts;
   const $ = (id) => document.getElementById(id);
   const kOf = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
