@@ -237,6 +237,21 @@
       .on('mousemove', (e, d) => T.show(e, `<b>${mlong(d.k)}</b> ${d.closed ? '(actual)' : '(forecast)'}<br>Cash ${gbp(d.eff)}<br>Headroom ${gbp(d.head)}<br>Net flow ${gbp(d.closed ? d.netA : d.netF)}`)).on('mouseleave', T.hide);
   }
 
-  X.cf = { load, compute };
+  /* in-memory only: carry the model further ahead (recurring lines continue, HP follows its schedule) so other pages can look beyond the saved months */
+  function extend(Mx, n, hp) {
+    const hasHp = hp && Object.keys(hp).length > 0;
+    for (let i = 0; i < n; i++) {
+      const prev = Mx.months[Mx.months.length - 1], k = fromIdx(midx(prev.k) + 1);
+      Mx.months.push({ k, closed: false, of: null, oa: null }); Mx.E[k] = {};
+      Mx.lines.filter((l) => l.recurring).forEach((l) => {
+        let v = Mx.E[prev.k] && Mx.E[prev.k][l.code] ? Mx.E[prev.k][l.code].f : null;
+        if (l.code === 'hp_payments' && hasHp) v = hp[k] || 0;
+        if (v != null) Mx.E[k][l.code] = { f: v, a: null };
+      });
+    }
+    return Mx;
+  }
+
+  X.cf = { load, compute, extend, hpSchedule };
   X.routes.cashflow = async (el) => { window.__hpSched = await hpSchedule(); return page(el); };
 })();
