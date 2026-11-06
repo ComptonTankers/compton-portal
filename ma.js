@@ -338,7 +338,7 @@
       hbars($('a2'), cr.map(([k, x]) => ({ l: k, v: x.nbv, v2: x.owed, c: x.owed > x.nbv ? C.bad : C.blue2, tip: `<b>${esc(k)}</b>` + row('Net book value', gbp(x.nbv)) + row('HP still owed', gbp(x.owed)) + row('Difference', gbp(x.nbv - x.owed)) })), { title: 'NBV vs HP', fmt: gbp, left: 150 });
     } else { $('a1').innerHTML = $('a2').innerHTML = '<div class="hint">Add costs to see this.</div>'; }
     const PALC = [C.blue, C.orange, C.blue2, C.good, '#7d5ba6', '#8a8f98'], mm = Array.from({ length: 24 }, (_, i) => NOW + i);
-    cols($('a3'), mm.map((m) => ({ l: lab(m), parts: cats.map((c, i) => ({ v: A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0), c: PALC[i % PALC.length], n: c })),
+    cols($('a3'), mm.map((m, ix) => ({ l: ix % 3 === 0 ? lab(m) : '', parts: cats.map((c, i) => ({ v: A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0), c: PALC[i % PALC.length], n: c })),
       tip: `<b>${labL(m)}</b>` + cats.map((c) => [c, A.filter((a) => a.category === c).reduce((t, a) => t + chargeAt(a, m), 0)]).filter(([, v]) => v).map(([c, v]) => row(c, gbp(v))).join('') + row('Total', gbp(depMonth(m))) })), { title: 'Depreciation charge', h: 220 });
     X.enhance($('fa_tab'), { filters: ['Description', 'Status'], group: 'Description', sum: 'NBV' });
     // wiring
