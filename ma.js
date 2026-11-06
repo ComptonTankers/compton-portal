@@ -25,7 +25,7 @@
   const FYM = 4;   // financial year starts in May and ends 30 April
   const fyOf = (i) => (i % 12 >= FYM ? Math.floor(i / 12) : Math.floor(i / 12) - 1);
   const fyLabel = (fy) => 'FY' + String(fy + 1).slice(2) + ' (May ' + fy + ' – Apr ' + (fy + 1) + ')';
-  const DEP = ['depreciation'], HPI = ['hp_interest'], DISP = ['disposal'];
+  const DEP = ['depreciation', 'ord_dep'], HPI = ['hp_interest', 'ord_int'], DISP = ['disposal'];
 
   /* ===================== fixed asset engine ===================== */
   let FA = null;
@@ -49,14 +49,19 @@
   /* ===================== management accounts + budget ===================== */
   let MA = null;
   async function maLoad() {
-    const [lines, ent] = await Promise.all([all('ma_lines', 'sort.asc'), all('ma_entries', 'month.asc')]);
+    const [lines, ent] = await Promise.all([all('ma_lines', 'sort.asc'), all('ma_entries', 'month.asc'), X.orders ? X.orders.load() : null]);
     const E = {}; ent.forEach((r) => { const k = String(r.month).slice(0, 7); (E[k] = E[k] || {})[r.line] = { a: num(r.actual), b: num(r.budget) }; });
     const lastK = Object.keys(E).filter((k) => Object.values(E[k]).some((x) => x.a != null)).sort().pop();
     const fy = MA ? MA.fy : (lastK ? fyOf(mi(lastK)) : fyOf(NOW));
+    if (X.orders) {   // estimated finance on assets on order, forecast months only
+      lines.push({ code: 'ord_int', label: 'HP interest – ordered assets (est.)', section: 'cos', sort: 905, virtual: true, note: 'Estimate from the Orders page (Fleet → New assets on order)' });
+      lines.push({ code: 'ord_dep', label: 'Depreciation – ordered assets (est.)', section: 'cos', sort: 906, virtual: true, note: 'Estimate from the Orders page (Fleet → New assets on order)' });
+    }
     lines.sort((a, b) => SECT.indexOf(a.section) - SECT.indexOf(b.section) || a.sort - b.sort);
-    MA = { lines, E, fy };
+    MA = { lines, E, fy, la: lastK ? mi(lastK) : NOW };
   }
   const cell = (l, m, w) => {   // {v, auto}
+    if (l.virtual) { if (w !== 'b' || m <= MA.la || !X.orders) return { v: null, auto: false }; const o = X.orders.impact(m), v = l.code === 'ord_int' ? o.int : o.dep; return { v: v ? Math.round(v) : null, auto: true, virtual: true }; }
     const k = kOf(m), e = MA.E[k] && MA.E[k][l.code], own = e ? (w === 'a' ? e.a : e.b) : null;
     if (own != null) return { v: own, auto: false };
     if (l.auto === 'fa' && FA && (w === 'b' || m <= NOW)) { const c = depMonth(m); if (c) return { v: Math.round(c * 100) / 100, auto: true }; }
@@ -109,7 +114,7 @@
     const ytdCells = (a, b, cost, fyb) => { const v = a - b; return `<td class="ytd">${a ? gbp(a) : '–'}</td><td class="ytd">${b ? gbp(b) : '–'}</td><td class="ytd ${a || b ? varCls(v, cost) : ''}">${a || b ? gbp(v) : '–'}</td><td class="ytd ${a || b ? varCls(v, cost) : ''}">${b ? pct(v / Math.abs(b)) : '–'}</td><td class="ytd">${fyb ? gbp(fyb) : '–'}</td>`; };
     const lineRow = (l) => {
       const cost = l.section !== 'income';
-      const inputs = ms.map((m) => ['a', 'b'].map((w) => { const c = cell(l, m, w); return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="${w}" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}" title="${c.auto ? 'Automatic from the fixed asset register – type to override' : ''}"></td>`; }).join('')).join('');
+      const inputs = ms.map((m) => ['a', 'b'].map((w) => { const c = cell(l, m, w); if (l.virtual) return `<td style="color:var(--mut);font-style:italic">${c.v == null ? '' : gbp(c.v)}</td>`; return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="${w}" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}" title="${c.auto ? 'Automatic from the fixed asset register – type to override' : ''}"></td>`; }).join('')).join('');
       return `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${inputs}${ytdCells(ysum((m) => cell(l, m, 'a').v || 0), ysum((m) => cell(l, m, 'b').v || 0), cost, sum((m) => cell(l, m, 'b').v || 0))}</tr>`;
     };
     const totRow = (cls, label, key, cost) => `<tr class="${cls}"><td>${label}</td>${ms.map((m) => `<td>${A(m)[key] ? gbp(A(m)[key]) : '–'}</td><td>${B(m)[key] ? gbp(B(m)[key]) : '–'}</td>`).join('')}${ytdCells(yA(key), yB(key), cost, fB(key))}</tr>`;
@@ -152,7 +157,7 @@
     $('p_go').onclick = async () => {
       const w = $('p_w').value, start = mi($('p_m').value), out = [], skipped = [];
       const norml = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const idx = {}; MA.lines.forEach((l) => { idx[norml(l.label)] = l; idx[norml(l.code)] = l; });
+      const idx = {}; MA.lines.filter((l) => !l.virtual).forEach((l) => { idx[norml(l.label)] = l; idx[norml(l.code)] = l; });
       $('p_t').value.split(/\r?\n/).filter((x) => x.trim()).forEach((ln) => { const c = ln.split('\t'); const name = (c[0] || '').trim(); if (!name) return; if (/^(total|gross profit|net profit|profit|less|income|basic|add back)/i.test(name)) return;
         const l = idx[norml(name)] || Object.entries(idx).find(([k]) => k.length > 4 && (norml(name).startsWith(k) || k.startsWith(norml(name))))?.[1];
         if (!l) { skipped.push(name); return; } c.slice(1).forEach((x, i) => { const v = parse(x); if (v !== undefined && v !== null) out.push({ month: kOf(start + i) + '-01', line: l.code, [w === 'a' ? 'actual' : 'budget']: v }); }); });
@@ -183,9 +188,9 @@
 
     // forecast check: where actual run-rate differs from the forecast month
     const chk = MA.lines.map((l) => { const a = ytd.map((m) => cell(l, m, 'a').v || 0); const avg = a.length ? a.reduce((t, v) => t + v, 0) / a.length : 0; const fc = rest.length ? sum((m) => cell(l, m, 'b').v || 0, rest) / rest.length : 0; const cost = l.section !== 'income'; return { l, avg, fc, d: cost ? avg - fc : fc - avg }; })
-      .filter((x) => !DISP.includes(x.l.code) && ytd.length && Math.abs(x.avg - x.fc) > Math.max(400, 0.2 * Math.max(x.fc, 1))).sort((p, q) => Math.abs(q.avg - q.fc) - Math.abs(p.avg - p.fc)).slice(0, 8);
+      .filter((x) => !DISP.includes(x.l.code) && !x.l.virtual && ytd.length && Math.abs(x.avg - x.fc) > Math.max(400, 0.2 * Math.max(x.fc, 1))).sort((p, q) => Math.abs(q.avg - q.fc) - Math.abs(p.avg - p.fc)).slice(0, 8);
     const head = `<tr><th>${esc(fyLabel(MA.fy))}</th>${ms.map((m) => `<th>${lab(m)}<br><span class="pill ${ytd.includes(m) ? 'g' : 'a'}" style="font-size:10px">${ytd.includes(m) ? 'budget' : 'forecast'}</span></th>`).join('')}<th class="ytd">Full year</th><th class="ytd" style="text-align:left;min-width:360px">Forecast basis</th></tr>`;
-    const lineRow = (l) => `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${ms.map((m) => { const c = cell(l, m, 'b'); return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="b" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}"></td>`; }).join('')}<td class="ytd">${gbp(sum((m) => cell(l, m, 'b').v || 0, ms))}</td><td class="ytd" style="text-align:left;white-space:normal;font-size:12px;color:var(--mut)">${esc(l.note || '')}</td></tr>`;
+    const lineRow = (l) => `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${ms.map((m) => { const c = cell(l, m, 'b'); if (l.virtual) return `<td style="color:var(--mut);font-style:italic">${c.v == null ? '' : gbp(c.v)}</td>`; return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="b" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}"></td>`; }).join('')}<td class="ytd">${gbp(sum((m) => cell(l, m, 'b').v || 0, ms))}</td><td class="ytd" style="text-align:left;white-space:normal;font-size:12px;color:var(--mut)">${esc(l.note || '')}</td></tr>`;
     const tot = (cls, label, key) => `<tr class="${cls}"><td>${label}</td>${ms.map((m) => `<td>${gbp(B(m)[key])}</td>`).join('')}<td class="ytd">${gbp(fyB(key))}</td><td class="ytd"></td></tr>`;
     const body = [];
     SECT.forEach((sec) => { body.push(`<tr class="sec"><td colspan="${ms.length + 3}">${SLAB[sec]}</td></tr>`); MA.lines.filter((l) => l.section === sec).forEach((l) => body.push(lineRow(l)));

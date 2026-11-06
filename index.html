@@ -74,16 +74,18 @@ table.cf td.var{font-size:12px;min-width:54px}table.cf td.var.g{color:var(--good
 table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--mut)}
 .mini{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer;color:var(--blue)}.mini.pri2{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:600}
 </style></head><body>
-<div id="gate"><div class="box"><h2>Compton Tankers</h2><p>Staff portal – please sign in</p>
+<div id="gate"><div class="box"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:64px;display:block;margin:0 0 14px"><p>Staff portal – please sign in</p>
 <label for="em">Email</label><input id="em" type="email" autocomplete="username">
 <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
 <button class="pri" id="go" type="button">Sign in</button><div class="err" id="err" role="alert"></div></div></div>
 <div id="app">
-<div class="mb"><button id="menu" type="button">Menu</button><b>Compton Tankers</b></div>
-<aside id="side"><div class="brand">COMPTON <span>TANKERS</span></div>
+<div class="mb"><button id="menu" type="button">Menu</button><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:30px;background:#fff;border-radius:6px;padding:3px 8px"></div>
+<aside id="side"><div class="brand"><a href="#/home" data-r="" style="background:#fff;padding:10px 12px;margin:0;display:block"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:46px;display:block"></a></div>
 <a href="#/home" data-r="home">Overview</a>
 <div class="grp">Fleet</div>
 <a class="sub" href="#/fleet" data-r="fleet">Fleet performance</a>
+<a class="sub" href="#/orders" data-r="orders">New assets on order</a>
+<a class="sub" href="#/analyser" data-r="analyser">Deal analyser</a>
 <div class="grp">Finance</div>
 <a class="sub" href="#/fin" data-r="fin">Finance overview</a>
 <a class="sub" href="#/hp" data-r="hp">HP overview</a>
@@ -275,11 +277,12 @@ async function pageHPVC(el){
   try{await api('contracts',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({unit:u,customer:$('c_c').value.trim()||null,monthly_rate:r,start_date:$('c_s').value||null,end_date:$('c_e').value||null,rolling:$('c_o').value==='true',source:'manual'})});D=null;route()}catch(e){$('c_err').textContent='Could not save: '+e.message}};
 }
 /* ---------- embedded pages ---------- */
+function pageAnalyser(el){const U='https://fleetrate-hgv-analyzer.paul-merchant47.chatgpt.site/';el.innerHTML=head('Deal analyser','FleetRate – price an HGV hire deal: weekly rate, cash, profit and finance over five years')+`<div class="card" style="padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span class="hint" style="margin:0;flex:1">Saved deals are kept in this browser. If the tool doesn't appear below, open it in its own tab.</span><a class="mini pri2" href="${U}" target="_blank" rel="noopener" style="text-decoration:none">Open in new tab</a></div><iframe class="emb" src="${U}" style="height:calc(100vh - 190px);min-height:600px;width:100%;border:0;border-radius:10px;background:#fff;margin:0" allow="clipboard-write; fullscreen"></iframe>`}
 function embed(el,src){el.innerHTML=`<iframe class="emb" src="${src}"></iframe>`;const f=el.firstChild;f.onload=()=>{try{const d=f.contentDocument;const s=d.createElement('style');s.textContent='#ct-signout{display:none!important}';d.head.appendChild(s)}catch(e){}}}
 function pageInspections(el){ embed(el,'inspect/#refs'); }
 /* ---------- router ---------- */
 window.CT={enhance,calcHPVC,mon,fmtD,NOW,api,all,gbp,esc,T,C,head,tiles,loadFinance,routes:null};
-const routes={fleet:el=>embed(el,'dashboard/'),hp:pageHP,hpvc:pageHPVC,inspections:pageInspections};
+const routes={fleet:el=>embed(el,'dashboard/'),analyser:pageAnalyser,hp:pageHP,hpvc:pageHPVC,inspections:pageInspections};
 window.CT.routes=routes;
 async function route(){
  const r=(location.hash.replace(/^#\/?/,'')||'home').split('?')[0];const fn=routes[r]||routes.home;
@@ -302,4 +305,5 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="stock.js?v=3"></script>
 <script src="home.js?v=7"></script>
 <script src="finance.js?v=1"></script>
-<script src="ma.js?v=3"></script></body></html>
+<script src="orders.js?v=1"></script>
+<script src="ma.js?v=4"></script></body></html>
