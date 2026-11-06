@@ -38,7 +38,7 @@
       // VAT workings
       const sumF = (codes) => codes.reduce((t, c) => t + n0(get(k, c, 'f')), 0);
       const oc = (!mo.closed && X.orders) ? X.orders.cash(k) : { inflow: 0, out: 0 }; r.oc = oc;
-      const autoW = { vat_sales: (sumF(salesL) + oc.inflow) / 6, vat_purch: -sumF(purch) / 6, vat_capex: -n0(get(k, 'capex', 'f')) / 6 - (oc.vat || 0) };
+      const autoW = { vat_sales: (sumF(salesL) + (oc.taxable != null ? oc.taxable : oc.inflow)) / 6, vat_purch: -sumF(purch) / 6, vat_capex: -n0(get(k, 'capex', 'f')) / 6 - (oc.vat || 0) };
       r.w = {}; let posF = 0, posA = 0, anyA = false;
       ['vat_sales', 'vat_purch', 'vat_capex'].forEach((c) => {
         const mf = get(k, c, 'f'), ma = get(k, c, 'a');
