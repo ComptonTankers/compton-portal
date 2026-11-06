@@ -20,8 +20,12 @@
   table.ma .ytd{background:#fdf6ee!important;border-left:1px solid var(--line)}.fav{color:var(--good)}.adv{color:var(--bad)}`;
   document.head.appendChild(css);
 
-  const SECT = ['income', 'cos', 'overhead', 'depreciation', 'finance', 'tax'];
-  const SLAB = { income: 'Income', cos: 'Direct costs', overhead: 'Overheads', depreciation: 'Depreciation', finance: 'Finance costs', tax: 'Tax' };
+  const SECT = ['income', 'cos', 'overhead'];
+  const SLAB = { income: 'Income', cos: 'Cost of sales', overhead: 'Operating expenses' };
+  const FYM = 4;   // financial year starts in May and ends 30 April
+  const fyOf = (i) => (i % 12 >= FYM ? Math.floor(i / 12) : Math.floor(i / 12) - 1);
+  const fyLabel = (fy) => 'FY' + String(fy + 1).slice(2) + ' (May ' + fy + ' – Apr ' + (fy + 1) + ')';
+  const DEP = ['depreciation'], HPI = ['hp_interest'], DISP = ['disposal'];
 
   /* ===================== fixed asset engine ===================== */
   let FA = null;
@@ -42,122 +46,168 @@
   const nbvAt = (a, m) => { const q = sched(a); if (!q || m < q.s) return q ? 0 : 0; if (q.disp != null && m >= q.disp) return 0; return q.cost - accAt(a, m); };
   const depMonth = (m) => FA ? FA.assets.filter((a) => a.active).reduce((t, a) => t + chargeAt(a, m), 0) : 0;
 
-  /* ===================== management accounts ===================== */
+  /* ===================== management accounts + budget ===================== */
   let MA = null;
   async function maLoad() {
-    const [lines, ent, mcs] = await Promise.all([all('ma_lines', 'sort.asc'), all('ma_entries', 'month.asc'), all('hire_months', 'month.asc')]);
+    const [lines, ent] = await Promise.all([all('ma_lines', 'sort.asc'), all('ma_entries', 'month.asc')]);
     const E = {}; ent.forEach((r) => { const k = String(r.month).slice(0, 7); (E[k] = E[k] || {})[r.line] = { a: num(r.actual), b: num(r.budget) }; });
-    const MCS = {}; mcs.forEach((m) => { MCS[String(m.month).slice(0, 7)] = +m.hire_revenue; });
-    const fyOf = (i) => (i % 12 >= 9 ? Math.floor(i / 12) : Math.floor(i / 12) - 1), lastK = Object.keys(MCS).concat(Object.keys(E).filter((k) => Object.values(E[k]).some((x) => x.a != null))).sort().pop();
+    const lastK = Object.keys(E).filter((k) => Object.values(E[k]).some((x) => x.a != null)).sort().pop();
     const fy = MA ? MA.fy : (lastK ? fyOf(mi(lastK)) : fyOf(NOW));
     lines.sort((a, b) => SECT.indexOf(a.section) - SECT.indexOf(b.section) || a.sort - b.sort);
-    MA = { lines, E, MCS, fy };
+    MA = { lines, E, fy };
   }
   const cell = (l, m, w) => {   // {v, auto}
     const k = kOf(m), e = MA.E[k] && MA.E[k][l.code], own = e ? (w === 'a' ? e.a : e.b) : null;
     if (own != null) return { v: own, auto: false };
-    if (l.auto === 'mcs' && w === 'a' && MA.MCS[k] != null) return { v: MA.MCS[k], auto: true };
     if (l.auto === 'fa' && FA && (w === 'b' || m <= NOW)) { const c = depMonth(m); if (c) return { v: Math.round(c * 100) / 100, auto: true }; }
     return { v: null, auto: false };
   };
+  const lv = (codes, m, w) => MA.lines.filter((l) => codes.includes(l.code)).reduce((t, l) => t + (cell(l, m, w).v || 0), 0);
   const secSum = (sec, m, w) => MA.lines.filter((l) => l.section === sec).reduce((t, l) => t + (cell(l, m, w).v || 0), 0);
   function pl(m, w) {
-    const income = secSum('income', m, w), cos = secSum('cos', m, w), overhead = secSum('overhead', m, w), dep = secSum('depreciation', m, w), fin = secSum('finance', m, w), tax = secSum('tax', m, w);
-    const gp = income - cos, ebitda = gp - overhead, op = ebitda - dep, pbt = op - fin, net = pbt - tax;
-    return { income, cos, gp, overhead, ebitda, dep, op, fin, pbt, net, tax };
+    const income = secSum('income', m, w), cos = secSum('cos', m, w), overhead = secSum('overhead', m, w);
+    const gp = income - cos, net = gp - overhead, disp = lv(DISP, m, w), dep = lv(DEP, m, w), hpi = lv(HPI, m, w);
+    return { income, cos, gp, overhead, net, disp, nodisp: net + disp, pre: net + dep + hpi + disp };
   }
-  const hasActual = (m) => { const k = kOf(m), e = MA.E[k]; return (e && Object.values(e).some((x) => x.a != null)) || MA.MCS[k] != null; };
+  const hasActual = (m) => { const e = MA.E[kOf(m)]; return !!(e && Object.values(e).some((x) => x.a != null)); };
+  const fyMonths = () => Array.from({ length: 12 }, (_, i) => MA.fy * 12 + FYM + i);
+  const lastActual = (ms) => [...ms].reverse().find((m) => hasActual(m));
 
   X.routes.ma = async (el) => { el.innerHTML = X.head('Management accounts', 'Loading…') + '<div class="empty">Loading…</div>'; if (!FA) await faLoad(); await maLoad(); maDraw(el); };
+  X.routes.budget = async (el) => { el.innerHTML = X.head('Budget', 'Loading…') + '<div class="empty">Loading…</div>'; if (!FA) await faLoad(); await maLoad(); budDraw(el); };
+
+  const fyPicker = (id) => { const o = []; for (let y = Math.floor(NOW / 12) - 2; y <= Math.floor(NOW / 12) + 1; y++) o.push(`<option value="${y}" ${y === MA.fy ? 'selected' : ''}>${fyLabel(y)}</option>`); return `<select id="${id}">${o.join('')}</select>`; };
+  const save = async (k, code, w, v) => {
+    await api('ma_entries?on_conflict=month,line', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ month: k + '-01', line: code, [w === 'a' ? 'actual' : 'budget']: v, updated_at: new Date().toISOString() }) });
+    (MA.E[k] = MA.E[k] || {}); (MA.E[k][code] = MA.E[k][code] || { a: null, b: null })[w] = v;
+  };
+  const wireInputs = (el, redraw) => el.querySelectorAll('input.mi').forEach((inp) => inp.addEventListener('change', async () => {
+    const v = parse(inp.value); if (v === undefined) { inp.value = ''; return; }
+    try { await save(inp.dataset.m, inp.dataset.l, inp.dataset.w, v); redraw(); } catch (e) { inp.style.outline = '2px solid ' + C.bad; }
+  }));
+  const reload = async (el, draw) => { const fy = MA.fy; await maLoad(); MA.fy = fy; draw(el); };
 
   function maDraw(el) {
     const keep = el.querySelector('.maw') ? [el.querySelector('.maw').scrollLeft, el.querySelector('.maw').scrollTop, window.scrollY] : null;
-    const s0 = MA.fy * 12 + 9, ms = Array.from({ length: 12 }, (_, i) => s0 + i);
-    const lastAct = [...ms].reverse().find((m) => hasActual(m)); const ytd = lastAct != null ? ms.filter((m) => m <= lastAct) : [];
+    const ms = fyMonths(), la = lastActual(ms), ytd = la != null ? ms.filter((m) => m <= la) : [];
     const sum = (f) => ms.reduce((t, m) => t + f(m), 0), ysum = (f) => ytd.reduce((t, m) => t + f(m), 0);
     const A = (m) => pl(m, 'a'), B = (m) => pl(m, 'b');
     const yA = (k) => ysum((m) => A(m)[k]), yB = (k) => ysum((m) => B(m)[k]), fB = (k) => sum((m) => B(m)[k]);
-    const missing = FA ? FA.assets.filter((a) => a.active && !a.cost).length : 0;
-    const fyLab = 'FY' + String(MA.fy + 1).slice(2) + ' (Oct ' + MA.fy + ' – Sep ' + (MA.fy + 1) + ')';
+    const outlook = (k) => yA(k) + ms.filter((m) => !ytd.includes(m)).reduce((t, m) => t + B(m)[k], 0);
     const varCls = (v, cost) => ((cost ? -v : v) >= 0 ? 'fav' : 'adv');
+    const vs = (a, b) => (b ? gbp(a - b) + ' vs budget (' + pct(a / b) + ')' : 'no budget');
     const tiles = X.tiles([
-      { l: 'Income, year to date', v: gbp(yA('income')), s: yB('income') ? gbp(yA('income') - yB('income')) + ' vs budget (' + pct(yA('income') / yB('income')) + ')' : 'no budget entered', c: yB('income') && yA('income') < yB('income') ? 'r' : 'g' },
-      { l: 'Gross margin', v: yA('income') ? pct(yA('gp') / yA('income'), 1) : '–', s: yB('income') ? 'budget ' + pct(yB('gp') / yB('income'), 1) : '' },
-      { l: 'EBITDA, year to date', v: gbp(yA('ebitda')), s: yB('ebitda') ? gbp(yA('ebitda') - yB('ebitda')) + ' vs budget' : '' },
-      { l: 'Net profit, year to date', v: gbp(yA('net')), s: yB('net') ? gbp(yA('net') - yB('net')) + ' vs budget' : '', c: yB('net') && yA('net') < yB('net') ? 'r' : '' },
-      { l: 'Full-year budget profit', v: gbp(fB('net')), s: fB('income') ? 'on income ' + gbp(fB('income')) : 'budget not entered yet', c: 'o' },
-      { l: 'Depreciation this FY', v: gbp(sum((m) => A(m).dep)), s: missing ? missing + ' assets still need a cost' : 'from the fixed asset register' }]);
+      { l: 'Income, year to date', v: gbp(yA('income')), s: vs(yA('income'), yB('income')), c: yB('income') && yA('income') < yB('income') ? 'r' : 'g' },
+      { l: 'Gross profit, year to date', v: gbp(yA('gp')), s: vs(yA('gp'), yB('gp')) },
+      { l: 'Net profit, year to date', v: gbp(yA('net')), s: vs(yA('net'), yB('net')), c: yA('net') < yB('net') ? 'r' : 'g' },
+      { l: 'Profit without disposals', v: gbp(yA('nodisp')), s: vs(yA('nodisp'), yB('nodisp')) },
+      { l: 'Full-year budget profit', v: gbp(fB('net')), s: 'on income ' + gbp(fB('income')), c: 'o' },
+      { l: 'Full-year outlook', v: gbp(outlook('net')), s: 'actual to date + budget for the rest · ' + gbp(outlook('net') - fB('net')) + ' vs budget', c: outlook('net') < fB('net') ? 'r' : 'g' }]);
 
-    // grid
-    const head1 = `<tr><th rowspan="2">${esc(fyLab)}</th>${ms.map((m) => `<th colspan="2" style="text-align:center">${lab(m)}</th>`).join('')}<th colspan="4" class="ytd" style="text-align:center">Year to date${lastAct != null ? ' to ' + lab(lastAct) : ''}</th><th rowspan="2" class="ytd">FY budget</th></tr>`;
+    const head1 = `<tr><th rowspan="2">${esc(fyLabel(MA.fy))}</th>${ms.map((m) => `<th colspan="2" style="text-align:center">${lab(m)}</th>`).join('')}<th colspan="4" class="ytd" style="text-align:center">Year to date${la != null ? ' to ' + lab(la) : ''}</th><th rowspan="2" class="ytd">FY budget</th></tr>`;
     const head2 = `<tr>${ms.map(() => '<th>Actual</th><th>Budget</th>').join('')}<th class="ytd">Actual</th><th class="ytd">Budget</th><th class="ytd">Var</th><th class="ytd">Var %</th></tr>`;
     const ytdCells = (a, b, cost, fyb) => { const v = a - b; return `<td class="ytd">${a ? gbp(a) : '–'}</td><td class="ytd">${b ? gbp(b) : '–'}</td><td class="ytd ${a || b ? varCls(v, cost) : ''}">${a || b ? gbp(v) : '–'}</td><td class="ytd ${a || b ? varCls(v, cost) : ''}">${b ? pct(v / Math.abs(b)) : '–'}</td><td class="ytd">${fyb ? gbp(fyb) : '–'}</td>`; };
     const lineRow = (l) => {
       const cost = l.section !== 'income';
-      const inputs = ms.map((m) => ['a', 'b'].map((w) => { const c = cell(l, m, w); return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="${w}" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}" title="${c.auto ? 'Automatic (' + (l.auto === 'mcs' ? 'MCS hire income' : 'fixed asset register') + ') – type to override' : ''}"></td>`; }).join('')).join('');
-      const a = ysum((m) => cell(l, m, 'a').v || 0), b = ysum((m) => cell(l, m, 'b').v || 0), fb = sum((m) => cell(l, m, 'b').v || 0);
-      return `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${inputs}${ytdCells(a, b, cost, fb)}</tr>`;
+      const inputs = ms.map((m) => ['a', 'b'].map((w) => { const c = cell(l, m, w); return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="${w}" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}" title="${c.auto ? 'Automatic from the fixed asset register – type to override' : ''}"></td>`; }).join('')).join('');
+      return `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${inputs}${ytdCells(ysum((m) => cell(l, m, 'a').v || 0), ysum((m) => cell(l, m, 'b').v || 0), cost, sum((m) => cell(l, m, 'b').v || 0))}</tr>`;
     };
     const totRow = (cls, label, key, cost) => `<tr class="${cls}"><td>${label}</td>${ms.map((m) => `<td>${A(m)[key] ? gbp(A(m)[key]) : '–'}</td><td>${B(m)[key] ? gbp(B(m)[key]) : '–'}</td>`).join('')}${ytdCells(yA(key), yB(key), cost, fB(key))}</tr>`;
     const body = [];
     SECT.forEach((sec) => {
-      const ls = MA.lines.filter((l) => l.section === sec && l.active !== false); if (!ls.length) return;
-      body.push(`<tr class="sec"><td colspan="${2 + ms.length * 2 + 4}">${SLAB[sec]}</td></tr>`); ls.forEach((l) => body.push(lineRow(l)));
+      body.push(`<tr class="sec"><td colspan="${2 + ms.length * 2 + 4}">${SLAB[sec]}</td></tr>`); MA.lines.filter((l) => l.section === sec && l.active !== false).forEach((l) => body.push(lineRow(l)));
       if (sec === 'income') body.push(totRow('sub', 'Total income', 'income', false));
-      if (sec === 'cos') { body.push(totRow('sub', 'Total direct costs', 'cos', true)); body.push(totRow('tot', 'Gross profit', 'gp', false)); }
-      if (sec === 'overhead') { body.push(totRow('sub', 'Total overheads', 'overhead', true)); body.push(totRow('tot', 'EBITDA', 'ebitda', false)); }
-      if (sec === 'depreciation') body.push(totRow('tot', 'Operating profit', 'op', false));
-      if (sec === 'finance') body.push(totRow('tot', 'Profit before tax', 'pbt', false));
-      if (sec === 'tax') body.push(totRow('tot', 'Net profit', 'net', false));
+      if (sec === 'cos') { body.push(totRow('sub', 'Total cost of sales', 'cos', true)); body.push(totRow('tot', 'Gross profit', 'gp', false)); }
+      if (sec === 'overhead') { body.push(totRow('sub', 'Total operating expenses', 'overhead', true)); body.push(totRow('tot', 'Net profit', 'net', false)); body.push(totRow('sub', 'Profit (without disposal)', 'nodisp', false)); body.push(totRow('sub', 'Profit before depreciation, HP interest &amp; disposals', 'pre', false)); }
     });
+    const adverse = MA.lines.map((l) => { const a = ytd.reduce((t, m) => t + (cell(l, m, 'a').v || 0), 0), b = ytd.reduce((t, m) => t + (cell(l, m, 'b').v || 0), 0); const cost = l.section !== 'income'; return { l, a, b, f: cost ? b - a : a - b }; }).filter((x) => x.b || x.a).sort((p, q) => p.f - q.f);
+    const flags = adverse.filter((x) => x.f < 0).slice(0, 6), wins = adverse.filter((x) => x.f > 0).reverse().slice(0, 4);
+    const li = (x, good) => `<li style="padding:8px 0;border-bottom:1px solid ${C.line}"><b>${esc(x.l.label)}</b>: ${gbp(x.a)} against ${gbp(x.b)} budget – <span class="${good ? 'fav' : 'adv'}">${gbp(Math.abs(x.f))} ${x.l.section === 'income' ? (good ? 'ahead' : 'short') : (good ? 'under' : 'over')}</span></li>`;
 
-    const fyOpts = []; for (let y = Math.floor(NOW / 12) - 3; y <= Math.floor(NOW / 12) + 1; y++) fyOpts.push(`<option value="${y}" ${y === MA.fy ? 'selected' : ''}>FY${String(y + 1).slice(2)} (Oct ${y} – Sep ${y + 1})</option>`);
-    const adverse = MA.lines.filter((l) => l.section !== 'depreciation').map((l) => { const a = ytd.reduce((t, m) => t + (cell(l, m, 'a').v || 0), 0), b = ytd.reduce((t, m) => t + (cell(l, m, 'b').v || 0), 0); const cost = l.section !== 'income'; return { l, a, b, f: cost ? b - a : a - b }; }).filter((x) => x.b || x.a).sort((p, q) => p.f - q.f);
-    const flags = adverse.filter((x) => x.f < 0 && x.b).slice(0, 5), wins = adverse.filter((x) => x.f > 0 && x.b).reverse().slice(0, 3);
-
-    el.innerHTML = X.head('Management accounts', 'Actual against budget · enter figures straight into the grid, or paste from Excel') + tiles +
-      `<div class="flt"><b>Financial year</b><select id="ma_fy">${fyOpts.join('')}</select><span class="cnt">Auto lines (MCS hire income, depreciation) fill themselves – type over them to override.</span></div>
+    el.innerHTML = X.head('Management accounts', 'Actual against budget · FY ends 30 April · type into the grid or paste from Excel') + tiles +
+      `<div class="flt"><b>Financial year</b>${fyPicker('ma_fy')}<span class="cnt">Edit budgets on the <a href="#/budget" style="color:${C.blue}">Budget</a> page.</span></div>
       <div class="row"><div class="card"><h3>Income against budget</h3><div class="hint">Monthly. Line = budget.</div><div id="m1"></div></div>
-        <div class="card"><h3>EBITDA against budget</h3><div class="hint">Monthly. Line = budget.</div><div id="m2"></div></div></div>
+        <div class="card"><h3>Net profit against budget</h3><div class="hint">Monthly. Line = budget.</div><div id="m2"></div></div></div>
       <div class="row"><div class="card"><h3>Cumulative net profit</h3><div class="hint">Running total through the year. Line = budget.</div><div id="m3"></div></div>
         <div class="card"><h3>Costs: actual vs budget (YTD)</h3><div class="hint">Bar = actual, thin line = budget. Hover for the variance.</div><div id="m4"></div></div></div>
-      <div class="row"><div class="card" style="border-top:4px solid ${C.bad}"><h3>Behind budget</h3>${flags.length ? '<ul style="margin:0;padding:0;list-style:none">' + flags.map((x) => `<li style="padding:8px 0;border-bottom:1px solid ${C.line}"><b>${esc(x.l.label)}</b>: ${gbp(x.a)} against ${gbp(x.b)} budget – <span class="adv">${gbp(Math.abs(x.f))} ${x.l.section === 'income' ? 'short' : 'over'}</span></li>`).join('') + '</ul>' : '<div class="hint">Nothing over budget (or no budget entered yet).</div>'}</div>
-        <div class="card" style="border-top:4px solid ${C.good}"><h3>Ahead of budget</h3>${wins.length ? '<ul style="margin:0;padding:0;list-style:none">' + wins.map((x) => `<li style="padding:8px 0;border-bottom:1px solid ${C.line}"><b>${esc(x.l.label)}</b>: ${gbp(x.a)} against ${gbp(x.b)} budget – <span class="fav">${gbp(x.f)} ${x.l.section === 'income' ? 'ahead' : 'under'}</span></li>`).join('') + '</ul>' : '<div class="hint">Nothing yet.</div>'}</div></div>
-      <div class="card"><h3>Profit and loss</h3><div class="hint">Type into any month. Blank budget = no budget set. Variance is favourable (green) or adverse (red).</div>
+      <div class="row"><div class="card" style="border-top:4px solid ${C.bad}"><h3>Behind budget</h3>${flags.length ? '<ul style="margin:0;padding:0;list-style:none">' + flags.map((x) => li(x, false)).join('') + '</ul>' : '<div class="hint">Nothing behind budget.</div>'}</div>
+        <div class="card" style="border-top:4px solid ${C.good}"><h3>Ahead of budget</h3>${wins.length ? '<ul style="margin:0;padding:0;list-style:none">' + wins.map((x) => li(x, true)).join('') + '</ul>' : '<div class="hint">Nothing yet.</div>'}</div></div>
+      <div class="card"><h3>Profit and loss</h3><div class="hint">Type into any month. Variance is favourable (green) or adverse (red). Loss on disposal is a cost (profit on disposal shows as a negative).</div>
         <div class="cfwrap maw" style="max-height:70vh"><table class="ma"><thead>${head1}${head2}</thead><tbody>${body.join('')}</tbody></table></div></div>
-      <div class="card"><h3>Paste from Excel</h3><div class="hint">Copy rows from the accountant's management accounts (line name in the first column, then the monthly numbers) and paste. Lines are matched by name; totals are ignored.</div>
+      <div class="card"><h3>Paste from Excel</h3><div class="hint">Copy rows from the monthly P&amp;L sheet (line name in the first column, then the figures) and paste. Lines are matched by name; totals are ignored.</div>
         <div class="form"><div><label>These are</label><select id="p_w"><option value="a">Actuals</option><option value="b">Budget</option></select></div><div><label>First number is for</label><select id="p_m">${ms.map((m) => `<option value="${kOf(m)}">${labL(m)}</option>`).join('')}</select></div></div>
-        <textarea id="p_t" rows="6" style="width:100%;font:inherit;margin:8px 0" placeholder="Hire income&#9;120000&#9;125000&#9;…"></textarea><div class="form"><div><button id="p_go" type="button">Import</button></div></div><div id="p_msg" class="hint" style="margin-top:8px"></div></div>
+        <textarea id="p_t" rows="6" style="width:100%;font:inherit;margin:8px 0" placeholder="Rental - energy&#9;137452&#9;132906&#9;…"></textarea><div class="form"><div><button id="p_go" type="button">Import</button></div></div><div id="p_msg" class="hint" style="margin-top:8px"></div></div>
       <div class="card"><h3>Add a line</h3><div class="form"><div><label>Name</label><input id="n_l"></div><div><label>Section</label><select id="n_s">${SECT.map((s) => `<option value="${s}">${SLAB[s]}</option>`).join('')}</select></div><div><button id="n_go" type="button">Add line</button></div></div></div>`;
 
-    const R12 = (f) => ms.map((m) => f(m));
     const tip = (m, key, label, cost) => { const a = A(m)[key], b = B(m)[key], v = cost ? b - a : a - b; return `<b>${labL(m)}</b>` + row(label + ' actual', gbp(a)) + row('Budget', gbp(b)) + row('Variance', (v >= 0 ? '+' : '') + gbp(v)); };
-    cols($('m1'), ms.map((m) => ({ l: lab(m), parts: [{ v: A(m).income, c: C.blue }], line: B(m).income ? { v: B(m).income } : null, tip: tip(m, 'income', 'Income', false) })), { title: 'Income against budget', h: 220 });
-    cols($('m2'), ms.map((m) => ({ l: lab(m), parts: [{ v: A(m).ebitda, c: C.blue2 }], line: B(m).income ? { v: B(m).ebitda } : null, tip: tip(m, 'ebitda', 'EBITDA', false) })), { title: 'EBITDA against budget', h: 220 });
+    cols($('m1'), ms.map((m) => ({ l: lab(m), parts: [{ v: ytd.includes(m) ? A(m).income : 0, c: C.blue }], line: { v: B(m).income }, tip: tip(m, 'income', 'Income', false) })), { title: 'Income against budget', h: 220 });
+    cols($('m2'), ms.map((m) => ({ l: lab(m), parts: [{ v: ytd.includes(m) ? A(m).net : 0, c: C.blue2 }], line: { v: B(m).net }, tip: tip(m, 'net', 'Net profit', false) })), { title: 'Net profit against budget', h: 220 });
     let ca = 0, cb = 0; cols($('m3'), ms.map((m) => { const inY = ytd.includes(m); if (inY) ca += A(m).net; cb += B(m).net; const a = ca, b = cb; return { l: lab(m), parts: [{ v: inY ? a : 0, c: C.blue }], line: { v: b }, tip: `<b>${labL(m)}</b>` + row('Cumulative actual', inY ? gbp(a) : '–') + row('Cumulative budget', gbp(b)) }; }), { title: 'Cumulative net profit', h: 220 });
-    const costRows = MA.lines.filter((l) => ['cos', 'overhead'].includes(l.section)).map((l) => ({ l, a: ytd.reduce((t, m) => t + (cell(l, m, 'a').v || 0), 0), b: ytd.reduce((t, m) => t + (cell(l, m, 'b').v || 0), 0) })).filter((x) => x.a || x.b).sort((p, q) => q.a - p.a).slice(0, 12);
+    const costRows = MA.lines.filter((l) => ['cos', 'overhead'].includes(l.section) && !DISP.includes(l.code)).map((l) => ({ l, a: ytd.reduce((t, m) => t + (cell(l, m, 'a').v || 0), 0), b: ytd.reduce((t, m) => t + (cell(l, m, 'b').v || 0), 0) })).filter((x) => x.a || x.b).sort((p, q) => q.a - p.a).slice(0, 14);
     if (costRows.length) hbars($('m4'), costRows.map((x) => ({ l: x.l.label, v: x.a, v2: x.b || null, c: x.b && x.a > x.b ? C.orange : C.blue2, tip: `<b>${esc(x.l.label)}</b>` + row('Actual YTD', gbp(x.a)) + row('Budget YTD', gbp(x.b)) + row('Variance', x.b ? gbp(x.b - x.a) : '–') })), { title: 'Costs', fmt: gbp, left: 190 });
     else $('m4').innerHTML = '<div class="hint">Enter costs to see the comparison.</div>';
 
-    // wiring
     $('ma_fy').onchange = (e) => { MA.fy = +e.target.value; maDraw(el); };
-    el.querySelectorAll('input.mi').forEach((inp) => inp.addEventListener('change', async () => {
-      const v = parse(inp.value); if (v === undefined) { inp.value = ''; return; }
-      const k = inp.dataset.m, code = inp.dataset.l, w = inp.dataset.w;
-      try { await api('ma_entries?on_conflict=month,line', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ month: k + '-01', line: code, [w === 'a' ? 'actual' : 'budget']: v, updated_at: new Date().toISOString() }) }); (MA.E[k] = MA.E[k] || {}); (MA.E[k][code] = MA.E[k][code] || { a: null, b: null })[w] = v; maDraw(el); } catch (e) { inp.style.outline = '2px solid ' + C.bad; }
-    }));
+    wireInputs(el, () => maDraw(el));
     $('p_go').onclick = async () => {
       const w = $('p_w').value, start = mi($('p_m').value), out = [], skipped = [];
       const norml = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
       const idx = {}; MA.lines.forEach((l) => { idx[norml(l.label)] = l; idx[norml(l.code)] = l; });
-      $('p_t').value.split(/\r?\n/).filter((x) => x.trim()).forEach((ln) => { const c = ln.split('\t'); const name = (c[0] || '').trim(); if (!name) return; if (/^(total|gross profit|ebitda|net profit|operating profit|profit before)/i.test(name)) return;
+      $('p_t').value.split(/\r?\n/).filter((x) => x.trim()).forEach((ln) => { const c = ln.split('\t'); const name = (c[0] || '').trim(); if (!name) return; if (/^(total|gross profit|net profit|profit|less|income|basic|add back)/i.test(name)) return;
         const l = idx[norml(name)] || Object.entries(idx).find(([k]) => k.length > 4 && (norml(name).startsWith(k) || k.startsWith(norml(name))))?.[1];
         if (!l) { skipped.push(name); return; } c.slice(1).forEach((x, i) => { const v = parse(x); if (v !== undefined && v !== null) out.push({ month: kOf(start + i) + '-01', line: l.code, [w === 'a' ? 'actual' : 'budget']: v }); }); });
       if (!out.length) { $('p_msg').textContent = 'Nothing imported' + (skipped.length ? ' – no line matched: ' + skipped.join(', ') : '.'); return; }
-      try { await api('ma_entries?on_conflict=month,line', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(out) }); const fy = MA.fy; await maLoad(); MA.fy = fy; maDraw(el); $('p_msg').textContent = 'Imported ' + out.length + ' figures.' + (skipped.length ? ' Not matched (add them as lines first): ' + skipped.join(', ') : ''); } catch (e) { $('p_msg').textContent = 'Import failed: ' + e.message; }
+      try { await api('ma_entries?on_conflict=month,line', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(out) }); await reload(el, maDraw); $('p_msg').textContent = 'Imported ' + out.length + ' figures.' + (skipped.length ? ' Not matched (add them as lines first): ' + skipped.join(', ') : ''); } catch (e) { $('p_msg').textContent = 'Import failed: ' + e.message; }
     };
     $('n_go').onclick = async () => { const name = $('n_l').value.trim(); if (!name) return; const sec = $('n_s').value, code = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 30);
-      try { await api('ma_lines', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ code, label: name, section: sec, sort: Math.max(0, ...MA.lines.filter((l) => l.section === sec).map((l) => l.sort)) + 1 }) }); const fy = MA.fy; await maLoad(); MA.fy = fy; maDraw(el); } catch (e) { alert('Could not add: ' + e.message); } };
+      try { await api('ma_lines', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ code, label: name, section: sec, sort: Math.max(0, ...MA.lines.map((l) => l.sort)) + 1 }) }); await reload(el, maDraw); } catch (e) { alert('Could not add: ' + e.message); } };
+    if (keep) { const w = el.querySelector('.maw'); w.scrollLeft = keep[0]; w.scrollTop = keep[1]; window.scrollTo(0, keep[2]); }
+  }
+
+  /* ---------- Budget page ---------- */
+  function budDraw(el) {
+    const keep = el.querySelector('.maw') ? [el.querySelector('.maw').scrollLeft, el.querySelector('.maw').scrollTop, window.scrollY] : null;
+    const ms = fyMonths(), la = lastActual(ms), ytd = la != null ? ms.filter((m) => m <= la) : [], rest = ms.filter((m) => !ytd.includes(m));
+    const A = (m) => pl(m, 'a'), B = (m) => pl(m, 'b');
+    const sum = (f, set) => set.reduce((t, m) => t + f(m), 0);
+    const fyB = (k) => sum((m) => B(m)[k], ms), yA = (k) => sum((m) => A(m)[k], ytd), yB = (k) => sum((m) => B(m)[k], ytd);
+    const outlook = (k) => yA(k) + sum((m) => B(m)[k], rest);
+    const monthlyRest = rest.length ? sum((m) => B(m).net, rest) / rest.length : 0;
+    const tiles = X.tiles([
+      { l: 'Budget income, full year', v: gbp(fyB('income')), s: gbp(fyB('income') / 12) + ' a month on average', c: 'o' },
+      { l: 'Budget net profit, full year', v: gbp(fyB('net')), s: pct(fyB('income') ? fyB('net') / fyB('income') : null, 1) + ' of income' },
+      { l: 'Profit to date vs budget', v: gbp(yA('net') - yB('net')), s: gbp(yA('net')) + ' actual vs ' + gbp(yB('net')) + ' budget · ' + ytd.length + ' months', c: yA('net') >= yB('net') ? 'g' : 'r' },
+      { l: 'Full-year outlook', v: gbp(outlook('net')), s: gbp(outlook('net') - fyB('net')) + ' vs budget', c: outlook('net') >= fyB('net') ? 'g' : 'r' },
+      { l: 'Profit needed per month', v: gbp(rest.length ? (fyB('net') - yA('net')) / rest.length : 0), s: 'over the remaining ' + rest.length + ' months to hit budget' },
+      { l: 'Budget months left', v: rest.length, s: 'draft forecast, ' + rest.length ? 'edit below' : '' }]);
+
+    // forecast check: where actual run-rate differs from the forecast month
+    const chk = MA.lines.map((l) => { const a = ytd.map((m) => cell(l, m, 'a').v || 0); const avg = a.length ? a.reduce((t, v) => t + v, 0) / a.length : 0; const fc = rest.length ? sum((m) => cell(l, m, 'b').v || 0, rest) / rest.length : 0; const cost = l.section !== 'income'; return { l, avg, fc, d: cost ? avg - fc : fc - avg }; })
+      .filter((x) => !DISP.includes(x.l.code) && ytd.length && Math.abs(x.avg - x.fc) > Math.max(400, 0.2 * Math.max(x.fc, 1))).sort((p, q) => Math.abs(q.avg - q.fc) - Math.abs(p.avg - p.fc)).slice(0, 8);
+    const head = `<tr><th>${esc(fyLabel(MA.fy))}</th>${ms.map((m) => `<th>${lab(m)}<br><span class="pill ${ytd.includes(m) ? 'g' : 'a'}" style="font-size:10px">${ytd.includes(m) ? 'budget' : 'forecast'}</span></th>`).join('')}<th class="ytd">Full year</th><th class="ytd" style="text-align:left;min-width:360px">Forecast basis</th></tr>`;
+    const lineRow = (l) => `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${ms.map((m) => { const c = cell(l, m, 'b'); return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="b" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}"></td>`; }).join('')}<td class="ytd">${gbp(sum((m) => cell(l, m, 'b').v || 0, ms))}</td><td class="ytd" style="text-align:left;white-space:normal;font-size:12px;color:var(--mut)">${esc(l.note || '')}</td></tr>`;
+    const tot = (cls, label, key) => `<tr class="${cls}"><td>${label}</td>${ms.map((m) => `<td>${gbp(B(m)[key])}</td>`).join('')}<td class="ytd">${gbp(fyB(key))}</td><td class="ytd"></td></tr>`;
+    const body = [];
+    SECT.forEach((sec) => { body.push(`<tr class="sec"><td colspan="${ms.length + 3}">${SLAB[sec]}</td></tr>`); MA.lines.filter((l) => l.section === sec).forEach((l) => body.push(lineRow(l)));
+      if (sec === 'income') body.push(tot('sub', 'Total income', 'income')); if (sec === 'cos') { body.push(tot('sub', 'Total cost of sales', 'cos')); body.push(tot('tot', 'Gross profit', 'gp')); } if (sec === 'overhead') { body.push(tot('sub', 'Total operating expenses', 'overhead')); body.push(tot('tot', 'Net profit', 'net')); } });
+
+    el.innerHTML = X.head('Budget', 'Full-year budget, draft forecast and performance against it · FY ends 30 April') + tiles +
+      `<div class="flt"><b>Financial year</b>${fyPicker('b_fy')}<span class="cnt">${ytd.length ? 'Actuals to ' + labL(la) + '; later months are the draft forecast.' : ''}</span></div>
+      <div class="row"><div class="card"><h3>Profit: actual, then forecast, against the original budget</h3><div class="hint">Bars = actual to date, then the forecast budget (lighter). Line = the budget as originally set.</div><div id="b1"></div></div>
+        <div class="card"><h3>Full-year outlook</h3><div class="hint">Cumulative net profit: actual to date plus forecast, against the full-year budget.</div><div id="b2"></div></div></div>
+      <div class="row"><div class="card"><h3>Where we are against budget</h3><div class="hint">Year-to-date variance by line. Green = better than budget, orange = worse.</div><div id="b3"></div></div>
+        <div class="card" style="border-top:4px solid ${C.orange}"><h3>Is the forecast realistic?</h3><div class="hint">Lines where the average month so far differs a lot from the forecast month. Adjust the budget below if you agree.</div>${chk.length ? '<ul style="margin:0;padding:0;list-style:none">' + chk.map((x) => `<li style="padding:8px 0;border-bottom:1px solid ${C.line}"><b>${esc(x.l.label)}</b>: averaging ${gbp(x.avg)} a month, forecast ${gbp(x.fc)} – <span class="${x.d > 0 ? 'adv' : 'fav'}">${x.d > 0 ? 'forecast may be ' + (x.l.section === 'income' ? 'too high' : 'too low') : 'forecast may be ' + (x.l.section === 'income' ? 'cautious' : 'generous')}</span></li>`).join('') + '</ul>' : '<div class="hint">The forecast is in line with the run-rate so far.</div>'}</div></div>
+      <div class="card"><h3>Budget grid</h3><div class="hint">Every month is editable. The <b>forecast basis</b> column says how each draft figure for the remaining months was worked out – change any figure and the reports above follow.</div>
+        <div class="cfwrap maw" style="max-height:72vh"><table class="ma"><thead>${head}</thead><tbody>${body.join('')}</tbody></table></div></div>`;
+
+    const labs = ms.map((m) => lab(m)); let cumA = 0, cumB = 0, cumO = 0;
+    cols($('b1'), ms.map((m) => { const act = ytd.includes(m); const v = act ? A(m).net : B(m).net; return { l: lab(m), parts: [{ v, c: act ? C.blue : '#9fb6e0' }], line: { v: B(m).net }, tip: `<b>${labL(m)}</b> ${act ? '(actual)' : '(forecast)'}` + row(act ? 'Actual profit' : 'Forecast profit', gbp(v)) + row('Original budget', gbp(B(m).net)) + (act ? row('Variance', gbp(A(m).net - B(m).net)) : '') }; }), { title: 'Profit', h: 230 });
+    cols($('b2'), ms.map((m) => { const act = ytd.includes(m); cumO += act ? A(m).net : B(m).net; cumB += B(m).net; const o = cumO, b = cumB; return { l: lab(m), parts: [{ v: o, c: act ? C.blue : '#9fb6e0' }], line: { v: b }, tip: `<b>${labL(m)}</b>` + row('Cumulative outlook', gbp(o)) + row('Cumulative budget', gbp(b)) + row('Difference', gbp(o - b)) }; }), { title: 'Cumulative', h: 230 });
+    const vr = MA.lines.map((l) => { const a = sum((m) => cell(l, m, 'a').v || 0, ytd), b = sum((m) => cell(l, m, 'b').v || 0, ytd); const f = l.section === 'income' ? a - b : b - a; return { l, a, b, f }; }).filter((x) => (x.a || x.b) && Math.abs(x.f) > 1).sort((p, q) => Math.abs(q.f) - Math.abs(p.f)).slice(0, 12);
+    if (vr.length) hbars($('b3'), vr.map((x) => ({ l: x.l.label, v: Math.abs(x.f), c: x.f >= 0 ? C.good : C.orange, tip: `<b>${esc(x.l.label)}</b>` + row('Actual YTD', gbp(x.a)) + row('Budget YTD', gbp(x.b)) + row(x.f >= 0 ? 'Better than budget by' : 'Worse than budget by', gbp(Math.abs(x.f))) })), { title: 'Variance by line', fmt: gbp, left: 190 });
+    else $('b3').innerHTML = '<div class="hint">No actuals yet.</div>';
+    $('b_fy').onchange = (e) => { MA.fy = +e.target.value; budDraw(el); };
+    wireInputs(el, () => budDraw(el));
     if (keep) { const w = el.querySelector('.maw'); w.scrollLeft = keep[0]; w.scrollTop = keep[1]; window.scrollTo(0, keep[2]); }
   }
 
