@@ -177,7 +177,7 @@
     const vatNote = `<tr class="note"><td class="lab">VAT settled this month</td>${R.map((r) => `<td colspan="3" class="n">${r.vatAuto ? (r.vatAuto.net < 0 ? 'refund ' : 'pay ') + fmt(Math.abs(r.vatAuto.net)) + ' (' + mlabel(r.vatAuto.qk[0]) + '–' + mlabel(r.vatAuto.qk[1]) + ')' : ''}</td>`).join('')}</tr>`;
     const actions = `<tr class="act"><td class="lab">Month status</td>${R.map((r) => `<td colspan="3" class="n">${r.closed ? `<button class="mini" data-reopen="${r.k}">Reopen</button>` : `<button class="mini pri2" data-close="${r.k}">Close month</button>`}</td>`).join('')}</tr>`;
 
-    const table = `<div class="cfwrap"><table class="cf"><thead><tr><th class="lab"></th>${cols}</tr><tr><th class="lab">Line item</th>${sub}</tr></thead><tbody>
+    const table = `<div class="cfwrap" style="max-height:none"><table class="cf"><thead><tr><th class="lab"></th>${cols}</tr><tr><th class="lab">Line item</th>${sub}</tr></thead><tbody>
       ${bal('Opening cash balance', 'openF', 'openA', 'bal')}
       ${section('Cash inflows')}${by('in').map((l) => lineRow(l, true)).join('')}${ordRow('New assets – hire income (incl VAT, est.)', 'inflow', 'From confirmed orders on the New assets on order page')}${tot('Total cash inflows', 'inF', 'inA', 'tot', true)}
       ${section('Cash outflows')}${by('out').map((l) => lineRow(l, false)).join('')}${ordRow('New assets – deposits, HP payments &amp; purchase VAT (est.)', 'out', 'From confirmed orders on the New assets on order page')}${tot('Total cash outflows', 'outF', 'outA', 'tot', false)}
