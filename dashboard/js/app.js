@@ -200,8 +200,8 @@ dash.draw('chart-rpu', (el) => {
 dash.draw('chart-ytd-type', (el) => {
   if (!CT.statusOk(el, ['types'])) return;
   const rows = CT.rowsFor('type_summary').filter((r) => r.ytd_revenue > 0).sort((a, b) => b.ytd_revenue - a.ytd_revenue);
-  if (!rows.length) return CT.empty(el, 'No year-to-date revenue.');
-  CT.hbar(el, rows.map((r, i) => ({ label: r.type, values: [r.ytd_revenue], colors: [i === 0 ? CT.orange : CT.blue] })), { fmt: CT.fmt.gbp, aria: 'Year-to-date hire revenue by type' });
+  if (!rows.length) return CT.empty(el, 'No revenue on record.');
+  CT.hbar(el, rows.map((r, i) => ({ label: r.type, values: [r.ytd_revenue], colors: [i === 0 ? CT.orange : CT.blue] })), { fmt: CT.fmt.gbp, aria: 'Hire revenue on record by type' });
 });
 dash.draw('chart-customers', (el) => {
   if (!CT.statusOk(el, ['customers'])) return;
@@ -213,7 +213,7 @@ dash.draw('chart-util-type', (el) => {
   if (!CT.statusOk(el, ['types'])) return;
   const rows = CT.rowsFor('type_summary').filter((r) => r.units > 0).sort((a, b) => b.units - a.units || (b.utilisation || 0) - (a.utilisation || 0));
   if (!rows.length) return CT.empty(el, 'No units in this period.');
-  CT.hbar(el, rows.map((r) => ({ label: r.type + ' (' + r.units + ')', values: [r.utilisation || 0, r.ytd_utilisation || 0], colors: [CT.orange, CT.blue], names: ['Selected period', 'FY to date'] })),
+  CT.hbar(el, rows.map((r) => ({ label: r.type + ' (' + r.units + ')', values: [r.utilisation || 0, r.ytd_utilisation || 0], colors: [CT.orange, CT.blue], names: ['Selected period', 'On record'] })),
     { fmt: (v) => d3.format('.0%')(v), max: 1, axis: (t) => d3.format('.0%')(t), aria: 'Time utilisation by equipment type' });
 });
 dash.draw('fleet-stack', (el) => {
@@ -343,7 +343,7 @@ dash.draw('unit-rows', (tb) => {
     .sort((a, b) => { const x = a[col], y = b[col]; if (typeof x === 'string' || typeof y === 'string') return dir * String(x ?? '').localeCompare(String(y ?? '')); return dir * ((x ?? -1) - (y ?? -1)); });
   const gm = new Map(); base.forEach((r) => { if (!gm.has(r.type)) gm.set(r.type, { n: 0, off: 0, cd: 0, od: 0, rev: 0, ytd: 0 }); const g = gm.get(r.type); g.n++; if (r.status === 'Off hire') g.off++; g.cd += +r.chargeable_days || 0; g.od += +r.on_hire_days || 0; g.rev += +r.revenue || 0; g.ytd += +r.ytd_revenue || 0; });
   const groups = [...gm.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([name, g]) => ({ name, cells: [CT.fmt.int(g.n), CT.fmt.int(g.n - g.off), CT.fmt.int(g.off), CT.fmt.pct(g.cd ? g.od / g.cd : null), CT.fmt.gbp0(g.rev), CT.fmt.gbp0(g.n ? g.rev / g.n : 0), CT.fmt.gbp0(g.ytd)], cls: [0, 0, g.off ? 'down' : '', 0, 0, 0, 0] }));
-  CT.drawGroups('unit', ['Type', 'Units', 'On hire', 'Off hire', 'Utilisation', 'Hire revenue', 'Per unit', 'FY revenue'], groups, F.type, (v) => { CT.flt.unit.type = v; dash.draw('unit-rows'); });
+  CT.drawGroups('unit', ['Type', 'Units', 'On hire', 'Off hire', 'Utilisation', 'Hire revenue', 'Per unit', 'Revenue on record'], groups, F.type, (v) => { CT.flt.unit.type = v; dash.draw('unit-rows'); });
   const cnt = document.getElementById('cnt-unit'); if (cnt) cnt.textContent = 'Showing ' + list.length + ' of ' + rows.length + ' units · ' + CT.fmt.gbp0(list.reduce((s, r) => s + (+r.revenue || 0), 0)) + ' revenue';
   for (const r of list) {
     const tr = document.createElement('tr'); tr.dataset.key = CT.keyOf(r);
@@ -379,7 +379,7 @@ dash.draw('util-groups', (box) => {
   base.forEach((r) => { const k = r.type || 'Other'; if (!gm.has(k)) gm.set(k, { units: [], cd: 0, od: 0, rev: 0, ytd: 0, off: 0 }); const g = gm.get(k); g.units.push(r); g.cd += +r.chargeable_days || 0; g.od += +r.on_hire_days || 0; g.rev += +r.revenue || 0; g.ytd += +r.ytd_revenue || 0; if (r.status === 'Off hire') g.off++; });
   const fy = (name, g) => { const t = types.find((x) => x.type === name); if (t && t.ytd_utilisation != null && !U.q && !U.status) return t.ytd_utilisation; const v = g.units.map((u) => u.ytd_utilisation).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const t = document.createElement('table'), hr = document.createElement('tr');
-  ['Type / unit', 'Status', 'Chargeable days', 'Days on hire', 'Utilisation', 'FY to date', 'Hire revenue', 'FY revenue'].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 1) th.className = 'n'; hr.append(th); });
+  ['Type / unit', 'Status', 'Chargeable days', 'Days on hire', 'Utilisation', 'On record', 'Hire revenue', 'Revenue on record'].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 1) th.className = 'n'; hr.append(th); });
   const thd = document.createElement('thead'); thd.append(hr); const tb = document.createElement('tbody');
   const utilCell = (tr, v, off) => { const td = CT.cell(tr, '', 'n'); const bar = document.createElement('span'); bar.className = 'bar'; bar.style.width = Math.round(60 * (v || 0)) + 'px'; if (off) bar.style.background = CT.orange; td.append(bar, document.createTextNode(CT.fmt.pct(v))); };
   [...gm.entries()].sort((a, b) => b[1].rev - a[1].rev).forEach(([name, g]) => {

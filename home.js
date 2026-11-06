@@ -141,7 +141,7 @@
     el.innerHTML = X.head('Business overview', `Fleet, contracts, HP, cash and stock · MCS data to ${FM ? labL(mon(FM + '-01')) : 'n/a'}`) +
       X.tiles([
         { l: 'Hire turnover · ' + (FM ? lab(mon(FM + '-01')) : ''), v: gbp(F.hire_revenue), s: F.sales_turnover ? gbp(F.sales_turnover) + ' sales too' : 'latest MCS month', c: 'o' },
-        { l: 'Time utilisation', v: pct(fUtil, 1), s: fYtd != null ? pct(fYtd, 1) + ' year to date' : '' },
+        { l: 'Time utilisation', v: pct(fUtil, 1), s: fYtd != null ? pct(fYtd, 1) + ' on record' : '' },
         { l: 'Units on hire', v: F.units_on_hire != null ? F.units_on_hire + ' / ' + F.units : '–', s: (F.units_idle || 0) + ' off hire all month', c: F.units_idle > 20 ? 'r' : '' },
         { l: 'Contracted hire / month', v: gbp(incNow), s: gbp(fixedNow) + ' fixed · ' + gbp(rollNow) + ' rolling' },
         { l: 'HP / month', v: gbp(hpNow), s: live.length + ' live agreements · ' + (hpNow ? (incNow / hpNow).toFixed(2) + '× covered' : '') },
@@ -162,7 +162,7 @@
         <div class="card"><h3>Fleet status · ${FM ? labL(mon(FM + '-01')) : ''}</h3><div class="hint">Every unit by how much it was on hire. Hover a section.</div><div id="h3"></div>
           <div class="legend"><span><i style="background:${C.blue}"></i>On hire all month</span><span><i style="background:${C.blue2};opacity:.55"></i>Part of the month</span><span><i style="background:${C.orange}"></i>Off hire all month</span></div>
           <h3 style="margin-top:16px">Hire revenue by customer</h3><div class="hint">Share of the month's hire revenue.</div><div id="h5"></div></div>
-        <div class="card"><h3>Utilisation by type</h3><div class="hint">This month (bar) against the financial year to date (thin line).</div><div id="h4"></div></div>
+        <div class="card"><h3>Utilisation by type</h3><div class="hint">This month (bar) against everything on record since Sep 2026 (thin line).</div><div id="h4"></div></div>
       </div>` +
       (months.length > 1 ? `<div class="card"><h3>Monthly hire revenue</h3><div class="hint">Every month loaded from MCS.</div><div id="h6"></div></div>` : '') +
       `<div class="card"><h3>Assets to watch</h3><div class="hint">Off hire all month while still on finance – the costliest first.</div>${idleHP.length ? '<div class="box2"><table><thead><tr><th>Asset</th><th>Type</th><th class="n">HP / month</th><th class="n">FY utilisation</th><th class="n">FY revenue</th></tr></thead><tbody>' + idleHP.map((u) => `<tr><td><b>${esc(u.unit)}</b></td><td>${esc(u.type || '')}</td><td class="n">${gbp(u.hp)}</td><td class="n">${u.ytd_chargeable_days ? pct(u.ytd_on_hire_days / u.ytd_chargeable_days) : '–'}</td><td class="n">${gbp(u.ytd_revenue)}</td></tr>`).join('') + '</tbody></table></div>' : '<div class="hint">No financed units were idle all month.</div>'}</div>`;
@@ -179,7 +179,7 @@
       { title: 'Contracted income against HP' });
     stackBar(document.getElementById('h3'), [{ n: 'On hire all month', v: F.units_on_hire - F.units_part || 0, c: C.blue }, { n: 'Part of the month', v: F.units_part || 0, c: '#8fb0e8' }, { n: 'Off hire all month', v: F.units_idle || 0, c: C.orange }].filter((s) => s.v > 0));
     hbars(document.getElementById('h4'), fTypes.filter((t) => +t.chargeable_days > 0).map((t) => ({ l: t.type, v: t.on_hire_days / t.chargeable_days, v2: t.ytd_chargeable_days ? t.ytd_on_hire_days / t.ytd_chargeable_days : null,
-      tip: `<b>${esc(t.type)}</b>` + row('Units', t.units) + row('Utilisation', pct(t.on_hire_days / t.chargeable_days, 1)) + row('Year to date', t.ytd_chargeable_days ? pct(t.ytd_on_hire_days / t.ytd_chargeable_days, 1) : '–') + row('Off hire all month', t.units_idle) + row('Hire revenue', gbp(t.revenue)) + row('Year-to-date revenue', gbp(t.ytd_revenue)) })), { title: 'Utilisation by type', max: 1, fmt: (v) => pct(v), left: 180 });
+      tip: `<b>${esc(t.type)}</b>` + row('Units', t.units) + row('Utilisation', pct(t.on_hire_days / t.chargeable_days, 1)) + row('On record', t.ytd_chargeable_days ? pct(t.ytd_on_hire_days / t.ytd_chargeable_days, 1) : '–') + row('Off hire all month', t.units_idle) + row('Hire revenue', gbp(t.revenue)) + row('Year-to-date revenue', gbp(t.ytd_revenue)) })), { title: 'Utilisation by type', max: 1, fmt: (v) => pct(v), left: 180 });
     hbars(document.getElementById('h5'), fCust.slice(0, 10).map((c) => ({ l: c.customer, v: +c.revenue, tip: `<b>${esc(c.customer)}</b>` + row('Hire revenue', gbp(c.revenue)) + row('Share of month', pct(c.revenue / custTot, 1)) })), { title: 'Top customers', fmt: gbp });
     if (document.getElementById('h6')) cols(document.getElementById('h6'), months.map((m) => ({ l: lab(mon(m.month + '-01')), parts: [{ v: +m.hire_revenue, c: C.blue }],
       tip: `<b>${labL(mon(m.month + '-01'))}</b>` + row('Hire revenue', gbp(m.hire_revenue)) + row('Sales', gbp(m.sales_turnover)) + row('Utilisation', m.chargeable_days ? pct(m.on_hire_days / m.chargeable_days, 1) : '–') + row('Units on hire', m.units_on_hire + ' / ' + m.units) + row('Customers', m.customers) })), { title: 'Monthly hire revenue', h: 200 });

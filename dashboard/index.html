@@ -100,7 +100,7 @@
       <div class="ct-tile" id="tile-onhire"><span class="lab">Units on hire (latest month)</span><span class="big" data-draw="kpi" data-source="summary" data-field="units_on_hire" data-fmt="int">—</span><span class="note">of <span data-draw="kpi" data-source="summary" data-field="units" data-fmt="int">—</span> units in the fleet</span></div>
       <div class="ct-tile or" id="tile-idle"><span class="lab">Units off hire all month</span><span class="big" data-draw="kpi" data-source="summary" data-field="units_idle" data-fmt="int">—</span><span class="note">Latest month in the period</span></div>
       <div class="ct-tile" id="tile-customers"><span class="lab">Customers billed</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="customers" data-fmt="int">—</span><span class="note">Top customer: <span data-draw="kpi" data-source="customer_stats" data-field="top1_share" data-fmt="pct">—</span> of turnover</span></div>
-      <div class="ct-tile" id="tile-ytd"><span class="lab">Hire revenue, financial year to date</span><span class="big" data-draw="kpi" data-source="summary" data-field="mcs_ytd_revenue" data-fmt="gbp">—</span><span class="note">From MCS year-to-date figures · <span data-draw="kpi" data-source="summary" data-field="mcs_ytd_utilisation" data-fmt="pct">—</span> utilised</span></div>
+      <div class="ct-tile" id="tile-ytd"><span class="lab">Hire revenue on record (since Sep 2026)</span><span class="big" data-draw="kpi" data-source="summary" data-field="mcs_ytd_revenue" data-fmt="gbp">—</span><span class="note">From MCS year-to-date figures · <span data-draw="kpi" data-source="summary" data-field="mcs_ytd_utilisation" data-fmt="pct">—</span> utilised</span></div>
       <div class="ct-tile or" id="tile-top1"><span class="lab">Largest customer's share</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="top1_share" data-fmt="pct">—</span><span class="note" data-draw="kpi" data-source="customer_stats" data-field="top1_name" data-fmt="text">—</span></div>
       <div class="ct-tile" id="tile-top3"><span class="lab">Top 3 customers' share</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="top3_share" data-fmt="pct">—</span></div>
       <div class="ct-tile" id="tile-top10"><span class="lab">Top 10 customers' share</span><span class="big" data-draw="kpi" data-source="customer_stats" data-field="top10_share" data-fmt="pct">—</span></div>
@@ -112,7 +112,7 @@
       <div class="ct-card" id="card-trend-util"><h3>Monthly time utilisation</h3><p class="note">Days on hire ÷ chargeable days, each unit capped at 100%.</p><div class="ct-chart" data-draw="chart-trend-util" data-source="summary"></div></div>
       <div class="ct-card" id="card-customers"><h3>Top 10 customers by turnover</h3><p class="note">Selected period, all equipment types combined.</p><div class="ct-chart" data-draw="chart-customers" data-source="customer_summary"></div></div>
       <div class="ct-card" id="card-rpu"><h3>Hire revenue per unit per month, by type</h3><p class="note">Revenue ÷ units in that type ÷ months in the period.</p><div class="ct-chart" data-draw="chart-rpu" data-source="type_summary"></div></div>
-      <div class="ct-card" id="card-ytd-type"><h3>Hire revenue by type, financial year to date</h3><p class="note">From the MCS year-to-date figures for the latest month in the period.</p><div class="ct-chart" data-draw="chart-ytd-type" data-source="type_summary"></div></div>
+      <div class="ct-card" id="card-ytd-type"><h3>Hire revenue by type on record (since Sep 2026)</h3><p class="note">Built up from the monthly reports loaded into the portal, starting September 2026.</p><div class="ct-chart" data-draw="chart-ytd-type" data-source="type_summary"></div></div>
     </div>
     <div class="ct-card" id="card-fleet-status"><h3>Where the fleet was in the latest month</h3><p class="note">Units on hire every chargeable day, part of the month, or not at all.</p>
       <div class="ct-stack" data-draw="fleet-stack" data-source="summary"></div>
@@ -122,8 +122,8 @@
       <div class="ct-ugtools"><input type="search" class="ct-search2" placeholder="Search unit or type" aria-label="Search units"><button type="button" class="ct-clr" id="ug-open">Expand all</button><button type="button" class="ct-clr" id="ug-shut">Collapse all</button><select id="ug-status" aria-label="Status"><option value="">All statuses</option><option>Full</option><option>Part</option><option>Off hire</option></select></div>
       <div class="ct-tablebox" data-draw="util-groups" data-source="unit_summary"></div>
     </div>
-    <div class="ct-card" id="card-offhire"><h3>Units with no hire days in the period</h3><p class="note">Sorted by financial-year-to-date utilisation, lowest first.</p>
-      <div class="ct-tablebox"><table data-source="unit_summary" data-row-key="period,unit"><thead><tr><th data-field="unit">Unit</th><th data-field="type">Type</th><th class="n" data-field="chargeable_days">Chargeable days</th><th class="n" data-field="ytd_utilisation">FY to date</th><th class="n" data-field="ytd_revenue">FY revenue</th></tr></thead><tbody data-draw="offhire-rows" data-source="unit_summary"></tbody></table></div>
+    <div class="ct-card" id="card-offhire"><h3>Units with no hire days in the period</h3><p class="note">Sorted by utilisation on record, lowest first.</p>
+      <div class="ct-tablebox"><table data-source="unit_summary" data-row-key="period,unit"><thead><tr><th data-field="unit">Unit</th><th data-field="type">Type</th><th class="n" data-field="chargeable_days">Chargeable days</th><th class="n" data-field="ytd_utilisation">FY to date</th><th class="n" data-field="ytd_revenue">Revenue on record</th></tr></thead><tbody data-draw="offhire-rows" data-source="unit_summary"></tbody></table></div>
     </div>
   </section>
 
@@ -138,8 +138,8 @@
         <th class="n" data-field="on_hire_days"><button type="button" class="ct-sort" data-col="on_hire_days">Days on hire</button></th>
         <th data-field="utilisation"><button type="button" class="ct-sort" data-col="utilisation">Utilisation</button></th>
         <th class="n" data-field="revenue"><button type="button" class="ct-sort" data-col="revenue">Hire revenue</button></th>
-        <th class="n" data-field="ytd_utilisation"><button type="button" class="ct-sort" data-col="ytd_utilisation">FY to date util.</button></th>
-        <th class="n" data-field="ytd_revenue"><button type="button" class="ct-sort" data-col="ytd_revenue">FY revenue</button></th>
+        <th class="n" data-field="ytd_utilisation"><button type="button" class="ct-sort" data-col="ytd_utilisation">Util. on record</button></th>
+        <th class="n" data-field="ytd_revenue"><button type="button" class="ct-sort" data-col="ytd_revenue">Revenue on record</button></th>
       </tr></thead><tbody data-draw="unit-rows" data-source="unit_summary"></tbody></table></div>
     </div>
   </section>
@@ -182,7 +182,7 @@
 </div>
 </div>
 <script src="js/calcs.js"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/app.js?v=5"></script>
 <script src="js/hp.js?v=2"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/supabase-loader.js"></script>

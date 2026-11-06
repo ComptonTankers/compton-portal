@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const norm = (u) => String(u || '').replace(/\s+/g, '').toUpperCase();
   const pc = (v) => v == null || isNaN(v) ? '–' : (v * 100).toFixed(1) + '%';
-  const FYM = mon('2026-05-01');
+  const FYM = mon('2026-09-01'); /* revenue on record starts Sep 2026 */
   const S = { q: '', type: '', st: '', hp: '', sort: 'life', dir: -1, open: null };
   let ROWS = [], META = {};
 
@@ -42,7 +42,7 @@
     META = { month: d.fleet.length ? d.fleet[0].month : null };
   }
 
-  const COLS = [['unit', 'Unit', 0], ['st', 'Status', 0], ['cust', 'Customer', 0], ['crate', 'Contract £/mo', 1], ['life', 'Lifetime earnings', 1], ['profit', 'Lifetime profit', 1], ['fyUtil', 'Util (FY)', 1],
+  const COLS = [['unit', 'Unit', 0], ['st', 'Status', 0], ['cust', 'Customer', 0], ['crate', 'Contract £/mo', 1], ['life', 'Lifetime earnings', 1], ['profit', 'Lifetime profit', 1], ['fyUtil', 'Util (on record)', 1],
     ['owed', 'HP remaining', 1], ['settle', 'Est. settlement', 1], ['nbv', 'Book value', 1], ['resid', 'Residual', 1]];
 
   function draw(el) {
@@ -54,21 +54,21 @@
     const neg = (v) => v < 0 ? ' style="color:var(--bad,#b3261e)"' : '';
     const cell = (r, k) => { const v = r[k]; switch (k) {
       case 'unit': return `<b>${esc(r.unit)}</b>`; case 'st': return `<span class="pill ${r.onHire ? 'g' : 'a'}">${r.onHire ? 'On hire' : 'Off hire'}</span>`; case 'cust': return esc(r.cust || '–');
-      case 'life': return `<span title="This FY ${gbp(r.fyRev)}${r.hasLife ? ' + earlier ' + gbp(r.prior) : ' (earlier years not entered)'}">${gbp(v)}${r.hasLife ? '' : '*'}</span> <input class="mi" style="width:74px;opacity:.75" data-prior="${r.faId || ''}" placeholder="earlier £" value="${r.prior == null ? '' : r.prior}" title="Hire revenue earned before this financial year (from older MCS reports)">`;
-      case 'profit': return v == null ? '<span class="hint">n/a</span>' : `<b${neg(v)} title="Earnings ${gbp(r.life)} less depreciation ${gbp(r.dep)} less HP interest ${gbp(r.intr)}${r.hasLife ? '' : ' – this FY only'}">${gbp(v)}${r.hasLife ? '' : '*'}</b>`;
+      case 'life': return `<span title="On record ${gbp(r.fyRev)}${r.hasLife ? ' + earlier ' + gbp(r.prior) : ' (earlier £ not entered)'}">${gbp(v)}${r.hasLife ? '' : '*'}</span> <input class="mi" style="width:74px;opacity:.75" data-prior="${r.faId || ''}" placeholder="earlier £" value="${r.prior == null ? '' : r.prior}" title="Hire revenue earned before September 2026">`;
+      case 'profit': return v == null ? '<span class="hint">n/a</span>' : `<b${neg(v)} title="Earnings ${gbp(r.life)} less depreciation ${gbp(r.dep)} less HP interest ${gbp(r.intr)}${r.hasLife ? '' : ' – months on record only'}">${gbp(v)}${r.hasLife ? '' : '*'}</b>`;
       case 'fyUtil': return pc(v); case 'owed': return v ? `<span title="${esc(r.lender)} · ${gbp(r.pm)} a month">${gbp(v)}</span>` : '–'; case 'nbv': return v == null ? '<span class="hint">n/a</span>' : `<span title="Cost ${gbp(r.cost)}">${gbp(v)}</span>`; case 'resid': return v == null ? '<span class="hint">n/a</span>' : gbp(v);
       default: return v ? gbp(v) : '–'; } };
     const grp = new Map(); vis.forEach((r) => { if (!grp.has(r.type)) grp.set(r.type, []); grp.get(r.type).push(r); });
     el.innerHTML = X.head('Asset summary', 'Every fleet asset: what it has earned, what it has made, what is owed on it and what it is worth' + (META.month ? ' · hire data to ' + META.month.slice(0, 7) : '')) +
       X.tiles([{ l: 'Assets in view', v: vis.length, s: vis.filter((r) => r.onHire).length + ' on hire · ' + idle.length + ' off hire', c: 'o' },
-        { l: 'Lifetime earnings', v: gbp(sum(vis, 'life')), s: full + ' of ' + vis.length + ' have earlier years entered; others show this FY only' },
+        { l: 'Lifetime earnings', v: gbp(sum(vis, 'life')), s: full + ' of ' + vis.length + ' have earlier £ entered; the rest show months on record only' },
         { l: 'Lifetime profit', v: gbp(sum(pr, 'profit')), s: 'earnings – depreciation – HP interest', c: sum(pr, 'profit') < 0 ? 'r' : 'g' },
         { l: 'HP remaining', v: gbp(sum(vis, 'owed')), s: gbp(sum(vis, 'pm')) + '/month · settlement ≈ ' + gbp(sum(vis, 'settle')) },
         { l: 'Book value', v: gbp(sum(priced, 'nbv')), s: priced.length + ' of ' + vis.length + ' priced · residual ' + gbp(sum(priced, 'resid')) },
         { l: 'Book value after settling HP', v: gbp(sum(priced, 'nbv') - sum(priced.filter((r) => r.hasHP), 'settle')), s: 'what is left on the books if every HP were paid off today', c: 'g' },
         { l: 'HP on idle assets', v: gbp(idleHP), s: idle.filter((r) => r.hasHP).length + ' off-hire assets still on HP', c: idleHP ? 'r' : '' }]) +
       `<div class="card"><div class="flt"><input type="search" id="as_q" placeholder="Search unit, customer, lender…" value="${esc(S.q)}"><select id="as_t"><option value="">All descriptions</option>${types.map((t) => `<option ${S.type === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select><select id="as_s"><option value="">On &amp; off hire</option>${['On hire', 'Off hire'].map((t) => `<option ${S.st === t ? 'selected' : ''}>${t}</option>`).join('')}</select><select id="as_h"><option value="">HP &amp; owned</option>${['On HP', 'Owned'].map((t) => `<option ${S.hp === t ? 'selected' : ''}>${t}</option>`).join('')}</select><button type="button" class="lnk" id="as_e">Expand / collapse groups</button><span class="cnt">${vis.length} of ${R.length}</span></div>
-      <div class="hint">Grouped by description; click a group to open it, click a column heading to sort. Hover a figure for the detail. <b>Lifetime earnings</b> = this financial year (from the MCS report) + the “earlier £” you enter for years before. <b>*</b> = earlier years not entered yet, so earnings and profit cover this financial year only. Profit = earnings – depreciation over the same period – estimated HP interest. Book value uses the Fixed assets depreciation settings.</div>
+      <div class="hint">Grouped by description; click a group to open it, click a column heading to sort. Hover a figure for the detail. <b>Lifetime earnings</b> = revenue on record (monthly MCS reports loaded since September 2026) + the “earlier £” you enter for anything before. <b>*</b> = earlier £ not entered yet, so earnings and profit only cover the months on record. Profit = earnings – depreciation over the same period – estimated HP interest. Book value uses the Fixed assets depreciation settings.</div>
       <div class="box2"><table id="as_tb"><thead><tr>${COLS.map(([k, t, n]) => `<th class="${n ? 'n' : ''}" data-k="${k}" style="cursor:pointer">${t}${S.sort === k ? (S.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>${[...grp.entries()].sort((a, b) => sum(b[1], 'life') - sum(a[1], 'life')).map(([t, rs]) => {
         const o = S.open == null ? false : S.open.has(t), p = rs.filter((r) => r.nbv != null), q2 = rs.filter((r) => r.profit != null);
         return `<tr class="ug-g" data-t="${esc(t)}" style="cursor:pointer;background:var(--soft,#f1f4fa);font-weight:600"><td>${o ? '▾' : '▸'} ${esc(t)} (${rs.length})</td><td>${rs.filter((r) => r.onHire).length} on hire</td><td></td><td class="n">${gbp(sum(rs, 'crate'))}</td><td class="n">${gbp(sum(rs, 'life'))}</td><td class="n">${gbp(sum(q2, 'profit'))}</td><td class="n">${pc(avg(rs, 'fyUtil'))}</td><td class="n">${gbp(sum(rs, 'owed'))}</td><td class="n">${gbp(sum(rs, 'settle'))}</td><td class="n">${gbp(sum(p, 'nbv'))}</td><td class="n">${gbp(sum(p, 'resid'))}</td></tr>` +
