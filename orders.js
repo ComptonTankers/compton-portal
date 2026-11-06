@@ -124,6 +124,9 @@
         if (cl.length > 1) svg.append('path').datum(cl).attr('fill', 'none').attr('stroke', C.blue).attr('stroke-width', 3).attr('d', d3.line().x((q) => x(lab(ks(q.r.k)))).y((q) => y(q.r.closeA)));
         svg.selectAll('circle').data(R).join('circle').attr('cx', (q) => x(lab(ks(q.r.k)))).attr('cy', (q) => y(q.r.eff)).attr('r', 4.5).attr('fill', (q) => (q.r.closed ? C.blue : '#fff')).attr('stroke', (q) => (q.r.eff < q.r.buffer ? C.bad : q.r.closed ? C.blue : C.orange)).attr('stroke-width', 2.5)
           .on('mousemove', (e, q) => { const o = q.r.oc || {}; T.show(e, `<b>${lab(ks(q.r.k))}</b> ${q.r.closed ? '(actual)' : '(forecast)'}<br>Cash with orders ${gbp(q.r.eff)}<br>Without ${gbp(q.b.eff)}<br>Difference ${gbp(q.r.eff - q.b.eff)}<br>Headroom ${gbp(q.r.head)}` + (!q.r.closed && (o.out || o.inflow) ? `<br>This month from orders: hire in ${gbp(o.inflow || 0)}, out ${gbp(o.out || 0)} (incl. VAT ${gbp(o.vat || 0)})` : '')); }).on('mouseleave', T.hide);
+        const lq = R[R.length - 1], hi = lq.r.eff >= lq.b.eff;
+        svg.append('text').attr('x', Wd - Mg.r - 4).attr('y', y(lq.r.eff) + (hi ? -12 : 20)).attr('text-anchor', 'end').attr('font-size', 12).attr('font-weight', 600).attr('fill', C.orange).text('With these orders');
+        svg.append('text').attr('x', Wd - Mg.r - 4).attr('y', y(lq.b.eff) + (hi ? 20 : -12)).attr('text-anchor', 'end').attr('font-size', 12).attr('font-weight', 600).attr('fill', '#6b7587').text('Without orders');
         svg.append('text').attr('x', Wd - Mg.r - 4).attr('y', y(buf) - 6).attr('text-anchor', 'end').attr('font-size', 11).attr('fill', C.bad).text('Buffer ' + gbp(buf));
         // monthly detail
         const rowsT = open.filter((q) => (q.r.oc && (q.r.oc.out || q.r.oc.inflow)) || Math.abs(q.r.eff - q.b.eff) > 1).slice(0, 6);
