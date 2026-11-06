@@ -142,10 +142,17 @@ dash.draw('hp-unit-rows', (tb) => {
   tb.replaceChildren();
   const rows = CT.rowsFor('hp_units');
   if (!rows) return;
-  const q = (document.querySelector('.ct-hpsearch')?.value || '').trim().toLowerCase();
+  CT.mkFilters('hp', '.ct-hpsearch', [{ k: 'type', label: 'Type' }, { k: 'status', label: 'Finance' }, { k: 'fin', label: 'Finance company' }], () => dash.draw('hp-unit-rows'));
+  const q = (document.querySelector('.ct-hpsearch')?.value || '').trim().toLowerCase(), F = CT.flt.hp;
+  CT.fillSel('hp', 'type', 'All types', rows.map((r) => r.type)); CT.fillSel('hp', 'status', 'All finance statuses', rows.map((r) => r.status)); CT.fillSel('hp', 'fin', 'All finance companies', rows.map((r) => r.finance_company));
   const { col, dir } = CT.hpSort;
-  const list = rows.filter((r) => !q || (r.unit + ' ' + r.type + ' ' + r.finance_company + ' ' + r.status).toLowerCase().includes(q))
+  const base = rows.filter((r) => (!q || (r.unit + ' ' + r.type + ' ' + r.finance_company + ' ' + r.status).toLowerCase().includes(q)) && (!F.status || r.status === F.status) && (!F.fin || r.finance_company === F.fin));
+  const list = base.filter((r) => !F.type || r.type === F.type)
     .sort((a, b) => { const x = a[col], y = b[col]; if (typeof x === 'string' || typeof y === 'string') return dir * String(x ?? '').localeCompare(String(y ?? '')); return dir * ((x ?? -1e12) - (y ?? -1e12)); });
+  const gm = new Map(); base.forEach((r) => { if (!gm.has(r.type)) gm.set(r.type, { n: 0, hp: 0, rev: 0, cost: 0, under: 0, mp: 0 }); const g = gm.get(r.type); g.n++; if (r.status === 'HP') { g.hp++; g.mp += r.monthly_payment || 0; } g.rev += r.revenue; g.cost += r.hp_cost; if (r.hp_cost > 0 && r.revenue < r.hp_cost) g.under++; });
+  const groups = [...gm.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([name, g]) => ({ name, cells: [CT.fmt.int(g.n), CT.fmt.int(g.hp), CT.fmt.gbp0(g.rev), CT.fmt.gbp0(g.cost), CT.fmt.gbp0(g.rev - g.cost), CT.fmt.cover(g.cost ? g.rev / g.cost : null), CT.fmt.int(g.under)], cls: [0, 0, 0, 0, g.rev - g.cost < 0 ? 'down' : '', g.cost && g.rev < g.cost ? 'down' : '', g.under ? 'down' : ''] }));
+  CT.drawGroups('hp', ['Type', 'Units', 'On HP', 'Hire revenue', 'HP cost', 'After HP', 'Cover', 'Not covering'], groups, F.type, (v) => { CT.flt.hp.type = v; dash.draw('hp-unit-rows'); });
+  const cnt = document.getElementById('cnt-hp'); if (cnt) cnt.textContent = 'Showing ' + list.length + ' of ' + rows.length + ' units · after HP ' + CT.fmt.gbp0(list.reduce((s, r) => s + r.revenue_after_hp, 0));
   for (const r of list) {
     const tr = document.createElement('tr'); tr.dataset.key = CT.keyOf(r);
     CT.cell(tr, r.unit); CT.cell(tr, r.type);

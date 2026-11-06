@@ -282,6 +282,40 @@ dash.draw('chart-trend-util', (el) => {
     .on('mouseleave', () => tip.hide());
 });
 
+
+// ---------- filters + group overviews (shared) ----------
+CT.flt = CT.flt || { unit: { type: '', status: '' }, hp: { type: '', status: '', fin: '' } };
+CT.mkFilters = (key, inputSel, defs, redraw) => {
+  const inp = document.querySelector(inputSel); if (!inp || inp.dataset.flt) return; inp.dataset.flt = '1';
+  const wrap = document.createElement('div'); wrap.className = 'ct-flt';
+  defs.forEach((d) => { const s = document.createElement('select'); s.dataset.k = d.k; s.dataset.key = key; s.setAttribute('aria-label', d.label);
+    s.addEventListener('change', () => { CT.flt[key][d.k] = s.value; redraw(); }); wrap.append(s); });
+  const clr = document.createElement('button'); clr.type = 'button'; clr.className = 'ct-clr'; clr.textContent = 'Clear filters';
+  clr.addEventListener('click', () => { for (const k in CT.flt[key]) CT.flt[key][k] = ''; inp.value = ''; redraw(); });
+  const cnt = document.createElement('span'); cnt.className = 'ct-cnt'; cnt.id = 'cnt-' + key; wrap.append(clr, cnt);
+  const grp = document.createElement('div'); grp.className = 'ct-grp ct-tablebox'; grp.id = 'grp-' + key;
+  inp.after(wrap); wrap.after(grp);
+  CT.fltDefs = CT.fltDefs || {}; CT.fltDefs[key] = defs;
+};
+CT.fillSel = (key, k, allLabel, values) => {
+  const s = document.querySelector('select[data-key="' + key + '"][data-k="' + k + '"]'); if (!s) return;
+  const cur = CT.flt[key][k], vals = [...new Set(values.filter(Boolean))].sort();
+  s.replaceChildren(); const o0 = document.createElement('option'); o0.value = ''; o0.textContent = allLabel; s.append(o0);
+  vals.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = v; s.append(o); });
+  if (cur && !vals.includes(cur)) CT.flt[key][k] = ''; s.value = CT.flt[key][k];
+};
+// grouped overview table: groups = [{name, cells:[text,...], cls:[..]}], click a row to filter by it
+CT.drawGroups = (key, heads, groups, active, onPick) => {
+  const box = document.getElementById('grp-' + key); if (!box) return;
+  const t = document.createElement('table'), th = document.createElement('thead'), hr = document.createElement('tr');
+  heads.forEach((h, i) => { const c = document.createElement('th'); c.textContent = h; if (i) c.className = 'n'; hr.append(c); }); th.append(hr);
+  const tb = document.createElement('tbody');
+  groups.forEach((g) => { const tr = document.createElement('tr'); tr.className = 'ct-grow' + (g.name === active ? ' on' : ''); tr.tabIndex = 0;
+    const pick = () => onPick(g.name === active ? '' : g.name); tr.addEventListener('click', pick); tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(); });
+    CT.cell(tr, g.name); g.cells.forEach((x, i) => { const td = CT.cell(tr, x, 'n'); if (g.cls && g.cls[i]) td.classList.add(g.cls[i]); }); tb.append(tr); });
+  t.append(th, tb); box.replaceChildren(t);
+};
+
 // ---------- tables ----------
 CT.cell = (tr, text, cls) => { const td = document.createElement('td'); if (cls) td.className = cls; td.textContent = text; tr.append(td); return td; };
 CT.keyOf = (r) => encodeURIComponent(r.period) + ',' + encodeURIComponent(r.unit);
@@ -300,10 +334,17 @@ dash.draw('unit-rows', (tb) => {
   tb.replaceChildren();
   const rows = CT.rowsFor('unit_summary');
   if (!rows) return;
-  const q = (document.querySelector('.ct-search')?.value || '').trim().toLowerCase();
+  CT.mkFilters('unit', '.ct-search', [{ k: 'type', label: 'Type' }, { k: 'status', label: 'Status' }], () => dash.draw('unit-rows'));
+  const q = (document.querySelector('.ct-search')?.value || '').trim().toLowerCase(), F = CT.flt.unit;
+  CT.fillSel('unit', 'type', 'All types', rows.map((r) => r.type)); CT.fillSel('unit', 'status', 'All statuses', rows.map((r) => r.status));
   const { col, dir } = CT.sort;
-  const list = rows.filter((r) => !q || (r.unit + ' ' + r.type + ' ' + r.status).toLowerCase().includes(q))
+  const base = rows.filter((r) => (!q || (r.unit + ' ' + r.type + ' ' + r.status).toLowerCase().includes(q)) && (!F.status || r.status === F.status));
+  const list = base.filter((r) => !F.type || r.type === F.type)
     .sort((a, b) => { const x = a[col], y = b[col]; if (typeof x === 'string' || typeof y === 'string') return dir * String(x ?? '').localeCompare(String(y ?? '')); return dir * ((x ?? -1) - (y ?? -1)); });
+  const gm = new Map(); base.forEach((r) => { if (!gm.has(r.type)) gm.set(r.type, { n: 0, off: 0, cd: 0, od: 0, rev: 0, ytd: 0 }); const g = gm.get(r.type); g.n++; if (r.status === 'Off hire') g.off++; g.cd += +r.chargeable_days || 0; g.od += +r.on_hire_days || 0; g.rev += +r.revenue || 0; g.ytd += +r.ytd_revenue || 0; });
+  const groups = [...gm.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([name, g]) => ({ name, cells: [CT.fmt.int(g.n), CT.fmt.int(g.n - g.off), CT.fmt.int(g.off), CT.fmt.pct(g.cd ? g.od / g.cd : null), CT.fmt.gbp0(g.rev), CT.fmt.gbp0(g.n ? g.rev / g.n : 0), CT.fmt.gbp0(g.ytd)], cls: [0, 0, g.off ? 'down' : '', 0, 0, 0, 0] }));
+  CT.drawGroups('unit', ['Type', 'Units', 'On hire', 'Off hire', 'Utilisation', 'Hire revenue', 'Per unit', 'FY revenue'], groups, F.type, (v) => { CT.flt.unit.type = v; dash.draw('unit-rows'); });
+  const cnt = document.getElementById('cnt-unit'); if (cnt) cnt.textContent = 'Showing ' + list.length + ' of ' + rows.length + ' units · ' + CT.fmt.gbp0(list.reduce((s, r) => s + (+r.revenue || 0), 0)) + ' revenue';
   for (const r of list) {
     const tr = document.createElement('tr'); tr.dataset.key = CT.keyOf(r);
     CT.cell(tr, r.unit); CT.cell(tr, r.type);

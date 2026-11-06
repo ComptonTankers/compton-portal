@@ -56,6 +56,7 @@
   }
 
   function wire(el) {
+    X.enhance([...el.querySelectorAll('table')].find((t) => t.querySelector('th') && t.querySelector('th').textContent === 'Vehicle'), { filters: ['Type', 'Status'], group: 'Status' });
     const err = (t) => { const e = $('s_err'); if (e) e.textContent = t || ''; };
     $('s_add').onclick = async () => {
       const reg = $('s_reg').value.trim().toUpperCase(); if (!reg) { err('Enter the registration or trailer ID.'); return; }
