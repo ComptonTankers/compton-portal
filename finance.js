@@ -53,7 +53,7 @@
       <div class="row">
         <div class="card"><h3>HP payments by lender</h3><div class="hint">This month's payments, by finance company.</div><div id="f5"></div></div>
         <div class="card"><h3>HP still to pay</h3><div class="hint">Remaining payments at each quarter; the balance shrinks as agreements end.</div><div id="f6"></div></div>
-      </div>`;
+      </div>` + '<div id="ma_fin"></div>';
     cols($('f1'), R.map((r) => ({ l: lab(mi(r.k)), parts: [{ v: r.closed ? r.inA : r.inF, c: C.blue2 }, { v: -(r.closed ? r.outA : r.outF), c: C.orange }], line: { v: r.closed ? r.netA : r.netF },
       tip: `<b>${labL(mi(r.k))}</b> ${r.closed ? '(actual)' : '(forecast)'}` + row('Money in', gbp(r.closed ? r.inA : r.inF)) + row('Money out', gbp(r.closed ? r.outA : r.outF)) + row('Net', gbp(r.closed ? r.netA : r.netF)) })), { title: 'Money in and out' });
     cols($('f2'), R.map((r) => ({ l: lab(mi(r.k)), parts: [{ v: r.eff, c: r.closed ? C.blue : '#7fa1e0' }], line: { v: r.closeF },
@@ -63,6 +63,7 @@
     hbars($('f4'), mix.slice(0, 10).map((x, i) => ({ l: x.l, v: x.v, c: PAL[i % PAL.length], tip: `<b>${esc(x.l)}</b>` + row('Spend', gbp(x.v)) + row('Share', pct(x.v / mixTot, 1)) + row('Per month', gbp(x.v / win.length)) })), { title: 'Spend mix', fmt: gbp, left: 170 });
     hbars($('f5'), lendRows.map(([k, v], i) => ({ l: k, v, c: PAL[i % PAL.length], tip: `<b>${esc(k)}</b>` + row('This month', gbp(v)) + row('Share of HP', pct(v / (hpNowTot(lendRows) || 1), 1)) })), { title: 'HP by lender', fmt: gbp, left: 190 });
     cols($('f6'), run.map((x) => ({ l: lab(x.m), parts: [{ v: x.v, c: C.blue2 }], tip: `<b>${labL(x.m)}</b>` + row('Still to pay from here', gbp(x.v)) })), { title: 'HP still to pay', h: 220 });
+    if (X.ma) X.ma.finance($('ma_fin'));
     function hpNowTot(a) { return a.reduce((t, [, v]) => t + v, 0); }
   };
 

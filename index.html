@@ -128,11 +128,12 @@ async function all(table,order){let rows=[],from=0;for(;;){const part=await api(
 /* ---------- data ---------- */
 let D=null;
 async function loadFinance(force){if(D&&!force)return D;
- const [agr,ass,sch,con,fu]=await Promise.all([all('hp_agreements','end_month.asc'),all('hp_agreement_assets','agreement_id.asc'),all('hp_schedule','month.asc'),all('contracts','unit.asc'),all('hire_units','month.asc,unit.asc')]);
- const lm=fu.length?fu[fu.length-1].month:null;const fleet=fu.filter(x=>x.month===lm);
+ const [agr,ass,sch,con,fu,fas]=await Promise.all([all('hp_agreements','end_month.asc'),all('hp_agreement_assets','agreement_id.asc'),all('hp_schedule','month.asc'),all('contracts','unit.asc'),all('hire_units','month.asc,unit.asc'),api('fa_assets?select=ref,disposed_date&disposed_date=not.is.null').catch(()=>[])]);
+ const sold=new Set(fas.filter(x=>x.disposed_date&&x.disposed_date.slice(0,10)<=new Date().toISOString().slice(0,10)).map(x=>String(x.ref).replace(/\s+/g,'').toUpperCase()));
+ const lm=fu.length?fu[fu.length-1].month:null;const fleet=fu.filter(x=>x.month===lm&&!sold.has(String(x.unit).replace(/\s+/g,'').toUpperCase()));
  const byId=new Map(agr.map(a=>[a.id,a]));
  sch.forEach(r=>{r.m=mon(r.month);r.amount=+r.amount});
- D={agr,ass,sch,con,byId,fleet};return D}
+ D={agr,ass,sch,con,byId,fleet,sold};return D}
 /* ---------- helpers ---------- */
 function tip(){const t=$('tip');return{show(e,h){t.innerHTML=h;t.style.display='block';t.style.left=Math.min(e.clientX+14,innerWidth-270)+'px';t.style.top=(e.clientY+14)+'px'},hide(){t.style.display='none'}}}
 const T=tip();
@@ -189,10 +190,14 @@ async function pageHP(el){
   {l:'Next to end',v:next?monLong(next.end):'–',s:next?esc(next.a.agreement_ref)+' · '+gbp(next.pay)+'/mo':''},
   {l:'Ending in 12 months',v:in12.length,s:gbp(in12.reduce((s,r)=>s+r.pay,0))+' a month freed'}])+
  `<div class="card"><h3>Monthly HP payments going forward</h3><div class="hint">Total due each month. The steps down are agreements ending.</div><div id="ch1"></div></div>`+
- `<div class="card"><h3>Live agreements</h3><div class="hint">Sorted by end date. Settlement is an estimate (agreements without a recorded rate use 8%).</div><div class="box2"><table><thead><tr><th>Agreement</th><th>Lender</th><th>Assets</th><th>Progress</th><th class="n">Left</th><th class="n">Monthly</th><th class="n">Remaining</th><th class="n">Est. settlement</th><th>Ends</th></tr></thead><tbody>${rows.map(r=>{const pct=r.total?Math.round((r.total-r.left)/r.total*100):0;const c=r.left<=12?'a':'b';
-  return `<tr><td><b>${esc(r.a.agreement_ref||('#'+r.a.id))}</b></td><td>${esc((r.a.finance_company||'').replace(/ (PLC|LTD|LIMITED)$/i,''))}</td><td>${esc(r.units.join(', '))||'–'}</td><td><div class="bar"><i style="width:${pct}%"></i></div></td><td class="n"><span class="pill ${c}">${r.left} mo</span></td><td class="n">${gbp2(r.pay)}</td><td class="n">${gbp(r.remain)}</td><td class="n">${gbp(r.settle)}${r.rate?'':' *'}</td><td>${monLong(r.end)}</td></tr>`}).join('')}</tbody><tfoot><tr><td colspan="5"><b>Total</b></td><td class="n"><b>${gbp2(thisMonth)}</b></td><td class="n"><b>${gbp(remaining)}</b></td><td class="n"><b>${gbp(settleAll)}</b></td><td></td></tr></tfoot></table></div><div class="hint" style="margin-top:8px">* uses the 8% placeholder rate – the JCB agreement uses its real 6.60%.</div></div>`;
+ `<div class="card"><h3>Live agreements</h3><div class="hint">Sorted by end date. Settlement is an estimate (agreements without a recorded rate use 8%).</div><div class="box2"><table><thead><tr><th>Agreement</th><th>Lender</th><th>Assets</th><th>Progress</th><th class="n">Left</th><th class="n">Monthly</th><th class="n">Remaining</th><th class="n">Est. settlement</th><th>Ends</th><th></th></tr></thead><tbody>${rows.map(r=>{const pct=r.total?Math.round((r.total-r.left)/r.total*100):0;const c=r.left<=12?'a':'b';
+  return `<tr><td><b>${esc(r.a.agreement_ref||('#'+r.a.id))}</b></td><td>${esc((r.a.finance_company||'').replace(/ (PLC|LTD|LIMITED)$/i,''))}</td><td>${esc(r.units.join(', '))||'–'}</td><td><div class="bar"><i style="width:${pct}%"></i></div></td><td class="n"><span class="pill ${c}">${r.left} mo</span></td><td class="n">${gbp2(r.pay)}</td><td class="n">${gbp(r.remain)}</td><td class="n">${gbp(r.settle)}${r.rate?'':' *'}</td><td>${monLong(r.end)}</td><td><button class="mini" data-settle="${r.a.id}" data-est="${Math.round(r.settle)}">Settle</button></td></tr>`}).join('')}</tbody><tfoot><tr><td colspan="5"><b>Total</b></td><td class="n"><b>${gbp2(thisMonth)}</b></td><td class="n"><b>${gbp(remaining)}</b></td><td class="n"><b>${gbp(settleAll)}</b></td><td></td><td></td></tr></tfoot></table></div><div class="hint" style="margin-top:8px">* uses the 8% placeholder rate – the JCB agreement uses its real 6.60%.</div></div>`;
  barChart('ch1',ms.map(x=>({k:monStr(x.m),v:x.v,m:x.m})),r=>`<b>${monLong(r.m)}</b><br>${gbp(r.v)} due`);
  enhance(cardTable(el,'Live agreements'),{filters:['Lender'],group:'Lender',sum:'Monthly'});
+ const setl=d.agr.filter(a=>!a.active&&a.settled_date).sort((x,y)=>String(y.settled_date).localeCompare(String(x.settled_date)));
+ el.insertAdjacentHTML('beforeend',`<div class="card"><h3>Settled agreements</h3><div class="hint">Agreements settled early or sold with the asset. They no longer count anywhere. Reinstate one if it was settled by mistake.</div>${setl.length?`<div class="box2"><table><thead><tr><th>Agreement</th><th>Lender</th><th>Settled</th><th class="n">Settlement paid</th><th>Note</th><th></th></tr></thead><tbody>${setl.map(a=>`<tr><td><b>${esc(a.agreement_ref||('#'+a.id))}</b></td><td>${esc((a.finance_company||'').replace(/ (PLC|LTD|LIMITED)$/i,''))}</td><td>${new Date(a.settled_date).toLocaleDateString('en-GB')}</td><td class="n">${a.settlement_amount!=null?gbp(+a.settlement_amount):'–'}</td><td>${esc((a.notes||'').split(' · ').pop())}</td><td><button class="mini" data-reinst="${a.id}">Reinstate</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing settled yet. Use <b>Settle</b> on a live agreement above.</div>'}</div>`);
+ el.querySelectorAll('[data-settle]').forEach(b=>b.onclick=()=>window.CT.dispose.settle(d.agr.find(a=>a.id==b.dataset.settle),+b.dataset.est,()=>pageHP(el)));
+ el.querySelectorAll('[data-reinst]').forEach(b=>b.onclick=()=>{if(confirm('Reinstate this agreement?'))window.CT.dispose.reinstate(d.agr.find(a=>a.id==b.dataset.reinst),()=>pageHP(el))});
 }
 function barChart(id,data,tipFn,color){
  const el=$(id);if(!el)return;const W=el.clientWidth||900,H=280,M={t:10,r:10,b:34,l:56};
@@ -333,7 +338,8 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 </script>
 <script src="cashflow.js?v=5"></script>
 <script src="stock.js?v=3"></script>
-<script src="home.js?v=7"></script>
-<script src="finance.js?v=1"></script>
-<script src="orders.js?v=2"></script>
-<script src="ma.js?v=5"></script></body></html>
+<script src="home.js?v=8"></script>
+<script src="finance.js?v=2"></script>
+<script src="disposals.js?v=2"></script>
+<script src="orders.js?v=3"></script>
+<script src="ma.js?v=6"></script></body></html>

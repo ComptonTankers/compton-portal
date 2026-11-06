@@ -170,6 +170,51 @@
     if (keep) { const w = el.querySelector('.maw'); w.scrollLeft = keep[0]; w.scrollTop = keep[1]; window.scrollTo(0, keep[2]); }
   }
 
+  /* ---------- budget performance blocks for the Overview and Finance overview ---------- */
+  function perf() {
+    const ms = fyMonths(), la = lastActual(ms), ytd = la != null ? ms.filter((m) => m <= la) : [], rest = ms.filter((m) => !ytd.includes(m));
+    const A = (m) => pl(m, 'a'), B = (m) => pl(m, 'b'), S = (f, set) => set.reduce((t, m) => t + f(m), 0);
+    const yA = (k) => S((m) => A(m)[k], ytd), yB = (k) => S((m) => B(m)[k], ytd), fB = (k) => S((m) => B(m)[k], ms), out = (k) => yA(k) + S((m) => B(m)[k], rest);
+    const lines = MA.lines.map((l) => { const a = S((m) => cell(l, m, 'a').v || 0, ytd), b = S((m) => cell(l, m, 'b').v || 0, ytd), fy = S((m) => cell(l, m, 'b').v || 0, ms), rem = S((m) => cell(l, m, 'b').v || 0, rest); const cost = l.section !== 'income'; return { l, a, b, fy, outlook: a + rem, f: cost ? b - a : a - b, cost }; }).filter((x) => x.a || x.b || x.fy);
+    return { ms, la, ytd, rest, A, B, yA, yB, fB, out, lines };
+  }
+  const vtxt = (v) => (v >= 0 ? '+' : '–') + gbp(Math.abs(v));
+  X.ma = {
+    async overview(el) {
+      if (!el) return; try { if (!FA) await faLoad(); await maLoad(); } catch (e) { return; }
+      const P = perf(); if (P.la == null) { el.innerHTML = ''; return; }
+      const { ms, la, ytd, A, B, yA, yB, fB, out, lines } = P;
+      const behind = lines.filter((x) => x.f < -1).sort((p, q) => p.f - q.f).slice(0, 4), ahead = lines.filter((x) => x.f > 1).sort((p, q) => q.f - p.f).slice(0, 3);
+      el.innerHTML = `<div class="card"><h3>Performance against budget</h3><div class="hint">${esc(fyLabel(MA.fy))} · actuals to ${labL(la)} · <a href="#/budget" style="color:${C.blue}">Budget</a> · <a href="#/ma" style="color:${C.blue}">Management accounts</a></div>` +
+        X.tiles([
+          { l: 'Net profit, year to date', v: gbp(yA('net')), s: vtxt(yA('net') - yB('net')) + ' vs budget', c: yA('net') >= yB('net') ? 'g' : 'r' },
+          { l: labL(la), v: gbp(A(la).net), s: vtxt(A(la).net - B(la).net) + ' vs budget (' + gbp(B(la).net) + ')', c: A(la).net >= B(la).net ? 'g' : 'r' },
+          { l: 'Income, year to date', v: gbp(yA('income')), s: vtxt(yA('income') - yB('income')) + ' vs budget', c: yA('income') >= yB('income') ? 'g' : 'r' },
+          { l: 'Full-year outlook', v: gbp(out('net')), s: vtxt(out('net') - fB('net')) + ' vs budget of ' + gbp(fB('net')), c: out('net') >= fB('net') ? 'g' : 'r' }]) +
+        `<div class="row"><div><div id="mo_c"></div></div><div>${behind.length ? '<div class="hint" style="margin:6px 0"><b>Behind budget (year to date)</b></div><ul style="margin:0;padding:0;list-style:none">' + behind.map((x) => `<li style="padding:6px 0;border-bottom:1px solid ${C.line}"><b>${esc(x.l.label)}</b>: ${gbp(x.a)} vs ${gbp(x.b)} – <span class="adv">${gbp(Math.abs(x.f))} ${x.cost ? 'over' : 'short'}</span></li>`).join('') + '</ul>' : '<div class="hint">Nothing behind budget.</div>'}${ahead.length ? '<div class="hint" style="margin:10px 0 4px"><b>Ahead of budget</b></div><ul style="margin:0;padding:0;list-style:none">' + ahead.map((x) => `<li style="padding:5px 0"><b>${esc(x.l.label)}</b> – <span class="fav">${gbp(x.f)} ${x.cost ? 'under' : 'ahead'}</span></li>`).join('') + '</ul>' : ''}</div></div></div>`;
+      cols(el.querySelector('#mo_c'), ms.map((m) => ({ l: lab(m), parts: [{ v: ytd.includes(m) ? A(m).net : 0, c: C.blue }], line: { v: B(m).net }, tip: `<b>${labL(m)}</b>` + row('Net profit', ytd.includes(m) ? gbp(A(m).net) : 'forecast') + row('Budget', gbp(B(m).net)) })), { title: 'Net profit vs budget', h: 200 });
+    },
+    async finance(el) {
+      if (!el) return; try { if (!FA) await faLoad(); await maLoad(); } catch (e) { return; }
+      const P = perf(); if (P.la == null) { el.innerHTML = ''; return; }
+      const { ms, la, ytd, rest, A, B, yA, yB, fB, out, lines } = P;
+      const gm = (a) => (a.income ? a.gp / a.income : 0), ya = { income: yA('income'), gp: yA('gp') }, yb = { income: yB('income'), gp: yB('gp') };
+      const tile = (l, k, cost) => ({ l, v: gbp(yA(k)), s: vtxt(yA(k) - yB(k)) + ' vs budget ' + gbp(yB(k)), c: (cost ? yA(k) <= yB(k) : yA(k) >= yB(k)) ? 'g' : 'r' });
+      el.innerHTML = `<h2 style="margin:22px 0 4px;font-size:24px">Performance against budget</h2><div class="hint" style="margin-bottom:8px">${esc(fyLabel(MA.fy))} · actuals to ${labL(la)} (${ytd.length} month${ytd.length === 1 ? '' : 's'}) · budget edited on the <a href="#/budget" style="color:${C.blue}">Budget</a> page</div>` +
+        X.tiles([tile('Income, year to date', 'income', false), tile('Cost of sales', 'cos', true), { l: 'Gross margin', v: pct(gm(ya), 1), s: 'budget ' + pct(yb.income ? yb.gp / yb.income : 0, 1), c: gm(ya) >= (yb.income ? yb.gp / yb.income : 0) ? 'g' : 'r' }, tile('Operating expenses', 'overhead', true), tile('Net profit', 'net', false), { l: 'Full-year outlook', v: gbp(out('net')), s: vtxt(out('net') - fB('net')) + ' vs ' + gbp(fB('net')) + ' budget', c: out('net') >= fB('net') ? 'g' : 'r' }]) +
+        `<div class="row"><div class="card"><h3>Income vs budget</h3><div class="hint">Monthly. Line = budget.</div><div id="fo_1"></div></div><div class="card"><h3>Costs vs budget</h3><div class="hint">Cost of sales + operating expenses. Line = budget.</div><div id="fo_2"></div></div></div>
+        <div class="row"><div class="card"><h3>Cumulative profit vs budget</h3><div class="hint">Running total through the year. Line = budget.</div><div id="fo_3"></div></div><div class="card"><h3>Biggest variances (year to date)</h3><div class="hint">Green = better than budget, orange = worse.</div><div id="fo_4"></div></div></div>
+        <div class="card"><h3>Every line against budget</h3><div class="hint">Year to date, and the full-year outlook (actual to date plus the budget for the remaining months).</div><div class="box2" style="max-height:520px"><table id="fo_tab"><thead><tr><th>Line</th><th>Section</th><th class="n">Actual YTD</th><th class="n">Budget YTD</th><th class="n">Variance</th><th class="n">Var %</th><th class="n">Full-year budget</th><th class="n">Full-year outlook</th></tr></thead><tbody>${lines.map((x) => `<tr><td>${esc(x.l.label)}</td><td data-g="${SLAB[x.l.section]}">${SLAB[x.l.section]}</td><td class="n">${gbp(x.a)}</td><td class="n">${gbp(x.b)}</td><td class="n ${x.f >= 0 ? 'fav' : 'adv'}">${vtxt(x.a - x.b)}</td><td class="n">${x.b ? pct((x.a - x.b) / Math.abs(x.b)) : '–'}</td><td class="n">${gbp(x.fy)}</td><td class="n">${gbp(x.outlook)}</td></tr>`).join('')}</tbody></table></div></div>`;
+      const mk = (key, color, cost) => ms.map((m) => ({ l: lab(m), parts: [{ v: ytd.includes(m) ? A(m)[key] : 0, c: color }], line: { v: B(m)[key] }, tip: `<b>${labL(m)}</b>` + row('Actual', ytd.includes(m) ? gbp(A(m)[key]) : 'forecast') + row('Budget', gbp(B(m)[key])) + (ytd.includes(m) ? row('Variance', vtxt(A(m)[key] - B(m)[key])) : '') }));
+      cols(el.querySelector('#fo_1'), mk('income', C.blue), { title: 'Income', h: 210 });
+      cols(el.querySelector('#fo_2'), ms.map((m) => { const a = A(m).cos + A(m).overhead, b = B(m).cos + B(m).overhead; return { l: lab(m), parts: [{ v: ytd.includes(m) ? a : 0, c: C.orange }], line: { v: b }, tip: `<b>${labL(m)}</b>` + row('Actual', ytd.includes(m) ? gbp(a) : 'forecast') + row('Budget', gbp(b)) + (ytd.includes(m) ? row('Variance', vtxt(b - a) + ' (positive = under budget)') : '') }; }), { title: 'Costs', h: 210 });
+      let ca = 0, cb = 0; cols(el.querySelector('#fo_3'), ms.map((m) => { const inY = ytd.includes(m); if (inY) ca += A(m).net; cb += B(m).net; const a = ca, b = cb; return { l: lab(m), parts: [{ v: inY ? a : 0, c: C.blue }], line: { v: b }, tip: `<b>${labL(m)}</b>` + row('Cumulative actual', inY ? gbp(a) : '–') + row('Cumulative budget', gbp(b)) }; }), { title: 'Cumulative', h: 210 });
+      const vr = lines.filter((x) => Math.abs(x.f) > 1).sort((p, q) => Math.abs(q.f) - Math.abs(p.f)).slice(0, 12);
+      if (vr.length) hbars(el.querySelector('#fo_4'), vr.map((x) => ({ l: x.l.label, v: Math.abs(x.f), c: x.f >= 0 ? C.good : C.orange, tip: `<b>${esc(x.l.label)}</b>` + row('Actual YTD', gbp(x.a)) + row('Budget YTD', gbp(x.b)) + row(x.f >= 0 ? 'Better by' : 'Worse by', gbp(Math.abs(x.f))) })), { title: 'Variances', fmt: gbp, left: 190 });
+      X.enhance(el.querySelector('#fo_tab'), { filters: ['Section'], group: 'Section' });
+    }
+  };
+
   /* ---------- Budget page ---------- */
   function budDraw(el) {
     const keep = el.querySelector('.maw') ? [el.querySelector('.maw').scrollLeft, el.querySelector('.maw').scrollTop, window.scrollY] : null;
@@ -185,17 +230,19 @@
       { l: 'Profit to date vs budget', v: gbp(yA('net') - yB('net')), s: gbp(yA('net')) + ' actual vs ' + gbp(yB('net')) + ' budget · ' + ytd.length + ' months', c: yA('net') >= yB('net') ? 'g' : 'r' },
       { l: 'Full-year outlook', v: gbp(outlook('net')), s: gbp(outlook('net') - fyB('net')) + ' vs budget', c: outlook('net') >= fyB('net') ? 'g' : 'r' },
       { l: 'Profit needed per month', v: gbp(rest.length ? (fyB('net') - yA('net')) / rest.length : 0), s: 'over the remaining ' + rest.length + ' months to hit budget' },
-      { l: 'Budget months left', v: rest.length, s: 'draft forecast – edit in the grid below' }]);
+      { l: la != null ? labL(la) + ' vs budget' : 'Latest month', v: la != null ? gbp(A(la).net - B(la).net) : '–', s: la != null ? gbp(A(la).net) + ' actual vs ' + gbp(B(la).net) + ' budget' : 'no actuals yet', c: la != null && A(la).net >= B(la).net ? 'g' : 'r' }]);
 
     // forecast check: where actual run-rate differs from the forecast month
     const chk = MA.lines.map((l) => { const a = ytd.map((m) => cell(l, m, 'a').v || 0); const avg = a.length ? a.reduce((t, v) => t + v, 0) / a.length : 0; const fc = rest.length ? sum((m) => cell(l, m, 'b').v || 0, rest) / rest.length : 0; const cost = l.section !== 'income'; return { l, avg, fc, d: cost ? avg - fc : fc - avg }; })
       .filter((x) => !DISP.includes(x.l.code) && !x.l.virtual && ytd.length && Math.abs(x.avg - x.fc) > Math.max(400, 0.2 * Math.max(x.fc, 1))).sort((p, q) => Math.abs(q.avg - q.fc) - Math.abs(p.avg - p.fc)).slice(0, 8);
-    const head = `<tr><th>${esc(fyLabel(MA.fy))}</th>${ms.map((m) => `<th>${lab(m)}<br><span class="pill ${ytd.includes(m) ? 'g' : 'a'}" style="font-size:10px">${ytd.includes(m) ? 'budget' : 'forecast'}</span></th>`).join('')}<th class="ytd">Full year</th><th class="ytd" style="text-align:left;min-width:360px">Forecast basis</th></tr>`;
-    const lineRow = (l) => `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}</td>${ms.map((m) => { const c = cell(l, m, 'b'); if (l.virtual) return `<td style="color:var(--mut);font-style:italic">${c.v == null ? '' : gbp(c.v)}</td>`; return `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="b" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}"></td>`; }).join('')}<td class="ytd">${gbp(sum((m) => cell(l, m, 'b').v || 0, ms))}</td><td class="ytd" style="text-align:left;white-space:normal;font-size:12px;color:var(--mut)">${esc(l.note || '')}</td></tr>`;
-    const tot = (cls, label, key) => `<tr class="${cls}"><td>${label}</td>${ms.map((m) => `<td>${gbp(B(m)[key])}</td>`).join('')}<td class="ytd">${gbp(fyB(key))}</td><td class="ytd"></td></tr>`;
+    const isA = (m) => ytd.includes(m);
+    const head = `<tr><th rowspan="2">${esc(fyLabel(MA.fy))}</th>${ms.map((m) => `<th colspan="3" style="text-align:center">${lab(m)} <span class="pill ${isA(m) ? 'g' : 'a'}" style="font-size:10px">${isA(m) ? 'actual' : 'forecast'}</span></th>`).join('')}<th rowspan="2" class="ytd">Full-year budget</th><th rowspan="2" class="ytd" style="text-align:left;min-width:340px">Forecast basis</th></tr><tr>${ms.map(() => '<th>Budget</th><th>Actual</th><th>Var</th>').join('')}</tr>`;
+    const vcell = (a, b, cost, show) => { if (!show) return '<td></td>'; const v = a - b; return `<td class="${v === 0 ? '' : ((cost ? -v : v) >= 0 ? 'fav' : 'adv')}">${v === 0 ? '–' : (v > 0 ? '+' : '') + gbp(v)}</td>`; };
+    const lineRow = (l) => { const cost = l.section !== 'income'; return `<tr><td>${esc(l.label)}${l.auto ? ' <span class="pill b" style="font-size:10px">auto</span>' : ''}${l.virtual ? ' <span class="pill a" style="font-size:10px">from orders</span>' : ''}</td>${ms.map((m) => { const c = cell(l, m, 'b'), a = cell(l, m, 'a'), show = isA(m); const bc = l.virtual ? `<td style="color:var(--mut);font-style:italic">${c.v == null ? '' : gbp(c.v)}</td>` : `<td><input class="mi ${c.auto ? 'auto' : ''}" data-l="${l.code}" data-m="${kOf(m)}" data-w="b" value="${c.v == null ? '' : Math.round(c.v * 100) / 100}"></td>`; return bc + `<td>${show && a.v != null ? gbp(a.v) : ''}</td>` + vcell(a.v || 0, c.v || 0, cost, show && (a.v != null || c.v != null)); }).join('')}<td class="ytd">${gbp(sum((m) => cell(l, m, 'b').v || 0, ms))}</td><td class="ytd" style="text-align:left;white-space:normal;font-size:12px;color:var(--mut)">${esc(l.note || '')}</td></tr>`; };
+    const tot = (cls, label, key, cost) => `<tr class="${cls}"><td>${label}</td>${ms.map((m) => `<td>${gbp(B(m)[key])}</td><td>${isA(m) ? gbp(A(m)[key]) : ''}</td>${vcell(A(m)[key], B(m)[key], cost, isA(m))}`).join('')}<td class="ytd">${gbp(fyB(key))}</td><td class="ytd"></td></tr>`;
     const body = [];
-    SECT.forEach((sec) => { body.push(`<tr class="sec"><td colspan="${ms.length + 3}">${SLAB[sec]}</td></tr>`); MA.lines.filter((l) => l.section === sec).forEach((l) => body.push(lineRow(l)));
-      if (sec === 'income') body.push(tot('sub', 'Total income', 'income')); if (sec === 'cos') { body.push(tot('sub', 'Total cost of sales', 'cos')); body.push(tot('tot', 'Gross profit', 'gp')); } if (sec === 'overhead') { body.push(tot('sub', 'Total operating expenses', 'overhead')); body.push(tot('tot', 'Net profit', 'net')); } });
+    SECT.forEach((sec) => { body.push(`<tr class="sec"><td colspan="${ms.length * 3 + 3}">${SLAB[sec]}</td></tr>`); MA.lines.filter((l) => l.section === sec).forEach((l) => body.push(lineRow(l)));
+      if (sec === 'income') body.push(tot('sub', 'Total income', 'income', false)); if (sec === 'cos') { body.push(tot('sub', 'Total cost of sales', 'cos', true)); body.push(tot('tot', 'Gross profit', 'gp', false)); } if (sec === 'overhead') { body.push(tot('sub', 'Total operating expenses', 'overhead', true)); body.push(tot('tot', 'Net profit', 'net', false)); } });
 
     el.innerHTML = X.head('Budget', 'Full-year budget, draft forecast and performance against it · FY ends 30 April') + tiles +
       `<div class="flt"><b>Financial year</b>${fyPicker('b_fy')}<span class="cnt">${ytd.length ? 'Actuals to ' + labL(la) + '; later months are the draft forecast.' : ''}</span></div>
@@ -203,7 +250,7 @@
         <div class="card"><h3>Full-year outlook</h3><div class="hint">Cumulative net profit: actual to date plus forecast, against the full-year budget.</div><div id="b2"></div></div></div>
       <div class="row"><div class="card"><h3>Where we are against budget</h3><div class="hint">Year-to-date variance by line. Green = better than budget, orange = worse.</div><div id="b3"></div></div>
         <div class="card" style="border-top:4px solid ${C.orange}"><h3>Is the forecast realistic?</h3><div class="hint">Lines where the average month so far differs a lot from the forecast month. Adjust the budget below if you agree.</div>${chk.length ? '<ul style="margin:0;padding:0;list-style:none">' + chk.map((x) => `<li style="padding:8px 0;border-bottom:1px solid ${C.line}"><b>${esc(x.l.label)}</b>: averaging ${gbp(x.avg)} a month, forecast ${gbp(x.fc)} – <span class="${x.d > 0 ? 'adv' : 'fav'}">${x.d > 0 ? 'forecast may be ' + (x.l.section === 'income' ? 'too high' : 'too low') : 'forecast may be ' + (x.l.section === 'income' ? 'cautious' : 'generous')}</span></li>`).join('') + '</ul>' : '<div class="hint">The forecast is in line with the run-rate so far.</div>'}</div></div>
-      <div class="card"><h3>Budget grid</h3><div class="hint">Every month is editable. The <b>forecast basis</b> column says how each draft figure for the remaining months was worked out – change any figure and the reports above follow.</div>
+      <div class="card"><h3>Budget grid</h3><div class="hint">Each month shows the <b>budget</b> (editable), the <b>actual</b> and the <b>variance</b> (green = better than budget). Actuals are entered on the Management accounts page. The <b>forecast basis</b> column says how each draft figure for the remaining months was worked out.</div>
         <div class="cfwrap maw" style="max-height:72vh"><table class="ma"><thead>${head}</thead><tbody>${body.join('')}</tbody></table></div></div>`;
 
     const labs = ms.map((m) => lab(m)); let cumA = 0, cumB = 0, cumO = 0;
@@ -263,7 +310,8 @@
         <td class="n"><input class="mi" style="width:50px" data-id="${a.id}" data-f="life_years" value="${a.life_years == null ? '' : +a.life_years}" placeholder="${p.life_years || ''}"></td>
         <td class="n">${q ? gbp(q.mc) : '–'}</td><td class="n">${q ? gbp(accAt(a, NOW)) : '–'}</td><td class="n">${q ? gbp(nbvAt(a, NOW)) : '–'}</td><td class="n">${gbp(owed(a.ref))}</td>
         <td data-g="${status(a)}"><span class="pill ${status(a) === 'Depreciating' ? 'g' : status(a) === 'Needs cost / date' ? 'a' : 'b'}">${status(a)}</span></td>
-        <td><input type="date" data-id="${a.id}" data-f="disposed_date" value="${a.disposed_date ? String(a.disposed_date).slice(0, 10) : ''}" style="font:inherit;border:1px solid transparent;width:130px"></td></tr>`; };
+        <td><input type="date" data-id="${a.id}" data-f="disposed_date" value="${a.disposed_date ? String(a.disposed_date).slice(0, 10) : ''}" style="font:inherit;border:1px solid transparent;width:130px"></td>
+        <td style="white-space:nowrap">${a.disposed_date ? `<button class="mini" data-unsell="${a.id}">Reinstate</button>` : `<button class="mini" data-sold="${a.id}">Sold</button>`}</td></tr>`; };
     el.innerHTML = X.head('Fixed assets & depreciation', 'Cost, depreciation and book value of the fleet · feeds the management accounts') + tiles +
       (missing.length ? `<div class="empty"><b>${missing.length} assets need a cost and purchase date</b> before they depreciate.${canFill ? ` I can estimate ${canFill} of them from their HP agreements (present value of the payments plus any deposit) – a starting point to check against the invoices. <button id="fa_fill" type="button" class="lnk" style="border:0;background:none;color:${C.blue};text-decoration:underline;cursor:pointer;font:inherit">Fill ${canFill} from HP</button>` : ''}</div>` : '') +
       `<div class="row"><div class="card"><h3>Book value by category</h3><div class="hint">Bar = net book value, thin line = original cost.</div><div id="a1"></div></div>
@@ -272,7 +320,7 @@
       <div class="card"><h3>Depreciation policy</h3><div class="hint">Straight line over the life to the residual value, from the month of purchase. Defaults are a starting point – confirm with the accountant. An asset can have its own life (override in the register).</div>
         <div class="box2"><table><thead><tr><th>Category</th><th class="n">Life (years)</th><th class="n">Residual %</th></tr></thead><tbody>${FA.polRows.map((p) => `<tr><td>${esc(p.category)}</td><td class="n"><input class="mi" style="width:60px" data-pol="${esc(p.category)}" data-f="life_years" value="${+p.life_years}"></td><td class="n"><input class="mi" style="width:60px" data-pol="${esc(p.category)}" data-f="residual_pct" value="${+p.residual_pct}"></td></tr>`).join('')}</tbody></table></div></div>
       <div class="card"><h3>Asset register</h3><div class="hint">Type a cost and purchase date to start depreciating. Faded numbers in the cost box are the HP-implied estimate.</div>
-        <div class="box2" style="max-height:640px"><table id="fa_tab"><thead><tr><th>Asset</th><th>Description</th><th>Category</th><th class="n">Cost £</th><th>Purchased</th><th class="n">Life (yrs)</th><th class="n">Per month</th><th class="n">Acc. dep.</th><th class="n">NBV</th><th class="n">HP owed</th><th>Status</th><th>Disposed</th></tr></thead><tbody>${A.map(row1).join('')}</tbody></table></div></div>
+        <div class="box2" style="max-height:640px"><table id="fa_tab"><thead><tr><th>Asset</th><th>Description</th><th>Category</th><th class="n">Cost £</th><th>Purchased</th><th class="n">Life (yrs)</th><th class="n">Per month</th><th class="n">Acc. dep.</th><th class="n">NBV</th><th class="n">HP owed</th><th>Status</th><th>Disposed</th><th></th></tr></thead><tbody>${A.map(row1).join('')}</tbody></table></div></div>
       <div class="card"><h3>Add an asset</h3><div class="form"><div><label>Reference</label><input id="fa_r"></div><div><label>Description</label><input id="fa_d"></div><div><label>Category</label><select id="fa_c">${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div><div><label>Cost £</label><input id="fa_k" type="number" step="0.01"></div><div><label>Purchased</label><input id="fa_p" type="date"></div><div><button id="fa_add" type="button">Add asset</button></div></div></div>`;
     // charts
     const cat = {}; A.forEach((a) => { const c = a.category || 'Other'; (cat[c] = cat[c] || { cost: 0, nbv: 0, owed: 0, n: 0 }); cat[c].n++; cat[c].owed += owed(a.ref); if (a.cost && a.purchase_date) { cat[c].cost += +a.cost; cat[c].nbv += nbvAt(a, NOW); } });
@@ -287,6 +335,14 @@
     X.enhance($('fa_tab'), { filters: ['Category', 'Status'], group: 'Category', sum: 'NBV' });
     // wiring
     const redraw = () => faDraw(el, d);
+    const refresh = async () => { await faLoad(); faDraw(el, await X.loadFinance()); };
+    const pvEst = (a) => { const rt = a.interest_rate != null ? +a.interest_rate / (+a.interest_rate > 1 ? 100 : 1) : 0.08, r = Math.pow(1 + rt, 1 / 12) - 1; return d.sch.filter((x) => x.agreement_id === a.id && x.m >= NOW).reduce((t, x) => t + x.amount / Math.pow(1 + r, Math.max(0, x.m - NOW)), 0); };
+    el.querySelectorAll('[data-sold]').forEach((b) => b.onclick = () => {
+      const a = FA.assets.find((x) => x.id == b.dataset.sold), k = norm(a.ref);
+      const agreements = [...new Set(d.ass.filter((x) => { const u = norm(x.unit); return u === k || (k.length >= 4 && u.startsWith(k)); }).map((x) => x.agreement_id))].map((id) => d.agr.find((g) => g.id === id)).filter((g) => g && g.active).map((g) => { const as = d.ass.filter((x) => x.agreement_id === g.id), tot = as.reduce((t, x) => t + (+x.share || 1), 0) || 1, mine = as.filter((x) => norm(x.unit) === k || (k.length >= 4 && norm(x.unit).startsWith(k))).reduce((t, x) => t + (+x.share || 1), 0); return { a: g, est: pvEst(g) * (as.length > 1 ? mine / tot : 1), shared: as.length > 1 }; });
+      X.dispose.sold(a, { nbv: a.cost && a.purchase_date ? nbvAt(a, NOW) : 0, agreements }, refresh);
+    });
+    el.querySelectorAll('[data-unsell]').forEach((b) => b.onclick = () => { if (confirm('Put this asset back as not sold?')) X.dispose.unsell(FA.assets.find((x) => x.id == b.dataset.unsell), refresh); });
     el.querySelectorAll('[data-id]').forEach((inp) => inp.addEventListener('change', async () => {
       const f = inp.dataset.f; let v = inp.value;
       if (['cost', 'life_years'].includes(f)) { v = parse(v); if (v === undefined) { inp.value = ''; return; } } else if (v === '') v = null;

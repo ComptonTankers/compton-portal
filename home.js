@@ -148,7 +148,7 @@
         { l: 'HP at risk', v: gbp(atRiskAmt), s: atRisk.length + ' assets without a secured term', c: 'r' },
         { l: 'Cash · ' + (lastClosed ? lab(rm(lastClosed.k)) + ' close' : 'start'), v: gbp(cash), s: low ? 'tightest: ' + lab(rm(low.k)) + ' (' + gbp(low.head) + ' over buffer)' : '', c: low && low.head < 0 ? 'r' : 'g' },
         { l: 'Sales stock held', v: held.length, s: 'asking ' + gbp(held.reduce((t, s) => t + (+s.asking_price || 0), 0)) }]) +
-      `<div class="row">
+      '<div id="ma_ov"></div>' + `<div class="row">
         <div class="card" style="border-top:4px solid ${C.bad}"><h3>Concerns</h3><div class="hint">Things losing money or exposed to risk.</div>${list(concerns, 'Nothing flagged.')}</div>
         <div class="card" style="border-top:4px solid ${C.blue}"><h3>Where to focus</h3><div class="hint">What needs doing now.</div>${list(focus, 'Nothing pending.')}</div>
       </div>
@@ -167,6 +167,7 @@
       `<div class="card"><h3>Assets to watch</h3><div class="hint">Off hire all month while still on finance – the costliest first.</div>${idleHP.length ? '<div class="box2"><table><thead><tr><th>Asset</th><th>Type</th><th class="n">HP / month</th><th class="n">FY utilisation</th><th class="n">FY revenue</th></tr></thead><tbody>' + idleHP.map((u) => `<tr><td><b>${esc(u.unit)}</b></td><td>${esc(u.type || '')}</td><td class="n">${gbp(u.hp)}</td><td class="n">${u.ytd_chargeable_days ? pct(u.ytd_on_hire_days / u.ytd_chargeable_days) : '–'}</td><td class="n">${gbp(u.ytd_revenue)}</td></tr>`).join('') + '</tbody></table></div>' : '<div class="hint">No financed units were idle all month.</div>'}</div>`;
 
     /* ---- charts ---- */
+    if (X.ma) X.ma.overview(document.getElementById('ma_ov'));
     cols(document.getElementById('h1'), R.map((r) => ({ l: lab(rm(r.k)), parts: [{ v: r.eff, c: r.closed ? C.blue : C.blue2 }],
       tip: `<b>${labL(rm(r.k))}</b> ${r.closed ? '(closed)' : '(forecast)'}` + row('Opening', gbp(r.closed ? r.openA : r.openF)) + row('Money in', gbp(r.closed ? r.inA : r.inF)) + row('Money out', gbp(r.closed ? r.outA : r.outF)) + row('Closing', gbp(r.eff)) + (r.closed ? row('vs forecast', gbp(r.closeA - r.closeF)) : '') + row('Headroom over buffer', gbp(r.head)) })),
       { title: 'Month-end cash', hline: +M.s.min_buffer, hlabel: 'buffer ' + gbp(M.s.min_buffer) });
