@@ -14,7 +14,7 @@
     const W = 720, H = o.h || 240, L = 56, R = 12, Tp = 12, B = 28;
     const tops = rows.map((r) => r.parts.reduce((t, p) => t + Math.max(p.v, 0), 0));
     const max = Math.max(1, o.hline || 0, ...tops, ...rows.map((r) => (r.line ? r.line.v : 0)));
-    const min = Math.min(0, ...rows.map((r) => r.parts.reduce((t, p) => t + Math.min(p.v, 0), 0)));
+    const min = Math.min(0, ...rows.map((r) => r.parts.reduce((t, p) => t + Math.min(p.v, 0), 0)), ...rows.map((r) => (r.line ? r.line.v : 0)));
     const y = (v) => Tp + (H - Tp - B) * (1 - (v - min) / (max - min || 1)), bw = (W - L - R) / rows.length;
     let s = svgOpen(W, H, o.title);
     for (let i = 0; i <= 4; i++) { const v = min + (max - min) * i / 4; s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${C.line}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="${C.mut}">${gbp(v)}</text>`; }
