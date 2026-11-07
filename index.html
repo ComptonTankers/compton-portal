@@ -199,6 +199,7 @@ async function pageHP(el){
  el.insertAdjacentHTML('beforeend',`<div class="card"><h3>Settled agreements</h3><div class="hint">Agreements settled early or sold with the asset. They no longer count anywhere. Reinstate one if it was settled by mistake.</div>${setl.length?`<div class="box2"><table><thead><tr><th>Agreement</th><th>Lender</th><th>Settled</th><th class="n">Settlement paid</th><th>Note</th><th></th></tr></thead><tbody>${setl.map(a=>`<tr><td><b>${esc(a.agreement_ref||('#'+a.id))}</b></td><td>${esc((a.finance_company||'').replace(/ (PLC|LTD|LIMITED)$/i,''))}</td><td>${new Date(a.settled_date).toLocaleDateString('en-GB')}</td><td class="n">${a.settlement_amount!=null?gbp(+a.settlement_amount):'–'}</td><td>${esc((a.notes||'').split(' · ').pop())}</td><td><button class="mini" data-reinst="${a.id}">Reinstate</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing settled yet. Use <b>Settle</b> on a live agreement above.</div>'}</div>`);
  el.querySelectorAll('[data-settle]').forEach(b=>b.onclick=()=>window.CT.dispose.settle(d.agr.find(a=>a.id==b.dataset.settle),+b.dataset.est,()=>pageHP(el)));
  el.querySelectorAll('[data-reinst]').forEach(b=>b.onclick=()=>{if(confirm('Reinstate this agreement?'))window.CT.dispose.reinstate(d.agr.find(a=>a.id==b.dataset.reinst),()=>pageHP(el))});
+ if(window.CT.hpExtra){try{await window.CT.hpExtra(el,d)}catch(e){el.insertAdjacentHTML('beforeend','<div class="card"><div class="hint">Could not build the margin view: '+esc(e.message)+'</div></div>')}}
 }
 function barChart(id,data,tipFn,color){
  const el=$(id);if(!el)return;const W=el.clientWidth||900,H=280,M={t:10,r:10,b:34,l:56};
@@ -343,4 +344,4 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="finance.js?v=3"></script>
 <script src="disposals.js?v=2"></script>
 <script src="orders.js?v=16"></script>
-<script src="ma.js?v=11"></script><script src="assets.js?v=5"></script></body></html>
+<script src="ma.js?v=11"></script><script src="assets.js?v=5"></script><script src="hpextra.js?v=1"></script></body></html>
