@@ -120,6 +120,22 @@
     draw();
   };
   X.pv.embed = embed;
+  /* ---- page-level period control (shared by Overview, Fleet, Cash) ---- */
+  const PS = (X.pv.S = X.pv.S || { per: 'month', pick: null, cmp: 'prev' });
+  X.pv.groups = groups;
+  X.pv.periodBar = function (el, gs, rerun, opts) {
+    const pickI = PS.pick != null && PS.pick < gs.length ? PS.pick : gs.length - 1; PS.pick = pickI === gs.length - 1 && PS.pick == null ? null : pickI;
+    const nm = (g) => (PS.per === 'qtr' ? g.label.split(' · ')[0] : PS.per === 'year' ? g.label.split(' (')[0] : g.label);
+    const bar = document.createElement('div'); bar.className = 'pv-card'; bar.style.cssText = 'margin-bottom:14px;padding:10px 14px';
+    bar.innerHTML = `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:end"><div><div class="hint">View by</div><div class="pv-seg">${[['month', 'Month'], ['qtr', 'Quarter'], ['year', 'Year']].map(([v, t]) => `<button data-per="${v}" class="${PS.per === v ? 'on' : ''}">${t}</button>`).join('')}</div></div><div><div class="hint">Period shown</div><select id="pb_pick">${gs.map((g, i) => `<option value="${i}" ${i === pickI ? 'selected' : ''}>${esc(nm(g))}${i === gs.length - 1 ? ' (latest)' : ''}</option>`).join('')}</select></div><div><div class="hint">Compare with</div><select id="pb_cmp"><option value="prev" ${PS.cmp === 'prev' ? 'selected' : ''}>Previous ${PS.per === 'month' ? 'month' : PS.per === 'qtr' ? 'quarter' : 'year'}</option><option value="ly" ${PS.cmp === 'ly' ? 'selected' : ''}>Same period last year</option></select></div><div class="hint" style="flex:1;min-width:200px">${opts && opts.note ? esc(opts.note) : 'Every number and chart on this page follows this choice.'}</div></div>
+      <style>.pv-seg{display:inline-flex;border:1px solid #c9d2e3;border-radius:8px;overflow:hidden}.pv-seg button{border:0;background:#fff;padding:7px 16px;font:inherit;font-weight:600;color:#44526e;cursor:pointer}.pv-seg button.on{background:#164698;color:#fff}</style>`;
+    el.appendChild(bar);
+    bar.querySelectorAll('[data-per]').forEach((b) => (b.onclick = () => { PS.per = b.dataset.per; PS.pick = null; rerun(); }));
+    bar.querySelector('#pb_pick').onchange = (e) => { PS.pick = +e.target.value === gs.length - 1 ? null : +e.target.value; rerun(); };
+    bar.querySelector('#pb_cmp').onchange = (e) => { PS.cmp = e.target.value; rerun(); };
+    return { i: pickI, g: gs[pickI], prev: gs[pickI - 1] || null, name: nm, per: PS.per, cmp: PS.cmp, word: PS.per === 'month' ? 'month' : PS.per === 'qtr' ? 'quarter' : 'year' };
+  };
+  X.pv.vs = function (cur, base, o) { o = o || {}; if (base == null || cur == null || (!base && !cur)) return ''; const d = cur - base, pct = base ? d / Math.abs(base) : null, good = o.cost ? d <= 0 : d >= 0; const txt = o.pts ? (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + ' pts' : (d >= 0 ? '+' : '') + (o.fmt ? o.fmt(d) : gbp(d)) + (pct != null ? ' (' + (pct >= 0 ? '+' : '') + (pct * 100).toFixed(0) + '%)' : ''); return `<span style="color:${good ? K0.good : K0.bad}">${txt}</span>`; };
   /* New purchases: orders (cash, VAT, edit) + deal analyser */
   X.routes['p-orders'] = async (el) => {
     el.innerHTML = X.head('New purchases', 'Preview · assets on order, what they do to cash and VAT, and the deal analyser') + '<div class="pv-banner"><b>Preview of the new layout</b> – these tabs carry your current pages across so nothing is missing; I will rebuild them in the new style next.</div>';
