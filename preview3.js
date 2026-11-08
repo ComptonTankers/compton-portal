@@ -140,7 +140,7 @@
   X.pv.vs = function (cur, base, o) { o = o || {}; if (base == null || cur == null || (!base && !cur)) return ''; const d = cur - base, pct = base ? d / Math.abs(base) : null, good = o.cost ? d <= 0 : d >= 0; const txt = o.pts ? (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + ' pts' : (d >= 0 ? '+' : '') + (o.fmt ? o.fmt(d) : gbp(d)) + (pct != null ? ' (' + (pct >= 0 ? '+' : '') + (pct * 100).toFixed(0) + '%)' : ''); return `<span style="color:${good ? K0.good : K0.bad}">${txt}</span>`; };
   /* New purchases: orders (cash, VAT, edit) + deal analyser */
   X.routes['p-orders'] = async (el) => {
-    el.innerHTML = X.head('New purchases', 'Preview · assets on order, what they do to cash and VAT, and the deal analyser') + '<div class="pv-banner"><b>Preview of the new layout</b> – these tabs carry your current pages across so nothing is missing; I will rebuild them in the new style next.</div>';
+    el.innerHTML = X.head('New purchases', 'assets on order, what they do to cash and VAT, and the deal analyser');
     const root = document.createElement('div'); el.appendChild(root);
     PV.tabs(root, [
       { id: 'o', label: 'On order, cash and VAT', render: (p) => embed(p, X.routes.orders, null) },

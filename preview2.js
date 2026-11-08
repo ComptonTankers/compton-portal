@@ -13,7 +13,7 @@
     const closed = R.filter((r) => r.closed), open = R.filter((r) => !r.closed), lastClosed = closed[closed.length - 1], cash = lastClosed ? lastClosed.closeA : M.s.opening_actual;
     cache.v = { d, M, R, K, stock, jobs, months, types, custs, units, P, F, FM, fT, fC, fU, hpFor, closed, open, lastClosed, cash, buf: +M.s.min_buffer }; cache.t = Date.now(); return cache.v;
   }
-  const banner = '<div class="pv-banner"><b>Preview of the new layout</b> – same live numbers, redesigned. Click any tile, bar, dot or list line to drill in. Tell me what you like and what to change; your current pages are untouched.</div>';
+  const banner = '';
   const loading = (t, s) => X.head(t, s) + '<div class="empty">Loading…</div>';
   const safe = (fn) => async (el) => { try { await fn(el); } catch (e) { console.error(e); el.insertAdjacentHTML('beforeend', '<div class="card"><div class="hint">Could not build this page: ' + esc(e.message) + '</div></div>'); } };
   const isFull = (u) => +u.chargeable_days > 0 && +u.on_hire_days / +u.chargeable_days >= .95, isOff = (u) => +u.chargeable_days > 0 && +u.on_hire_days === 0;
@@ -22,13 +22,13 @@
 
   /* =============================== OVERVIEW =============================== */
   X.routes['p-overview'] = safe(async (el) => {
-    el.innerHTML = loading('Overview', 'Preview · the ten numbers that matter');
+    el.innerHTML = loading('Overview', 'the ten numbers that matter');
     const D = await data(), { d, R, K, P, hpFor, open, lastClosed, cash, buf, M, stock } = D, allM = D.months;
     const mk = (r) => mi(String(r.month).slice(0, 7)), sm = (a, f) => a.reduce((t, x) => t + (+x[f] || 0), 0), PSv = X.pv.S;
     const latestM = Math.max(allM.length ? mk(allM[allM.length - 1]) : 0, lastClosed ? mi(lastClosed.k) : 0);
     const monthsAll = [...new Set([...allM.map(mk), ...R.map((r) => mi(r.k)), ...(P ? P.ms : [])])].sort((a, b) => a - b);
     const gsAll = X.pv.groups(PSv.per, monthsAll).map((g) => Object.assign(g, { set: new Set(g.months) })), gsSel = gsAll.filter((g) => g.months[0] <= latestM);
-    el.innerHTML = X.head('Overview', 'Preview · the numbers that matter') + banner; const holder = document.createElement('div'); el.appendChild(holder);
+    el.innerHTML = X.head('Overview', 'the numbers that matter') + banner; const holder = document.createElement('div'); el.appendChild(holder);
     const pb = X.pv.periodBar(holder, gsSel, () => X.routes['p-overview'](el), { note: 'Every tile and chart on this page follows this choice. Contracts and HP charts look forward over the next 12 months, grouped the same way.' });
     const agg = (set) => { const ms = allM.filter((m) => set.has(mk(m))); if (!ms.length) return null; const last = ms[ms.length - 1], rev = sm(ms, 'hire_revenue'), on = sm(ms, 'on_hire_days'), ch = sm(ms, 'chargeable_days'); return { n: ms.length, rev, on, ch, util: ch ? on / ch : null, units: +last.units || 0, onHire: +last.units_on_hire || 0, idle: +last.units_idle || 0, ms }; };
     const cmpSet = pb.cmp === 'ly' ? new Set(pb.g.months.map((x) => x - 12)) : pb.prev ? new Set(pb.prev.months) : null, cmpName = pb.cmp === 'ly' ? 'same ' + pb.word + ' last year' : 'previous ' + pb.word;
@@ -102,12 +102,12 @@
 
   /* =============================== CASH =============================== */
   X.routes['p-cash'] = safe(async (el) => {
-    el.innerHTML = loading('Cash', 'Preview · cash, money in and out, VAT');
+    el.innerHTML = loading('Cash', 'cash, money in and out, VAT');
     const D = await data(), { M, open, closed, cash, buf, lastClosed } = D; let R = D.R; const low = open.reduce((w, r) => (w == null || r.head < w.head ? r : w), null), nextVat = open.find((r) => r.vatAuto);
     const avgOut = closed.length ? closed.reduce((t, r) => t + r.outA, 0) / closed.length : 0;
     const rv = (r, c) => (r.closed ? (r.val(c, 'a') != null ? r.val(c, 'a') : 0) : (r.val(c, 'f') || 0)), mixIn = (r) => (r.closed ? r.inA : r.inF), mixOut = (r) => (r.closed ? r.outA : r.outF);
     const gsR = X.pv.groups(X.pv.S.per, R.map((r) => mi(r.k))).map((g) => Object.assign(g, { rows: g.months.map((m) => R.find((r) => mi(r.k) === m)) }));
-    el.innerHTML = X.head('Cash', 'Preview · will we stay above the buffer, and when does VAT land') + banner; const holder = document.createElement('div'); el.appendChild(holder);
+    el.innerHTML = X.head('Cash', 'will we stay above the buffer, and when does VAT land') + banner; const holder = document.createElement('div'); el.appendChild(holder);
     const pb = X.pv.periodBar(holder, gsR, () => X.routes['p-cash'](el), { note: 'Cash is the end-of-period balance; money in, money out and VAT are totals for the period. Closed months use actuals, open months the forecast. In month view the charts show the last closed month plus the next seven (longer if needed to reach the next VAT return). Confirmed new-asset orders are included.' });
     const mkPR = (rows, label) => { const cl = rows.filter((r) => r.closed), sum = (f) => rows.reduce((t, r) => t + f(r), 0), last = rows[rows.length - 1], I = sum(mixIn), O = sum(mixOut);
       return { label, full: label, k: rows[rows.length - 1].k, rows, closed: rows.every((r) => r.closed), nClosed: cl.length, inA: I, inF: I, outA: O, outF: O, netA: I - O, netF: I - O, eff: last.eff, closeF: last.closeF, closeA: last.closeA, head: Math.min(...rows.map((r) => r.head)), pos: sum((r) => r.pos), w: { vat_sales: { f: sum((r) => r.w.vat_sales.f) }, vat_purch: { f: sum((r) => r.w.vat_purch.f) }, vat_capex: { f: sum((r) => r.w.vat_capex.f) } }, val: (c) => sum((r) => rv(r, c)), acIn: cl.reduce((t, r) => t + r.inA - r.inF, 0), acOut: cl.reduce((t, r) => t + r.outA - r.outF, 0) }; };
@@ -139,7 +139,7 @@
 
   /* =============================== HP =============================== */
   X.routes['p-hp'] = safe(async (el) => {
-    el.innerHTML = loading('HP', 'Preview · what we owe, what covers it, what to clear first');
+    el.innerHTML = loading('HP', 'what we owe, what covers it, what to clear first');
     const D = await data(), { d, K, hpFor } = D, live = d.agr.filter((a) => a.active && !a.settled_date && mon(a.end_month) >= NOW), liveIds = new Set(live.map((a) => a.id)), fut = d.sch.filter((r) => r.m >= NOW && liveIds.has(r.agreement_id));
     const tyOf = new Map(); (D.units || []).forEach((u) => { if (u.type) tyOf.set(norm(u.unit), u.type); });
     const assetsByAg = new Map(); d.ass.forEach((x) => { if (!assetsByAg.has(x.agreement_id)) assetsByAg.set(x.agreement_id, []); assetsByAg.get(x.agreement_id).push(x.unit); });
@@ -148,7 +148,7 @@
     const hpNow = fut.filter((r) => r.m === NOW).reduce((t, r) => t + r.amount, 0), remain = fut.reduce((t, r) => t + r.amount, 0), incNow = (K.fixed.get(NOW) || 0) + (K.roll.get(NOW) || 0), atRisk = K.expoAll.filter((x) => x.k !== 'fixed'), atRiskAmt = atRisk.reduce((t, x) => t + x.amt, 0);
     const rate = (a) => (a.interest_rate != null ? +a.interest_rate / (+a.interest_rate > 1 ? 100 : 1) : 0.08), settleAll = live.reduce((t, a) => { const r = Math.pow(1 + rate(a), 1 / 12) - 1; return t + fut.filter((x) => x.agreement_id === a.id).reduce((s, x) => s + x.amount / Math.pow(1 + r, Math.max(0, x.m - NOW)), 0); }, 0);
     const T1 = [{ l: 'HP this month', v: gbp(hpNow), s: live.length + ' live agreements', c: 'o' }, { l: 'Still to pay', v: gbp(remain), s: 'gross, before interest rebate' }, { l: 'Est. settlement today', v: gbp(settleAll), s: 'discounted estimate', c: 'g' }, { l: 'Covered by hire', v: hpNow ? (incNow / hpNow).toFixed(2) + '×' : '–', s: gbp(incNow) + ' contracted hire', c: hpNow && incNow < hpNow * 1.1 ? 'r' : 'g' }, { l: 'Not secured by a contract', v: gbp(atRiskAmt), s: atRisk.length + ' assets', c: 'r' }];
-    el.innerHTML = X.head('HP', 'Preview · what we owe, what covers it, what to clear first') + banner + tiles(T1); wireTiles(el, T1);
+    el.innerHTML = X.head('HP', 'what we owe, what covers it, what to clear first') + banner + tiles(T1); wireTiles(el, T1);
     const root = document.createElement('div'); el.appendChild(root);
     tabs(root, [
       { id: 'ag', label: 'Agreements', render: (p) => { const byM = {}; fut.forEach((r) => (byM[r.m] = (byM[r.m] || 0) + r.amount)); const ms = Object.keys(byM).map(Number).sort((a, b) => a - b), hs = ms.length ? Array.from({ length: ms[ms.length - 1] - NOW + 1 }, (_, i) => NOW + i) : [];
@@ -168,11 +168,11 @@
 
   /* =============================== ACCOUNTS =============================== */
   X.routes['p-accounts'] = safe(async (el) => {
-    el.innerHTML = loading('Management accounts', 'Preview');
-    const D = await data(), P = D.P; if (!P || P.la == null) { el.innerHTML = X.head('Management accounts', 'Preview') + banner + '<div class="card"><div class="hint">No actuals entered yet.</div></div>'; return; }
+    el.innerHTML = loading('Management accounts', '');
+    const D = await data(), P = D.P; if (!P || P.la == null) { el.innerHTML = X.head('Management accounts', '') + banner + '<div class="card"><div class="hint">No actuals entered yet.</div></div>'; return; }
     const { ms, la, ytd, A, B, yA, yB, fB, out, lines } = P, rest = ms.filter((m) => !ytd.includes(m)), needPM = rest.length ? (fB('net') - yA('net')) / rest.length : 0, gm = yA('income') ? yA('gp') / yA('income') : null;
     const T1 = [{ l: 'Net profit to date', v: gbp(yA('net')), s: (yA('net') >= yB('net') ? '+' : '-') + gbp(Math.abs(yA('net') - yB('net'))) + ' vs budget', c: yA('net') >= yB('net') ? 'g' : 'r', spark: ytd.map((m) => A(m).net) }, { l: 'Income to date', v: gbp(yA('income')), s: (yA('income') >= yB('income') ? '+' : '-') + gbp(Math.abs(yA('income') - yB('income'))) + ' vs budget', c: yA('income') >= yB('income') ? 'g' : 'r', spark: ytd.map((m) => A(m).income) }, { l: 'Gross margin', v: pc(gm, 1), s: 'year to date' }, { l: 'Full-year outlook', v: gbp(out('net')), s: 'budget ' + gbp(fB('net')), c: out('net') >= fB('net') ? 'g' : 'r' }, { l: 'Profit needed a month', v: gbp(needPM), s: rest.length + ' months left to hit budget', c: 'o' }];
-    el.innerHTML = X.head('Management accounts', 'Preview · ' + esc(P.fyLabel) + ' · actuals to ' + labL(la)) + banner + tiles(T1); wireTiles(el, T1);
+    el.innerHTML = X.head('Management accounts', '' + esc(P.fyLabel) + ' · actuals to ' + labL(la)) + banner + tiles(T1); wireTiles(el, T1);
     const root = document.createElement('div'); el.appendChild(root);
     tabs(root, [
       { id: 'per', label: 'Monthly, quarterly, annual', render: (p) => X.pv.accountsPeriods(p) },
@@ -192,11 +192,11 @@
 
   /* =============================== FLEET =============================== */
   X.routes['p-fleet'] = safe(async (el) => {
-    el.innerHTML = loading('Fleet performance', 'Preview');
-    const D = await data(), { hpFor } = D, allM = D.months, allT = D.types, allC = D.custs, allU = D.units; if (!allM.length) { el.innerHTML = X.head('Fleet performance', 'Preview') + '<div class="card"><div class="hint">No hire data loaded.</div></div>'; return; }
+    el.innerHTML = loading('Fleet performance', '');
+    const D = await data(), { hpFor } = D, allM = D.months, allT = D.types, allC = D.custs, allU = D.units; if (!allM.length) { el.innerHTML = X.head('Fleet performance', '') + '<div class="card"><div class="hint">No hire data loaded.</div></div>'; return; }
     const mk = (r) => mi(String(r.month).slice(0, 7)), sm = (a, f) => a.reduce((t, x) => t + (+x[f] || 0), 0);
     const gs = X.pv.groups(X.pv.S.per, allM.map(mk)).map((g) => Object.assign(g, { set: new Set(g.months) }));
-    el.innerHTML = X.head('Fleet performance', 'Preview · MCS data') + banner; const holder = document.createElement('div'); el.appendChild(holder);
+    el.innerHTML = X.head('Fleet performance', 'MCS data') + banner; const holder = document.createElement('div'); el.appendChild(holder);
     const pb = X.pv.periodBar(holder, gs, () => X.routes['p-fleet'](el), { note: 'Quarters and years fill in as months are loaded from MCS (' + allM.length + ' so far). Every number and chart on this page follows this choice.' });
     const agg = (set) => { const ms = allM.filter((m) => set.has(mk(m))); if (!ms.length) return null; const last = ms[ms.length - 1], rev = sm(ms, 'hire_revenue'), on = sm(ms, 'on_hire_days'), ch = sm(ms, 'chargeable_days'); return { n: ms.length, rev, on, ch, util: ch ? on / ch : null, units: +last.units || 0, onHire: +last.units_on_hire || 0, idle: +last.units_idle || 0, ms }; };
     const cmpSet = pb.cmp === 'ly' ? new Set(pb.g.months.map((x) => x - 12)) : pb.prev ? pb.prev.set : null, cmpName = pb.cmp === 'ly' ? 'same ' + pb.word + ' last year' : 'previous ' + pb.word;
