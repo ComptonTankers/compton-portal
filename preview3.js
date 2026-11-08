@@ -120,4 +120,12 @@
     draw();
   };
   X.pv.embed = embed;
+  /* New purchases: orders (cash, VAT, edit) + deal analyser */
+  X.routes['p-orders'] = async (el) => {
+    el.innerHTML = X.head('New purchases', 'Preview · assets on order, what they do to cash and VAT, and the deal analyser') + '<div class="pv-banner"><b>Preview of the new layout</b> – these tabs carry your current pages across so nothing is missing; I will rebuild them in the new style next.</div>';
+    const root = document.createElement('div'); el.appendChild(root);
+    PV.tabs(root, [
+      { id: 'o', label: 'On order, cash and VAT', render: (p) => embed(p, X.routes.orders, null) },
+      { id: 'a', label: 'Deal analyser', render: (p) => embed(p, X.routes.analyser, null) }]);
+  };
 })();
