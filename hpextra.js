@@ -39,6 +39,7 @@
       if (bal > 0) paid += bal;
       return { x, saved: a.owed - x - paid, months: a.pays.length - k, pm: a.pm };
     }
+    X.hpLast = { U, ags };
     draw();
 
     function draw() {

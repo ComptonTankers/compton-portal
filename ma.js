@@ -188,6 +188,7 @@
   }
   const vtxt = (v) => (v >= 0 ? '+' : '–') + gbp(Math.abs(v));
   X.ma = {
+    async data() { if (!FA) await faLoad(); await maLoad(); return Object.assign(perf(), { fy: MA.fy, fyLabel: fyLabel(MA.fy) }); },
     async overview(el) {
       if (!el) return; try { if (!FA) await faLoad(); await maLoad(); } catch (e) { return; }
       const P = perf(); if (P.la == null) { el.innerHTML = ''; return; }
