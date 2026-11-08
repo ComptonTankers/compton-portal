@@ -111,14 +111,15 @@
     hover(svg, n > 1 ? xc : d3.scalePoint().domain([0]).range([W / 2, W / 2]), n, W, H, M, o);
   }
   function hbar(box, rows, o) {   // rows [{l,v,v2,c,tip}]
-    o = o || {}; const fmt = o.fmt || kf, rh = o.rh || 26, L = o.left || 150, W = box.clientWidth || 500, H = rows.length * rh + 6; box.innerHTML = '';
+    o = o || {}; const fmt = o.fmt || kf, rh = o.pair ? 48 : (o.rh || 26), L = o.left || 150, W = box.clientWidth || 500, H = rows.length * rh + 6; box.innerHTML = '';
     const mx = Math.max(1, ...rows.map((r) => Math.abs(r.v)), ...rows.map((r) => Math.abs(r.v2 || 0))), neg = rows.some((r) => r.v < 0), x0 = neg ? L + (W - L - 70) / 2 : L, sc = (neg ? (W - L - 70) / 2 : (W - L - 70)) / mx;
     const svg = d3.select(box).append('svg').attr('width', W).attr('height', H);
     rows.forEach((r, i) => { const y = i * rh + 3, w = Math.abs(r.v) * sc, g = svg.append('g').style('cursor', o.onClick ? 'pointer' : 'default');
       g.append('text').attr('x', L - 8).attr('y', y + rh * .62).attr('text-anchor', 'end').attr('font-size', 12).attr('fill', '#33405a').text(r.l.length > 24 ? r.l.slice(0, 23) + '…' : r.l);
-      g.append('rect').attr('x', r.v < 0 ? x0 - w : x0).attr('y', y + 3).attr('width', w).attr('height', rh - 9).attr('rx', 3).attr('fill', r.c || K0.blue);
-      if (r.v2 != null) g.append('rect').attr('x', x0).attr('y', y + rh / 2 - 6).attr('width', Math.abs(r.v2) * sc).attr('height', 3).attr('fill', '#222').attr('opacity', .55);
-      g.append('text').attr('x', (r.v < 0 ? x0 - w - 5 : x0 + w + 5)).attr('y', y + rh * .62).attr('text-anchor', r.v < 0 ? 'end' : 'start').attr('font-size', 11).attr('fill', '#33405a').text(fmt(r.v));
+      g.append('rect').attr('x', r.v < 0 ? x0 - w : x0).attr('y', y + 3).attr('width', w).attr('height', o.pair ? (rh - 9) / 2 : rh - 9).attr('rx', 3).attr('fill', r.c || K0.blue);
+      if (o.pair && r.v2 != null) { g.append('rect').attr('x', x0).attr('y', y + 3 + (rh - 9) / 2).attr('width', Math.abs(r.v2) * sc).attr('height', (rh - 9) / 2).attr('rx', 3).attr('fill', K0.orange); g.append('text').attr('x', x0 + Math.abs(r.v2) * sc + 5).attr('y', y + rh * .8).attr('font-size', 11).attr('fill', '#33405a').text(fmt(r.v2)); }
+      else if (r.v2 != null) g.append('rect').attr('x', x0).attr('y', y + rh / 2 - 6).attr('width', Math.abs(r.v2) * sc).attr('height', 3).attr('fill', '#222').attr('opacity', .55);
+      g.append('text').attr('x', (r.v < 0 ? x0 - w - 5 : x0 + w + 5)).attr('y', y + (o.pair ? rh * .45 : rh * .62)).attr('text-anchor', r.v < 0 ? 'end' : 'start').attr('font-size', 11).attr('fill', '#33405a').text(fmt(r.v));
       g.append('rect').attr('x', 0).attr('y', y).attr('width', W).attr('height', rh).attr('fill', 'transparent').on('mousemove', (e) => { if (T && r.tip) T.show(e, r.tip); }).on('mouseleave', () => T && T.hide()).on('click', () => o.onClick && o.onClick(r, i)); });
   }
   function donut(box, parts, o) {
@@ -134,6 +135,10 @@
   function waffle(box, units, o) {
     box.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:3px">' + units.map((u, i) => `<div data-i="${i}" style="width:16px;height:16px;border-radius:3px;background:${u.c};cursor:pointer"></div>`).join('') + '</div>';
     box.querySelectorAll('[data-i]').forEach((el) => { const u = units[+el.dataset.i]; el.onmousemove = (e) => T && T.show(e, u.tip); el.onmouseleave = () => T && T.hide(); el.onclick = () => o && o.onClick && o.onClick(u); });
+  }
+  function waffleGroups(box, groups, o) {   // groups [{title,color,items[{c,tip,...}],summary:[[label,value]]}]
+    box.innerHTML = groups.map((g, gi) => `<div style="margin-bottom:16px"><div style="font-weight:700;color:#1d2a44;margin-bottom:6px"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${g.color};margin-right:6px"></i>${esc(g.title)} <span style="font-weight:400;color:#6b7587">· ${g.items.length}</span></div><div style="display:flex;flex-wrap:wrap;gap:3px" data-g="${gi}">${g.items.map((u, i) => `<div data-i="${i}" style="width:16px;height:16px;border-radius:3px;background:${u.c};cursor:pointer"></div>`).join('')}</div><div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:8px;font-size:12px;color:#33405a">${g.summary.map(([l, v]) => `<span><span style="color:#6b7587">${esc(l)}</span> <b>${v}</b></span>`).join('')}</div></div>`).join('');
+    box.querySelectorAll('[data-g]').forEach((row) => { const g = groups[+row.dataset.g]; row.querySelectorAll('[data-i]').forEach((el) => { const u = g.items[+el.dataset.i]; el.onmousemove = (e) => T && T.show(e, u.tip); el.onmouseleave = () => T && T.hide(); el.onclick = () => o && o.onClick && o.onClick(u); }); });
   }
   function waterfall(box, steps, o) {   // steps [{l,v,total}]
     const H = (o && o.h) || 280, M = { t: 16, r: 12, b: 64, l: 52 }, { W, svg } = svgBox(box, H, M), n = steps.length;
@@ -156,5 +161,5 @@
       .on('mousemove', (e, p) => T && T.show(e, p.tip)).on('mouseleave', () => T && T.hide()).on('click', (e, p) => o.onClick && o.onClick(p));
     svg.selectAll(null).data(pts.filter((p) => p.label)).join('text').attr('x', (p) => x(p.x)).attr('y', (p) => y(p.y) - r(p.r) - 4).attr('text-anchor', 'middle').attr('font-size', 11).attr('fill', '#33405a').text((p) => p.label);
   }
-  window.CT.pv = { K0, lab, labL, mi, norm, pc, kf, legend, card, tbl, drill, tiles, wireTiles, tabs, lineChart, barChart, hbar, donut, waffle, waterfall, scatter, sparkSvg };
+  window.CT.pv = { K0, lab, labL, mi, norm, pc, kf, legend, card, tbl, drill, tiles, wireTiles, tabs, lineChart, barChart, hbar, donut, waffle, waffleGroups, waterfall, scatter, sparkSvg };
 })();
