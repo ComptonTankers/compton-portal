@@ -36,7 +36,7 @@
   .pv-drawer.on{transform:none}.pv-drawer header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
   .pv-drawer header h3{margin:0;flex:1}.pv-drawer .body{padding:14px 18px;overflow:auto;flex:1}.pv-drawer .x{border:0;background:none;font-size:22px;cursor:pointer}
   .pv-tbl{border-collapse:collapse;width:100%;font-size:13px}.pv-tbl th{text-align:left;color:var(--mut,#6b7587);font-weight:600;border-bottom:1px solid var(--line);padding:6px 8px;position:sticky;top:0;background:#fff}
-  .pv-tbl td{padding:6px 8px;border-bottom:1px solid var(--line)}.pv-tbl .n{text-align:right}
+  .pv-tbl.srt th{cursor:pointer;user-select:none;white-space:nowrap}.pv-tbl.srt th:hover{color:#164698}.pv-tbl.srt th.sa:after{content:' ▲';font-size:9px}.pv-tbl.srt th.sd:after{content:' ▼';font-size:9px}.pv-tbl tr.grp td{background:#eef3fb;font-weight:700;color:#1d2a44;padding:8px}.pv-tbl tr.grp td .gs{font-weight:400;font-size:12px;color:#33405a;margin-left:14px}.pv-tbl td{padding:6px 8px;border-bottom:1px solid var(--line)}.pv-tbl .n{text-align:right}
   .pv-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut,#6b7587);margin:2px 0 6px}.pv-leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
   .pv-wf text{font-size:11px}
   `;
@@ -45,7 +45,20 @@
   /* ---------- small helpers ---------- */
   const legend = (a) => '<div class="pv-leg">' + a.map(([c, t, dash]) => `<span><i style="background:${dash ? 'transparent;border-top:3px dashed ' + c : c};${dash ? 'height:0' : ''}"></i>${esc(t)}</span>`).join('') + '</div>';
   const card = (t, h, body, extra) => `<div class="pv-card" ${extra || ''}><h3>${t}</h3>${h ? `<div class="hint">${h}</div>` : ''}${body}</div>`;
-  const tbl = (heads, rows) => `<table class="pv-tbl"><thead><tr>${heads.map((h, i) => `<th class="${i ? 'n' : ''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'n' : ''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const tbl = (heads, rows) => `<table class="pv-tbl srt"><thead><tr>${heads.map((h, i) => `<th class="${i ? 'n' : ''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'n' : ''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  /* click a column title to sort; click again to reverse. Works inside group blocks too. */
+  const MN = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  function sortKey(td) { const t = (td.textContent || '').replace('●', '').trim(); if (!t || t === '–') return null;
+    let m = t.match(/^([A-Za-z]{3})[a-z]* (\d{2})$/); if (m && MN.includes(m[1].toLowerCase())) return (2000 + +m[2]) * 12 + MN.indexOf(m[1].toLowerCase());
+    m = t.match(/^(-?)£?(-?)([\d,]+(?:\.\d+)?)\s*(k|m|%|×| mo|x)?/i); if (m && /^[-£\d]/.test(t)) { let v = parseFloat(m[3].replace(/,/g, '')); if (/^m$/i.test(m[4] || '')) v *= 1e6; else if (/^k$/i.test(m[4] || '')) v *= 1e3; return (m[1] || m[2]) ? -v : v; }
+    return t.toLowerCase(); }
+  document.addEventListener('click', (e) => { const th = e.target.closest && e.target.closest('table.pv-tbl.srt th'); if (!th) return;
+    const table = th.closest('table'), idx = [...th.parentNode.children].indexOf(th), dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+    table.querySelectorAll('th').forEach((h) => { delete h.dataset.dir; h.classList.remove('sa', 'sd'); }); th.dataset.dir = dir; th.classList.add(dir === 'asc' ? 'sa' : 'sd');
+    table.querySelectorAll('tbody').forEach((tb) => { const all = [...tb.children], blocks = []; let cur = { head: null, rows: [] }; all.forEach((r) => { if (r.classList.contains('grp')) { if (cur.head || cur.rows.length) blocks.push(cur); cur = { head: r, rows: [] }; } else cur.rows.push(r); }); blocks.push(cur);
+      blocks.forEach((b) => { const ks = b.rows.map((r) => ({ r, k: r.children[idx] ? sortKey(r.children[idx]) : null }));
+        ks.sort((a, c) => { if (a.k == null && c.k == null) return 0; if (a.k == null) return 1; if (c.k == null) return -1; const d = typeof a.k === 'number' && typeof c.k === 'number' ? a.k - c.k : String(a.k).localeCompare(String(c.k)); return dir === 'asc' ? d : -d; });
+        ks.forEach((x) => tb.appendChild(x.r)); if (b.head) tb.insertBefore(b.head, ks.length ? ks[0].r : null); }); }); });
   let drawerEl;
   function drill(title, html, link) {
     if (!drawerEl) { drawerEl = document.createElement('div'); drawerEl.className = 'pv-drawer'; document.body.appendChild(drawerEl); }
