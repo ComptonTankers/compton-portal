@@ -186,7 +186,7 @@
       { id: 'out', label: 'Full-year outlook', render: (p) => { const d2 = lines.map((x) => ({ l: x.l.label, v: (x.cost ? x.fy - x.outlook : x.outlook - x.fy) })).filter((x) => Math.abs(x.v) > 1).sort((a, b) => Math.abs(b.v) - Math.abs(a.v)); const top = d2.slice(0, 7), oth = d2.slice(7).reduce((t, x) => t + x.v, 0);
         const steps = [{ l: 'Budget profit', v: fB('net'), total: 1 }].concat(top).concat(Math.abs(oth) > 1 ? [{ l: 'Other lines', v: oth }] : []).concat([{ l: 'Outlook', v: out('net'), total: 1 }]);
         p.innerHTML = card('From budget to outlook', 'How the full-year profit moves from the original budget to where actuals plus the rest-of-year budget land. Green helps profit, red hurts.', '<div id="w1"></div>'); waterfall($(p, '#w1'), steps, { h: 340 }); } },
-      { id: 'fa', label: 'Fixed assets', render: (p) => X.pv.embed(p, X.routes.fa, null) },
+      { id: 'fa', label: 'Fixed assets', render: (p) => { p.innerHTML = card('Fixed assets and depreciation', 'Cost, book value, the depreciation charge feeding these accounts, the register and the policies now have their own page.', '<a class="btn" href="#/p-fa" style="color:' + K0.blue + ';font-weight:700">Open Fixed assets →</a>'); } },
       { id: 'edit', label: 'Edit accounts', render: (p) => { p.innerHTML = '<div id="ed"></div>'; tabs($(p, '#ed'), [{ id: 'g', label: 'Monthly accounts grid', render: (q) => X.pv.embed(q, X.routes.ma, null) }, { id: 'b', label: 'Budget grid', render: (q) => X.pv.embed(q, X.routes.budget, null) }]); } }]);
   });
 

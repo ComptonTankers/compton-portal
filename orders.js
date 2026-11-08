@@ -40,6 +40,8 @@
     impact: (m) => ({ int: sumAt(m, 'int'), dep: sumAt(m, 'dep'), rev: sumAt(m, 'rev') }),
     off: false, pot: false,
     cash: (k) => { if (X.orders.off) return { inflow: 0, out: 0, vat: 0, rev: 0 }; const m = +k.slice(0, 4) * 12 + (+k.slice(5, 7) - 1), p = X.orders.pot, rev = sumAt(m, 'rev', p), vat = sumAt(m, 'vat', p); return { taxable: rev * 1.2, inflow: sumAt(m - 1, 'rev', p) * 1.2, out: sumAt(m, 'pay', p) + sumAt(m, 'deposit', p) + vat, vat, rev }; },
+    model: () => ({ ORD, POL, calc, at, live, longRun, sumAt, VS, STAT }),
+    setVS: (v) => { VS = v; },
     count: () => ORD.filter(live).length,
     _lr: (w, v) => longRun(w, v), _set: (o, p) => { ORD = o; POL = p; }
   };

@@ -85,5 +85,6 @@
   }
   function avg(a, k) { const v = a.map((r) => r[k]).filter((x) => x != null); return v.length ? v.reduce((t, x) => t + x, 0) / v.length : null; }
 
+  X.assetsData = async () => { await build(); return { rows: ROWS, meta: META }; };
   X.routes.assets = async (el) => { el.innerHTML = X.head('Asset summary', 'Loading…') + '<div class="empty">Loading…</div>'; await build(); draw(el); };
 })();

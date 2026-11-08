@@ -52,7 +52,7 @@
   const nbvAt = (a, m) => { const q = sched(a); if (!q) return 0; if (q.disp != null && m >= q.disp) return 0; return q.f(nAt(q, m)); };
   const depMonth = (m) => FA ? FA.assets.filter((a) => a.active).reduce((t, a) => t + chargeAt(a, m), 0) : 0;
 
-  X.fa = { load: faLoad, sched: (a) => sched(a), nbvAt: (a, m) => nbvAt(a, m) };
+  X.fa = { load: faLoad, sched: (a) => sched(a), nbvAt: (a, m) => nbvAt(a, m), get: () => FA, chargeAt: (a, m) => chargeAt(a, m), accAt: (a, m) => accAt(a, m), depMonth: (m) => depMonth(m) };
 
   /* ===================== management accounts + budget ===================== */
   let MA = null;
