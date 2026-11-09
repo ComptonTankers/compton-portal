@@ -94,6 +94,7 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <a class="sub" href="#/p-spend" data-r="p-spend">Spend</a>
 <a class="sub" href="#/p-stock" data-r="p-stock">Sales stock</a>
 <a class="sub" href="#/inspections" data-r="inspections">Photo guides</a>
+<a class="sub" href="#/p-users" data-r="p-users">Users</a>
 <div class="grp" style="color:#8a94a8">Classic pages</div>
 <a class="sub" href="#/classic-home" data-r="classic-home">Old overview</a>
 <a class="sub" href="#/fin" data-r="fin">Finance overview</a>
@@ -326,7 +327,7 @@ async function pageAnalyser(el){
 function embed(el,src){el.innerHTML=`<iframe class="emb" src="${src}"></iframe>`;const f=el.firstChild;f.onload=()=>{try{const d=f.contentDocument;const s=d.createElement('style');s.textContent='#ct-signout{display:none!important}';d.head.appendChild(s)}catch(e){}}}
 function pageInspections(el){ embed(el,'inspect/#refs'); }
 /* ---------- router ---------- */
-window.CT={enhance,calcHPVC,mon,fmtD,NOW,api,all,gbp,esc,T,C,head,tiles,loadFinance,routes:null};
+window.CT={enhance,calcHPVC,mon,fmtD,NOW,api,all,gbp,esc,T,C,head,tiles,loadFinance,session,base,cfg,routes:null};
 const routes={fleet:el=>embed(el,'dashboard/'),analyser:pageAnalyser,hp:pageHP,hpvc:pageHPVC,inspections:pageInspections};
 window.CT.routes=routes;
 async function route(){
@@ -352,4 +353,4 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="finance.js?v=3"></script>
 <script src="disposals.js?v=2"></script>
 <script src="orders.js?v=18"></script>
-<script src="ma.js?v=13"></script><script src="assets.js?v=6"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=4"></script><script src="preview2.js?v=11"></script><script src="preview3.js?v=5"></script><script src="pages.js?v=1"></script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
+<script src="ma.js?v=13"></script><script src="assets.js?v=6"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=4"></script><script src="preview2.js?v=11"></script><script src="preview3.js?v=5"></script><script src="pages.js?v=1"></script><script src="users.js?v=1"></script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
