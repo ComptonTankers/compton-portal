@@ -30,7 +30,7 @@
     await addCf('hp_settlement', date.slice(0, 7), amount);
   }
   X.dispose = {
-    dialog,
+    dialog, addCf,
     settle(a, est, done) {
       const bg = dialog('Settle HP agreement', `<div class="note"><b>${esc(a.agreement_ref || '#' + a.id)}</b> · ${esc(a.finance_company || '')}<br>It leaves the HP overview, forecasts and exposure from the settlement month, and the settlement is added to the Cash flow as an HP settlement outflow.</div>
         <label>Settlement date</label><input id="d_dt" type="date" value="${today()}"><label>Settlement amount £</label><input id="d_am" type="number" step="0.01" value="${Math.round(est || 0)}"><label>Note (optional)</label><input id="d_nt" placeholder="e.g. unit sold">`, 'Settle agreement', async () => {
