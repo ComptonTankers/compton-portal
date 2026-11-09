@@ -101,6 +101,11 @@
       <div class="row"><div><h3 style="font-size:17px">Details</h3><div class="box2"><table>${rows.map(([g, l, v]) => { const h = g !== sec ? `<tr><th colspan="2">${esc(g)}</th></tr>` : ''; sec = g; return h + `<tr><td class="muted">${esc(l)}</td><td>${esc(v)}</td></tr>`; }).join('') || '<tr><td>No details recorded.</td></tr>'}</table></div></div>
       <div><h3 style="font-size:17px">Photos</h3><div id="s_ph" class="phg"></div></div></div></div>`;
     $('s_close').onclick = () => { box.innerHTML = ''; };
+    /* ---- sales photos: cut out, studio backdrop, logo watermark (originals untouched) ---- */
+    const WALK = ['front_driver', 'front_pass', 'rear_pass', 'rear_driver', 'side_driver', 'side_pass', 'square_rear', 'square_front'];
+    const hdr0 = box.querySelector('div[style*="display:flex;gap:8px"]');
+    const sb = document.createElement('button'); sb.className = 'mini'; sb.textContent = 'Make sales photos'; hdr0.insertBefore(sb, hdr0.firstChild);
+    sb.onclick = () => salesPhotos(box, (d.photos || []).filter((p) => p.path && WALK.includes(p.key)), s.reg);
     /* ---- office editing: change values, add rows, add notes ---- */
     const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
     const eb = document.createElement('button'); eb.className = 'mini'; eb.id = 's_edit'; eb.textContent = 'Edit report'; hdr.insertBefore(eb, hdr.firstChild);
@@ -136,6 +141,51 @@
     ph.innerHTML = items.map((_, i) => `<figure id="ph${i}"><div class="phs">Loading…</div><figcaption>${esc(items[i].cap)}</figcaption></figure>`).join('') + (skipped.length ? `<div class="small muted" style="grid-column:1/-1">Skipped: ${skipped.map((p) => esc(p.label + ' (' + p.reason + ')')).join('; ')}</div>` : '') + (d.video && d.video.path ? `<div style="grid-column:1/-1"><b>Walkaround video</b><div id="s_vid" class="small muted">Loading…</div></div>` : '');
     items.forEach(async (it, i) => { const u = await fileUrl(it.path); const f = $('ph' + i); if (f) f.firstChild.outerHTML = u ? `<a href="${u}" target="_blank"><img src="${u}" alt=""></a>` : '<div class="phs">Not available</div>'; });
     if (d.video && d.video.path) { const u = await fileUrl(d.video.path); const v = $('s_vid'); if (v) v.innerHTML = u ? `<video src="${u}" controls style="width:100%;max-height:360px;border-radius:8px"></video>` : 'Not available'; }
+  }
+
+  let BG = null;
+  async function salesPhotos(box, items, reg) {
+    let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
+    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos</h3>
+      <div class="hint">Cuts each walkaround photo out, puts it on a clean studio backdrop and adds the logo watermark. Your original photos are not changed. The first run downloads the cut-out tool (about 40 MB) so allow a minute; after that each photo takes a few seconds. Check each result – tankers with pipes and ladders can leave rough edges.</div>
+      <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label>Backdrop <select id="ss_bg" style="padding:5px"><option value="studio">Light studio grey</option><option value="white">Plain white</option><option value="navy">Compton blue</option></select></label>
+      <button class="mini pri2" id="ss_go">Create ${items.length} sales photos</button><button class="mini" id="ss_all" style="display:none">Download all</button></div>
+      <div id="ss_msg" class="small muted"></div><div id="ss_out" class="phg"></div></div>`);
+    const q = (i) => box.querySelector(i); const msg = q('#ss_msg'), out = q('#ss_out');
+    if (!items.length) { msg.textContent = 'No walkaround photos were sent on this inspection.'; q('#ss_go').disabled = true; return; }
+    q('#s_sales').scrollIntoView({ behavior: 'smooth' });
+    const img = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    function bounds(im) { const c = document.createElement('canvas'), w = c.width = Math.min(im.width, 800), h = c.height = Math.round(im.height * w / im.width); const x = c.getContext('2d'); x.drawImage(im, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = 0, y1 = 0; for (let y = 0; y < h; y += 2) for (let xx = 0; xx < w; xx += 2) if (d[(y * w + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; } const k = im.width / w; return x1 > x0 ? { x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k } : { x: 0, y: 0, w: im.width, h: im.height }; }
+    async function compose(cut, style) {
+      const W = 1600, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 0, 0, H);
+      if (style === 'white') { g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ffffff'); } else if (style === 'navy') { g.addColorStop(0, '#2a5db0'); g.addColorStop(1, '#0f2f6b'); } else { g.addColorStop(0, '#f7f8fb'); g.addColorStop(.62, '#e6eaf1'); g.addColorStop(1, '#cfd6e2'); }
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+      const b = bounds(cut), sc = Math.min(W * .86 / b.w, H * .62 / b.h), dw = b.w * sc, dh = b.h * sc, dx = (W - dw) / 2, dy = H * .70 - dh;
+      const sh = x.createRadialGradient(W / 2, H * .70, 10, W / 2, H * .70, dw * .55); sh.addColorStop(0, 'rgba(0,0,0,.35)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+      x.save(); x.translate(0, H * .70); x.scale(1, .08); x.translate(0, -H * .70); x.fillStyle = sh; x.fillRect(W / 2 - dw * .6, H * .70 - dw * .6, dw * 1.2, dw * 1.2); x.restore();
+      x.drawImage(cut, b.x, b.y, b.w, b.h, dx, dy, dw, dh);
+      try { const lg = await img('assets/compton-logo.png'); const lw = W * .2, lh = lw * lg.height / lg.width; x.save(); x.globalAlpha = .6; if (style !== 'navy') { } x.fillStyle = style === 'navy' ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,0)'; if (style === 'navy') x.fillRect(W - lw - 50, H - lh - 50, lw + 20, lh + 20); x.drawImage(lg, W - lw - (style === 'navy' ? 40 : 40), H - lh - (style === 'navy' ? 40 : 40), lw, lh); x.restore(); } catch (e) { }
+      return new Promise((res) => c.toBlob(res, 'image/jpeg', .9));
+    }
+    const made = [];
+    q('#ss_go').onclick = async () => {
+      q('#ss_go').disabled = true; out.innerHTML = ''; made.length = 0; const style = q('#ss_bg').value;
+      try {
+        if (!BG) { msg.textContent = 'Loading the cut-out tool…'; BG = (await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm')).removeBackground; }
+      } catch (e) { msg.innerHTML = '<span style="color:#b3261e">Could not load the cut-out tool (' + esc(e.message) + '). Check the connection and try again.</span>'; q('#ss_go').disabled = false; return; }
+      for (let i = 0; i < items.length; i++) {
+        msg.textContent = `Working on photo ${i + 1} of ${items.length}: ${items[i].label}…`;
+        try {
+          const u = await fileUrl(items[i].path); if (!u) throw new Error('photo not available');
+          const blob = await (await fetch(u)).blob(); const cutBlob = await BG(blob); const cu = URL.createObjectURL(cutBlob); const cut = await img(cu);
+          const res = await compose(cut, style); const ru = URL.createObjectURL(res); const name = (reg + '-' + items[i].label).replace(/[^A-Za-z0-9]+/g, '_') + '.jpg'; made.push({ ru, name });
+          out.insertAdjacentHTML('beforeend', `<figure><a href="${ru}" target="_blank"><img src="${ru}" alt=""></a><figcaption>${esc(items[i].label)} · <a href="${ru}" download="${name}">Download</a></figcaption></figure>`);
+        } catch (e) { out.insertAdjacentHTML('beforeend', `<div class="phs">${esc(items[i].label)}: ${esc(e.message || 'failed')}</div>`); }
+      }
+      msg.textContent = `Done – ${made.length} of ${items.length} created. Not happy with one? Use the original, or edit it by hand.`; q('#ss_go').disabled = false;
+      if (made.length) { const a = q('#ss_all'); a.style.display = ''; a.onclick = () => made.forEach((m, k) => setTimeout(() => { const l = document.createElement('a'); l.href = m.ru; l.download = m.name; document.body.appendChild(l); l.click(); l.remove(); }, k * 400)); }
+    };
   }
 
   const st = document.createElement('style');
