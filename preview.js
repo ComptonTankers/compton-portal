@@ -110,15 +110,15 @@
     hover(svg, x, n, W, H, M, o);
   }
   function barChart(box, o) {   // stacked or single bars, optional line, signed
-    const H = (o.h || 260) + (o.sub ? 18 : 0), M = { t: o.sub ? 34 : 14, r: 16, b: 30, l: 52 }, { W, svg } = svgBox(box, H, M), n = o.labels.length, fmt = o.fmt || kf;
+    const H = (o.h || 260) + (o.sub ? 18 : 0), M = { t: 14, r: 16, b: o.sub ? 48 : 30, l: 52 }, { W, svg } = svgBox(box, H, M), n = o.labels.length, fmt = o.fmt || kf;
     const x = d3.scaleBand().domain(d3.range(n)).range([M.l, W - M.r]).padding(.28);
     const stacks = o.labels.map((_, i) => { let p = 0, q = 0; return o.series.map((s) => { const v = s.vals[i] || 0; if (v >= 0) { const r = [p, p + v]; p += v; return r; } const r = [q + v, q]; q += v; return r; }); });
     const all2 = stacks.flat().flat().concat(o.line ? o.line.vals.filter((v) => v != null) : []);
     const y = d3.scaleLinear().domain([Math.min(0, d3.min(all2)), (d3.max(all2) || 1) * 1.08]).nice().range([H - M.b, M.t]);
     axisY(svg, y, W, M, fmt);
     const xc = d3.scalePoint().domain(d3.range(n)).range([x(0) + x.bandwidth() / 2, x(n - 1) + x.bandwidth() / 2]);
-    axisX(svg, n > 1 ? xc : d3.scalePoint().domain([0]).range([W / 2, W / 2]), o.labels, W, H, M);
-    if (o.sub) o.sub.forEach((t, i) => svg.append('text').attr('x', x(i) + x.bandwidth() / 2).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', n > 14 ? 9.5 : 11).attr('font-weight', 700).attr('fill', (o.subc && o.subc[i]) || '#33405a').text(t));
+    axisX(svg, n > 1 ? xc : d3.scalePoint().domain([0]).range([W / 2, W / 2]), o.labels, W, H, o.sub ? Object.assign({}, M, { b: M.b - 18 }) : M);
+    if (o.sub) o.sub.forEach((t, i) => svg.append('text').attr('x', x(i) + x.bandwidth() / 2).attr('y', H - M.b + 14).attr('text-anchor', 'middle').attr('font-size', n > 14 ? 9.5 : 11).attr('font-weight', 700).attr('fill', (o.subc && o.subc[i]) || '#33405a').text(t));
     svg.append('line').attr('x1', M.l).attr('x2', W - M.r).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', '#b9c2d3');
     o.series.forEach((s, si) => svg.selectAll(null).data(o.labels.map((_, i) => i)).join('rect').attr('x', (i) => x(i)).attr('width', x.bandwidth()).attr('y', (i) => y(stacks[i][si][1])).attr('height', (i) => Math.max(0, y(stacks[i][si][0]) - y(stacks[i][si][1]))).attr('fill', (i) => (s.cf ? s.cf(i) : s.color)).attr('rx', 2).attr('opacity', (i) => (s.op ? s.op(i) : 1)));
     if (o.line) { svg.append('path').datum(o.line.vals.map((v, i) => [i, v])).attr('fill', 'none').attr('stroke', o.line.color).attr('stroke-width', 2.5).attr('stroke-dasharray', o.line.dash ? '6 4' : null).attr('d', d3.line().defined((d) => d[1] != null).x((d) => xc(d[0])).y((d) => y(d[1]))); svg.selectAll(null).data(o.line.vals.map((v, i) => [i, v]).filter((d) => d[1] != null)).join('circle').attr('cx', (d) => xc(d[0])).attr('cy', (d) => y(d[1])).attr('r', 3.5).attr('fill', '#fff').attr('stroke', o.line.color).attr('stroke-width', 2); }
