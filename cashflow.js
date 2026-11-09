@@ -75,8 +75,15 @@
       r.openA = mo.oa != null ? mo.oa : (i === 0 ? s.opening_actual : prevA);
       r.closeF = r.openF + r.netF; r.closeA = r.openA + r.netA;
       r.eff = r.closed ? r.closeA : r.closeF;
-      r.buffer = +s.min_buffer; r.headF = r.closeF - r.buffer; r.headA = r.closeA - r.buffer; r.head = r.eff - r.buffer;
       prevEff = r.eff; prevA = r.closeA;
+    });
+    /* Buffer: by default N months of the costs we cannot dodge (HP, wages, PAYE/NI, pension, plus insurance/other critical a month), looking forward from each month. */
+    const CRIT = ['hp_payments', 'payroll', 'paye', 'pension'], bm = s.buffer_months != null ? +s.buffer_months : 2, bo = +s.buffer_other || 0, rule = (s.buffer_mode || 'rule') === 'rule';
+    const crit = (r) => CRIT.reduce((t, c) => { const f = r.val(c, 'f'); return t + n0(f != null ? f : r.val(c, 'a')); }, 0) + bo;
+    res.forEach((r, i) => {
+      if (rule) { let b = 0, left = bm; for (let j = 1; left > 0; j++) { const rr = res[Math.min(i + j, res.length - 1)], w = Math.min(1, left); b += crit(rr) * w; left -= w; } r.buffer = Math.round(b); }
+      else r.buffer = +s.min_buffer;
+      r.headF = r.closeF - r.buffer; r.headA = r.closeA - r.buffer; r.head = r.eff - r.buffer;
     });
     return res;
   }
@@ -138,7 +145,7 @@
     const lastVar = lastClosed ? lastClosed.closeA - lastClosed.closeF : null;
     const fmt = (v) => gbp(v);
 
-    const head = `<div class="top"><h1>Cash flow</h1><div class="sub2">${esc(M.s.client_name || '')} · forecast vs actual, rolling · buffer ${fmt(M.s.min_buffer)}</div></div>`;
+    const head = `<div class="top"><h1>Cash flow</h1><div class="sub2">${esc(M.s.client_name || '')} · forecast vs actual, rolling · buffer ${(M.s.buffer_mode || 'rule') === 'rule' ? (M.s.buffer_months != null ? +M.s.buffer_months : 2) + ' months of critical costs' : fmt(M.s.min_buffer)}</div></div>`;
     const tiles = X.tiles([
       { l: 'Cash at ' + (lastClosed ? mlong(lastClosed.k) + ' close' : 'start'), v: fmt(cashNow), s: lastClosed ? 'actual, last closed month' : '', c: 'g' },
       { l: 'Lowest headroom ahead', v: low ? fmt(low.head) : '–', s: low ? 'in ' + mlong(low.k) + (low.head < 0 ? ' · below buffer' : ' · above buffer') : '', c: low && low.head < 0 ? 'r' : '' },
@@ -186,7 +193,7 @@
       </tbody></table></div>`;
 
     el.innerHTML = head + tiles +
-      `<div class="card"><h3>Cash vs minimum buffer</h3><div class="hint">Solid = actual cash at month end, dashed = forecast. Dotted line is your ${fmt(M.s.min_buffer)} buffer.</div><div id="cfch"></div></div>` +
+      `<div class="card"><h3>Cash vs minimum buffer</h3><div class="hint">Solid = actual cash at month end, dashed = forecast. Dotted line is your buffer ${(M.s.buffer_mode || 'rule') === 'rule' ? '(' + (M.s.buffer_months != null ? +M.s.buffer_months : 2) + ' months of HP, wages, PAYE/NI, pension and other critical costs)' : fmt(M.s.min_buffer)}.</div><div id="cfch"></div></div>` +
       `<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline"><div><h3>Forecast vs actual</h3><div class="hint">Type in any white cell. Grey figures are automatic (VAT, HP schedule). When a month's actuals are in, press <b>Close month</b>: its closing cash becomes the next opening balance and a new forecast month is added at the end.</div></div><div><button class="mini" id="cfadd">+ Add month</button></div></div>${table}<div class="err" id="cferr"></div></div>`;
     chart(R);
     const w = el.querySelector('.cfwrap');

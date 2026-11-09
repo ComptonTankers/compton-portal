@@ -97,11 +97,13 @@
   function lineChart(box, o) {
     const H = o.h || 280, M = { t: 14, r: 16, b: 30, l: 52 }, { W, svg } = svgBox(box, H, M), n = o.labels.length, fmt = o.fmt || kf;
     const x = d3.scalePoint().domain(d3.range(n)).range([M.l + 12, W - M.r - 12]);
-    const vals = o.series.flatMap((s) => s.vals).filter((v) => v != null).concat(o.hline != null ? [o.hline.v] : []);
+    const vals = o.series.flatMap((s) => s.vals).filter((v) => v != null).concat(o.hline != null ? (o.hline.vals ? o.hline.vals.filter((v) => v != null) : [o.hline.v]) : []);
     const y = d3.scaleLinear().domain([Math.min(0, d3.min(vals)), (d3.max(vals) || 1) * 1.08]).nice().range([H - M.b, M.t]);
     axisY(svg, y, W, M, fmt); axisX(svg, x, o.labels, W, H, M);
     if (o.band) svg.append('rect').attr('x', M.l).attr('width', W - M.l - M.r).attr('y', y(o.band[1])).attr('height', Math.max(0, y(o.band[0]) - y(o.band[1]))).attr('fill', '#fdeaea').attr('opacity', .6);
-    if (o.hline) { svg.append('line').attr('x1', M.l).attr('x2', W - M.r).attr('y1', y(o.hline.v)).attr('y2', y(o.hline.v)).attr('stroke', K0.bad).attr('stroke-width', 2).attr('stroke-dasharray', '2 4'); svg.append('text').attr('x', W - M.r - 2).attr('y', y(o.hline.v) - 5).attr('text-anchor', 'end').attr('font-size', 11).attr('fill', K0.bad).text(o.hline.t); }
+    if (o.hline && o.hline.vals) { const pts = o.hline.vals.map((v, i) => [i, v]).filter((d) => d[1] != null); svg.append('path').datum(pts).attr('fill', 'none').attr('stroke', K0.bad).attr('stroke-width', 2).attr('stroke-dasharray', '2 4').attr('d', d3.line().curve(d3.curveStepAfter).x((d) => x(d[0])).y((d) => y(d[1]))); if (pts.length) svg.append('text').attr('x', W - M.r - 2).attr('y', y(pts[pts.length - 1][1]) - 5).attr('text-anchor', 'end').attr('font-size', 11).attr('fill', K0.bad).text(o.hline.t); }
+    else if (o.hline) { svg.append('line').attr('x1', M.l).attr('x2', W - M.r).attr('y1', y(o.hline.v)).attr('y2', y(o.hline.v)).attr('stroke', K0.bad).attr('stroke-width', 2).attr('stroke-dasharray', '2 4'); svg.append('text').attr('x', W - M.r - 2).attr('y', y(o.hline.v) - 5).attr('text-anchor', 'end').attr('font-size', 11).attr('fill', K0.bad).text(o.hline.t); }
+    (o.vmarks || []).forEach((m) => { const cx = x(m.i); svg.append('line').attr('x1', cx).attr('x2', cx).attr('y1', M.t + 14).attr('y2', H - M.b).attr('stroke', K0.purple).attr('stroke-width', 1.6).attr('stroke-dasharray', '4 3'); const tx = svg.append('text').attr('x', Math.max(M.l + 40, Math.min(W - M.r - 40, cx))).attr('y', M.t + 8).attr('text-anchor', 'middle').attr('font-size', 11.5).attr('font-weight', 700).attr('fill', K0.purple).text(m.t); });
     o.series.forEach((s) => {
       if (s.area) svg.append('path').datum(s.vals.map((v, i) => [i, v])).attr('fill', s.color).attr('opacity', .12).attr('d', d3.area().defined((d) => d[1] != null).x((d) => x(d[0])).y0(y(0)).y1((d) => y(d[1])));
       svg.append('path').datum(s.vals.map((v, i) => [i, v])).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', s.w || 2.6).attr('stroke-dasharray', s.dash ? '7 5' : null).attr('d', d3.line().defined((d) => d[1] != null).x((d) => x(d[0])).y((d) => y(d[1])));
