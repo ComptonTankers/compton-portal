@@ -88,14 +88,14 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <a href="#/p-accounts" data-r="p-accounts">Management accounts</a>
 <a href="#/p-orders" data-r="p-orders">New purchases</a>
 <a href="#/p-fa" data-r="p-fa">Fixed assets</a>
+<a href="#/p-stock" data-r="p-stock">Stock &amp; inspections</a>
 <div class="grp">More</div>
 <a class="sub" href="#/p-assets" data-r="p-assets">Asset summary</a>
 <a class="sub" href="#/hpvc" data-r="hpvc">HP vs Contracts</a>
 <a class="sub" href="#/p-spend" data-r="p-spend">Spend</a>
-<a class="sub" href="#/p-stock" data-r="p-stock">Sales stock</a>
 <a class="sub" href="#/inspections" data-r="inspections">Photo guides</a>
 <a class="sub" href="#/p-users" data-r="p-users">Users</a>
-<div class="grp" style="color:#8a94a8">Classic pages</div>
+<div class="grp" id="clsT" style="color:#8a94a8;cursor:pointer;user-select:none">▸ Classic pages</div><div id="clsB" style="display:none">
 <a class="sub" href="#/classic-home" data-r="classic-home">Old overview</a>
 <a class="sub" href="#/fin" data-r="fin">Finance overview</a>
 <a class="sub" href="#/hp" data-r="hp">HP overview</a>
@@ -109,6 +109,7 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <a class="sub" href="#/orders" data-r="orders">New assets on order</a>
 <a class="sub" href="#/analyser" data-r="analyser">Deal analyser</a>
 <a class="sub" href="#/fleet" data-r="fleet">Fleet dashboard</a>
+</div>
 <button class="out" id="out" type="button">Sign out</button></aside>
 <main id="main"></main></div>
 <div class="tip" id="tip"></div>
@@ -353,4 +354,4 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="finance.js?v=3"></script>
 <script src="disposals.js?v=2"></script>
 <script src="orders.js?v=18"></script>
-<script src="ma.js?v=13"></script><script src="assets.js?v=6"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=4"></script><script src="preview2.js?v=11"></script><script src="preview3.js?v=5"></script><script src="pages.js?v=1"></script><script src="users.js?v=1"></script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
+<script src="ma.js?v=13"></script><script src="assets.js?v=6"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=4"></script><script src="preview2.js?v=11"></script><script src="preview3.js?v=5"></script><script src="pages.js?v=1"></script><script src="users.js?v=1"></script><script>(function(){var t=document.getElementById("clsT"),b=document.getElementById("clsB");function set(o){b.style.display=o?"block":"none";t.textContent=(o?"▾ ":"▸ ")+"Classic pages"}t.onclick=function(){set(b.style.display==="none")};function chk(){var h=location.hash.replace(/^#\/?/,"");if(b.querySelector("a[data-r=\""+h+"\"]"))set(true)}chk();addEventListener("hashchange",chk)})();</script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
