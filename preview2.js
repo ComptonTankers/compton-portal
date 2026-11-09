@@ -3,6 +3,7 @@
   const X = window.CT; if (!X || !X.pv) return;
   const { all, gbp, esc, NOW, mon } = X; const P_ = X.pv, { K0, lab, labL, mi, norm, pc, kf, legend, card, tbl, drill, tiles, wireTiles, tabs, lineChart, barChart, hbar, donut, waffle, waffleGroups, waterfall, scatter } = P_;
   const $ = (r, s) => r.querySelector(s);
+  const covP = (inc, hp) => (hp > 0 ? Math.round((inc / hp) * 100) + '%' : '–'), covC = (inc, hp) => (hp > 0 ? (inc >= hp ? K0.good : K0.bad) : K0.mut);
   const cache = { t: 0, v: null };
   async function data() {
     if (cache.v && Date.now() - cache.t < 4000) return cache.v;
@@ -84,7 +85,6 @@
     $(el, '#o2').innerHTML = items.length ? items.map((it, i) => `<div class="it" data-go="${it.go}"><span class="dot" style="background:${it.c}"></span><div><div>${it.h}</div>${it.sub ? `<div class="hint">${it.sub}</div>` : ''}</div><span class="amt">${gbp(it.amt)}${it.t}</span></div>`).join('') : '<div class="hint">Nothing flagged.</div>';
     el.querySelectorAll('#o2 .it').forEach((n) => (n.onclick = () => (location.hash = '#/' + n.dataset.go)));
     const m12 = Array.from({ length: 12 }, (_, i) => NOW + i), g12 = X.pv.groups(PSv.per, m12), sg = (mp, g) => g.months.reduce((t, m) => t + (mp.get(m) || 0), 0);
-    const covP = (inc, hp) => (hp > 0 ? Math.round((inc / hp) * 100) + '%' : '–'), covC = (inc, hp) => (hp > 0 ? (inc >= hp ? K0.good : K0.bad) : K0.mut);
     barChart($(el, '#o3'), { sub: g12.map((g) => covP(sg(K.fixed, g) + sg(K.roll, g), sg(K.hpMonth, g))), subc: g12.map((g) => covC(sg(K.fixed, g) + sg(K.roll, g), sg(K.hpMonth, g))), labels: g12.map((g) => pb.name(g)), h: 230, series: [{ name: 'Fixed', color: K0.blue, vals: g12.map((g) => sg(K.fixed, g)) }, { name: 'Rolling', color: K0.soft, vals: g12.map((g) => sg(K.roll, g)) }], line: { color: K0.bad, vals: g12.map((g) => sg(K.hpMonth, g)) }, tip: (i) => `<b>${g12[i].label}</b><br>Fixed ${gbp(sg(K.fixed, g12[i]))}<br>Rolling ${gbp(sg(K.roll, g12[i]))}<br>HP ${gbp(sg(K.hpMonth, g12[i]))}`, onClick: () => (location.hash = '#/p-hp') });
     const gP = P ? X.pv.groups(PSv.per, P.ms) : [], eI = (g) => P.ms.indexOf(g.months[g.months.length - 1]);
     if (P && P.la != null) lineChart($(el, '#o4'), { labels: gP.map((g) => pb.name(g)), h: 230, series: [{ color: K0.mut, dash: 1, vals: gP.map((g) => profB[eI(g)]), dots: PSv.per !== 'month', w: 2 }, { color: K0.blue, vals: gP.map((g) => profA[eI(g)]), dots: PSv.per !== 'month' }], tip: (i) => `<b>${gP[i].label}</b><br>${eI(gP[i]) <= iLa ? 'Actual' : 'Outlook'} ${gbp(profA[eI(gP[i])])}<br>Budget ${gbp(profB[eI(gP[i])])}`, onClick: () => (location.hash = '#/p-accounts'), fmt: kf });
