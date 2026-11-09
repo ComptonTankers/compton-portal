@@ -188,7 +188,8 @@
     function bounds(im) { const c = document.createElement('canvas'), w = c.width = Math.min(im.width, 800), h = c.height = Math.round(im.height * w / im.width); const x = c.getContext('2d'); x.drawImage(im, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = 0, y1 = 0; for (let y = 0; y < h; y += 2) for (let xx = 0; xx < w; xx += 2) if (d[(y * w + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; } const k = im.width / w; return x1 > x0 ? { x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k } : { x: 0, y: 0, w: im.width, h: im.height }; }
     async function compose(cut, style) {
       const W = 1600, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-      drawBackdrop(x, W, H, style);
+      let done = false; if (style === 'yard') { try { const bg = await img('assets/backdrop-yard.jpg'); x.drawImage(bg, 0, 0, W, H); done = true; } catch (e) { } }
+      if (!done) drawBackdrop(x, W, H, style);
       const b = bounds(cut), sc = Math.min(W * .86 / b.w, H * .62 / b.h), dw = b.w * sc, dh = b.h * sc, dx = (W - dw) / 2, dy = H * .78 - dh;
       const fy = H * .78; x.save(); x.translate(W / 2, fy); x.scale(1, .07);
       const sh = x.createRadialGradient(0, 0, 10, 0, 0, dw * .58); sh.addColorStop(0, 'rgba(0,0,0,.55)'); sh.addColorStop(.6, 'rgba(0,0,0,.25)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
