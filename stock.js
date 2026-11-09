@@ -101,6 +101,34 @@
       <div class="row"><div><h3 style="font-size:17px">Details</h3><div class="box2"><table>${rows.map(([g, l, v]) => { const h = g !== sec ? `<tr><th colspan="2">${esc(g)}</th></tr>` : ''; sec = g; return h + `<tr><td class="muted">${esc(l)}</td><td>${esc(v)}</td></tr>`; }).join('') || '<tr><td>No details recorded.</td></tr>'}</table></div></div>
       <div><h3 style="font-size:17px">Photos</h3><div id="s_ph" class="phg"></div></div></div></div>`;
     $('s_close').onclick = () => { box.innerHTML = ''; };
+    /* ---- office editing: change values, add rows, add notes ---- */
+    const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
+    const eb = document.createElement('button'); eb.className = 'mini'; eb.id = 's_edit'; eb.textContent = 'Edit report'; hdr.insertBefore(eb, hdr.firstChild);
+    const tableBox = box.querySelector('.box2');
+    const note = d.office_notes || '';
+    const noteHtml = () => (d.office_notes ? `<div class="card" style="margin-top:8px;background:#fff8ec;box-shadow:none"><b>Office notes</b><div style="white-space:pre-wrap">${esc(d.office_notes)}</div></div>` : '');
+    tableBox.insertAdjacentHTML('afterend', '<div id="s_notes">' + noteHtml() + '</div>');
+    eb.onclick = () => {
+      let R = rows.map((r) => r.slice()); let N = note;
+      const draw = () => {
+        let sc = '';
+        tableBox.innerHTML = '<table>' + R.map((r, i) => { const h = r[0] !== sc ? `<tr><th colspan="3">${esc(r[0])}</th></tr>` : ''; sc = r[0]; return h + `<tr><td class="muted">${esc(r[1])}</td><td><input data-i="${i}" value="${esc(r[2])}" style="width:100%;padding:5px 7px;font-size:13px"></td><td><button class="mini" data-del="${i}" title="Remove this line">✕</button></td></tr>`; }).join('') + '</table>' +
+          `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><input id="s_nl" placeholder="New line, e.g. Tank test due" style="padding:5px 7px;flex:1;min-width:160px"><input id="s_nv" placeholder="Value" style="padding:5px 7px;flex:1;min-width:120px"><button class="mini" id="s_addl">Add line</button></div>
+           <div style="margin-top:8px"><b>Office notes</b><textarea id="s_nt" style="width:100%;min-height:70px;padding:6px;font-size:13px" placeholder="Anything extra to add to this report">${esc(N)}</textarea></div>
+           <div class="hint" style="margin-top:4px">Tip: for dates, type the date or the word Expired / Not available.</div>
+           <div style="margin-top:8px;display:flex;gap:8px"><button class="mini pri2" id="s_save">Save changes</button><button class="mini" id="s_cancel">Cancel</button></div>`;
+        tableBox.querySelectorAll('input[data-i]').forEach((inp) => { inp.oninput = () => { R[+inp.dataset.i][2] = inp.value; }; });
+        tableBox.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => { R.splice(+b.dataset.del, 1); N = $('s_nt').value; draw(); }; });
+        $('s_nt').oninput = (e) => { N = e.target.value; };
+        $('s_addl').onclick = () => { const l = $('s_nl').value.trim(); if (!l) return; N = $('s_nt').value; let g = 'Added by office'; R.push([g, l, $('s_nv').value]); draw(); };
+        $('s_cancel').onclick = () => view(stockId);
+        $('s_save').onclick = async (e) => { e.target.disabled = true; try {
+          const nd = Object.assign({}, d, { rows: R, office_notes: $('s_nt').value.trim(), edited_at: new Date().toISOString() });
+          await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: nd }) });
+          j.data = nd; view(stockId); } catch (er) { alert('Could not save: ' + er.message); e.target.disabled = false; } };
+      };
+      draw();
+    };
     const ok = $('s_ok'); if (ok) ok.onclick = async () => { try { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'reviewed', reviewed_at: new Date().toISOString() }) }); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'for_sale' }) }); await load(); draw(document.getElementById('main')); } catch (e) { alert(e.message); } };
     box.scrollIntoView({ behavior: 'smooth' });
     const ph = $('s_ph'); const items = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, cap: p.label })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, cap: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : '') }))];

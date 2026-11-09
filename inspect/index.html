@@ -116,6 +116,7 @@ footer{font-size:12px;color:var(--brand);font-weight:600;text-align:center;paddi
 <main id="app"></main>
 <div class="navbar hidden" id="navbar"><div class="in">
   <button class="btn back" id="backbtn" onclick="back()">‹ Back</button>
+  <button class="btn back" id="skipbtn" onclick="skipStep()" style="flex:.8">Skip ›»</button>
   <button class="btn accent" id="nextbtn" onclick="next()">Next ›</button>
 </div></div>
 <div class="toast" id="toast"></div>
@@ -276,7 +277,7 @@ const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(
 const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/")))));
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("on"),2200); }
 function today(){ return new Date().toISOString().slice(0,10); }
-function fmtDate(d){ if(!d||d==="N/A") return d||""; const [y,m,dd]=d.split("-"); return dd&&m&&y?`${dd}/${m}/${y}`:d; }
+function fmtDate(d){ if(!d||d==="N/A"||d==="Expired") return d==="N/A"?"Not available":(d||""); const [y,m,dd]=d.split("-"); return dd&&m&&y?`${dd}/${m}/${y}`:d; }
 function loadImg(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; }); }
 
 let JOB=null, S=null, STEPS=[], REFS={}, saveT=null;
@@ -479,19 +480,28 @@ function fieldSet(){ const t=TYPES[JOB.type]; return new Set([...BASE_FIELDS,...
 function save(){ clearTimeout(saveT); saveT=setTimeout(()=>DB.set("state|"+JOB.id,S),250); cloudDirty(); }
 function setA(id,v){ S.answers[id]=v; save(); }
 function toggleNA(id,on){ S.answers[id]=on?"N/A":""; save(); render(); }
+function toggleEXP(id,on){ S.answers[id]=on?"Expired":""; save(); render(); }
 
 function render(){
   if(S.submitted&&S.step>=STEPS.length) return renderDone();
   const st=STEPS[S.step]; chrome(true);
   $("progbar").style.width=Math.round(S.step/(STEPS.length-1)*100)+"%";
   $("stepsec").textContent=st.section; $("stepnum").textContent=`Step ${S.step+1} of ${STEPS.length}`;
-  $("backbtn").disabled=S.step===0;
+  $("backbtn").disabled=S.step===0; $("skipbtn").classList.toggle("hidden",st.kind==="intro"||st.kind==="review");
   $("nextbtn").textContent= st.kind==="review" ? "Finish & send ›" : "Next ›";
   const fn={intro:rIntro,video:rVideo,photo:rPhoto,fields:rFields,compartments:rComp,tread:rTread,defects:rDefects,review:rReview}[st.kind];
   $("app").innerHTML=fn(st)+footerHTML();
   updateNext(); window.scrollTo(0,0);
 }
 function updateNext(){ const st=STEPS[S.step]; if(st.kind==="video"){ $("nextbtn").disabled=!S.video; } else if(st.kind==="photo"){ const p=S.photos[st.key]; $("nextbtn").disabled=!(p&&(p.status==="ok"||p.status==="skipped")); } else $("nextbtn").disabled=false; }
+function skipStep(){
+  const st=STEPS[S.step]; S.skips=S.skips||{};
+  if(st.kind==="photo"){ const p=S.photos[st.key]; if(!p||p.status==="pending") S.photos[st.key]={status:"skipped",reason:"Skipped"}; }
+  else if(st.kind==="video"){ if(!S.video) S.video={status:"skipped",reason:"Skipped"}; }
+  else if(st.kind==="fields"){ st.ids.forEach(id=>{ if(!FIELDS[id].optional&&!filled(S.answers[id])) S.answers[id]="N/A"; }); }
+  else S.skips[st.kind]=1;
+  S.step++; save(); render();
+}
 function back(){ if(S.step>0){ S.step--; save(); render(); } }
 function goto(i){ S.step=i; save(); render(); }
 function next(){
@@ -611,14 +621,14 @@ function skipVideo(){ const r=$("skipr").value.trim(); if(!r){ $("steperr").inne
 /* ---------- step: questions ---------- */
 function opts(f){ return f.optionsBy?f.optionsBy[TYPES[JOB.type].cat]:f.options; }
 function fieldHTML(id){
-  const f=FIELDS[id], v=S.answers[id]??"", na=v==="N/A"; let inp;
+  const f=FIELDS[id], v=S.answers[id]??"", na=v==="N/A"||v==="Expired", isNA=v==="N/A", isEX=v==="Expired"; let inp;
   if(f.type==="select") inp=`<select onchange="setA('${id}',this.value)" ${na?"disabled":""}><option value="">Select…</option>${opts(f).map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
   else if(f.type==="textarea") inp=`<textarea oninput="setA('${id}',this.value)" placeholder="${esc(f.ph||"")}" ${na?"disabled":""}>${na?"":esc(v)}</textarea>`;
   else { const t=f.type==="number"?"number":f.type==="date"?"date":"text";
     inp=`<input type="${t}" ${t==="number"?'inputmode="decimal"':""} ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} value="${na?"":esc(v)}" placeholder="${esc(f.ph||"")}" ${f.upper?'style="text-transform:uppercase"':""} oninput="setA('${id}',${f.upper?"this.value.toUpperCase()":"this.value"})" ${na?"disabled":""}>`; }
   const unit=f.units?`<select class="unitsel" onchange="setA('${id}_unit',this.value)">${f.units.map(u=>`<option ${(S.answers[id+"_unit"]||f.units[0])===u?"selected":""}>${u}</option>`).join("")}</select>`:f.unit?`<span class="unit">${f.unit}</span>`:"";
-  return `<div class="field"><label>${esc(f.label)}${f.optional?' <span class="opt">(optional)</span>':""}</label>${f.hint?`<div class="hint">${esc(f.hint)}</div>`:""}
-    <div class="row">${inp}${unit}</div>${f.optional?"":`<label class="na"><input type="checkbox" ${na?"checked":""} onchange="toggleNA('${id}',this.checked)"> Not available / can't check</label>`}</div>`;
+  return `<div class="field"><label>${esc(f.id_label||(id==="mot_date"&&TYPES[JOB.type].cat==="trailer"?"MOT / annual test expiry date":f.label))}${f.optional?' <span class="opt">(optional)</span>':""}</label>${f.hint?`<div class="hint">${esc(f.hint)}</div>`:""}
+    <div class="row">${inp}${unit}</div>${f.optional?"":`<label class="na"><input type="checkbox" ${isNA?"checked":""} ${isEX?"disabled":""} onchange="toggleNA('${id}',this.checked)"> Not available / can't check</label>${f.type==="date"?`<label class="na"><input type="checkbox" ${isEX?"checked":""} ${isNA?"disabled":""} onchange="toggleEXP('${id}',this.checked)"> Expired</label>`:""}`}</div>`;
 }
 function rFields(st){ return `<div class="card"><h2>${esc(st.section)}</h2>${st.ids.map(fieldHTML).join("")}<div id="steperr"></div></div>`; }
 
@@ -664,7 +674,7 @@ async function delDefect(i){ const d=S.defects[i]; await DB.del(`photo|${JOB.id}
 /* ---------- validation ---------- */
 function filled(v){ return v!=null&&String(v).trim()!==""; }
 function validate(st){
-  const a=S.answers;
+  const a=S.answers; if(S.skips&&S.skips[st.kind]&&(st.kind==="compartments"||st.kind==="tread")) return "";
   if(st.kind==="intro"){ if(!filled(a.inspector)) return "Please enter your name."; if(!a.reg_match) return "Please confirm the registration / ID."; if(a.reg_match==="No"&&!filled(a.actual_reg)) return "Please enter what the vehicle shows."; }
   if(st.kind==="video"&&!S.video) return "Record the walkaround video, or say why you can't.";
   if(st.kind==="photo"){ const p=S.photos[st.key]; if(!p||(p.status!=="ok"&&p.status!=="skipped")) return "Take the photo and confirm it, or say why you can't."; }
@@ -694,15 +704,15 @@ function hydrateReviewThumbs(){ document.querySelectorAll("img[data-k]").forEach
 function stepName(s){ if(s.kind==="photo"){ const d=PHOTOS[s.slot]; return d.label+(s.n>1?` ${s.i} – ${d.subs?.[s.i-1]||""}`:""); } if(s.kind==="fields") return s.section; return {intro:"Your name & registration",video:"Walkaround video",compartments:"Compartments and sizes",tread:"Tyre tread depths",defects:"Damage & defects"}[s.kind]||s.section; }
 
 /* ---------- output ---------- */
-function fmtVal(id){ const f=FIELDS[id], v=S.answers[id]; if(!filled(v)) return ""; if(v==="N/A") return "Not available"; if(f.type==="date") return fmtDate(v); if(f.units) return `${Number(v).toLocaleString("en-GB")} ${S.answers[id+"_unit"]||f.units[0]}`; if(f.unit) return `${f.type==="number"?Number(v).toLocaleString("en-GB"):v} ${f.unit}`; return String(v); }
+function fmtVal(id){ const f=FIELDS[id], v=S.answers[id]; if(!filled(v)) return ""; if(v==="N/A") return "Not available"; if(v==="Expired") return "EXPIRED"; if(f.type==="date") return fmtDate(v); if(f.units) return `${Number(v).toLocaleString("en-GB")} ${S.answers[id+"_unit"]||f.units[0]}`; if(f.unit) return `${f.type==="number"?Number(v).toLocaleString("en-GB"):v} ${f.unit}`; return String(v); }
 function specRows(){
   const a=S.answers, t=TYPES[JOB.type], fset=fieldSet(), rows=[];
   rows.push(["Job","Registration / ID",JOB.reg]); if(a.reg_match==="No") rows.push(["Job","Vehicle actually shows",a.actual_reg||""]);
   rows.push(["Job","Vehicle type",t.label]); if(JOB.stock) rows.push(["Job","Stock ref",JOB.stock]); if(JOB.where) rows.push(["Job","Location",JOB.where]);
   rows.push(["Job","Inspector",a.inspector||""]); rows.push(["Job","Inspection date",fmtDate(today())]);
   for(const g of GROUPS) for(const id of Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g)) rows.push([g,FIELDS[id].label,fmtVal(id)]);
-  if(fset.has("compartments")){ const n=parseInt(a.comp_count)||0, s=(a.comp_sizes||[]).slice(0,n); rows.push(["Tank & equipment","Number of compartments",n?String(n):""]); if(n) rows.push(["Tank & equipment","Compartment sizes (front to rear)",s.map(x=>Number(x).toLocaleString("en-GB")+" L").join(" / ")+` = ${s.reduce((x,y)=>x+(parseFloat(y)||0),0).toLocaleString("en-GB")} L`]); }
-  if(fset.has("tread")){ const n=axleCount(), tr=a.tread||{}; for(let k=1;k<=n;k++) rows.push(["Tyres",`Axle ${k} tread (passenger / driver)`,`${tr[k]?.ns??""} mm / ${tr[k]?.os??""} mm`]); }
+  if(fset.has("compartments")){ const n=parseInt(a.comp_count)||0, s=(a.comp_sizes||[]).slice(0,n); rows.push(["Tank & equipment","Number of compartments",n?String(n):""]); if(n&&!(S.skips&&S.skips.compartments)) rows.push(["Tank & equipment","Compartment sizes (front to rear)",s.map(x=>Number(x).toLocaleString("en-GB")+" L").join(" / ")+` = ${s.reduce((x,y)=>x+(parseFloat(y)||0),0).toLocaleString("en-GB")} L`]); }
+  if(fset.has("tread")){ const n=axleCount(), tr=a.tread||{}; for(let k=1;k<=n;k++) rows.push(["Tyres",`Axle ${k} tread (passenger / driver)`,S.skips&&S.skips.tread?"Skipped":`${tr[k]?.ns??""} mm / ${tr[k]?.os??""} mm`]); }
   rows.push(["Walkaround video","Walkaround video",S.video?.status==="ok"?"Included in pack (videos folder)":S.video?.status==="skipped"?"Not recorded: "+S.video.reason:"Not recorded"]);
   if(filled(a.comments)) rows.push(["Comments","Inspector comments",a.comments]);
   return rows;
