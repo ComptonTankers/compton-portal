@@ -143,12 +143,42 @@
     if (d.video && d.video.path) { const u = await fileUrl(d.video.path); const v = $('s_vid'); if (v) v.innerHTML = u ? `<video src="${u}" controls style="width:100%;max-height:360px;border-radius:8px"></video>` : 'Not available'; }
   }
 
+  /* Realistic yard backdrop: cloudy sky, grey cladded building, pale concrete forecourt. */
+  function drawBackdrop(x, W, H, style) {
+    if (style === 'white') { x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); return; }
+    if (style === 'navy') { const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#2a5db0'); g.addColorStop(1, '#0f2f6b'); x.fillStyle = g; x.fillRect(0, 0, W, H); return; }
+    if (style === 'studio') { const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#f7f8fb'); g.addColorStop(.62, '#e6eaf1'); g.addColorStop(1, '#cfd6e2'); x.fillStyle = g; x.fillRect(0, 0, W, H); return; }
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const bTop = H * .20, bBot = H * .47;
+    /* sky */
+    let g = x.createLinearGradient(0, 0, 0, bTop + 20); g.addColorStop(0, '#9fb0c4'); g.addColorStop(1, '#dfe5ec'); x.fillStyle = g; x.fillRect(0, 0, W, bTop + 20);
+    for (let i = 0; i < 26; i++) { const cx = rnd() * W, cy = rnd() * bTop * .9, r = 90 + rnd() * 200; const c = x.createRadialGradient(cx, cy, 0, cx, cy, r); c.addColorStop(0, 'rgba(255,255,255,.42)'); c.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = c; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
+    for (let i = 0; i < 12; i++) { const cx = rnd() * W, cy = rnd() * bTop * .8, r = 100 + rnd() * 180; const c = x.createRadialGradient(cx, cy, 0, cx, cy, r); c.addColorStop(0, 'rgba(110,125,145,.22)'); c.addColorStop(1, 'rgba(110,125,145,0)'); x.fillStyle = c; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
+    /* building */
+    g = x.createLinearGradient(0, bTop, 0, bBot); g.addColorStop(0, '#9da3ab'); g.addColorStop(1, '#868c95'); x.fillStyle = g; x.fillRect(0, bTop, W, bBot - bTop);
+    x.fillStyle = '#a9aeb6'; x.fillRect(0, bTop, W, 5); x.fillStyle = 'rgba(0,0,0,.08)'; x.fillRect(0, bTop + 5, W, 6);
+    for (let px = 0; px < W; px += 38) { x.fillStyle = (px / 38) % 2 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)'; x.fillRect(px, bTop + 11, 3, bBot - bTop - 11); }
+    x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, bBot - 6, W, 6);
+    /* concrete forecourt */
+    g = x.createLinearGradient(0, bBot, 0, H); g.addColorStop(0, '#bcbcb7'); g.addColorStop(.35, '#cbcbc6'); g.addColorStop(1, '#d9d9d4'); x.fillStyle = g; x.fillRect(0, bBot, W, H - bBot);
+    /* soft mottling + grain */
+    for (let i = 0; i < 90; i++) { const cx = rnd() * W, cy = bBot + rnd() * (H - bBot), r = 40 + rnd() * 140; const c = x.createRadialGradient(cx, cy, 0, cx, cy, r); const d = rnd() > .5; c.addColorStop(0, d ? 'rgba(0,0,0,.025)' : 'rgba(255,255,255,.04)'); c.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = c; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
+    const t = document.createElement('canvas'); t.width = t.height = 160; const tx = t.getContext('2d'), id = tx.createImageData(160, 160); for (let i = 0; i < id.data.length; i += 4) { const v = 110 + rnd() * 110; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 22; } tx.putImageData(id, 0, 0);
+    x.save(); x.beginPath(); x.rect(0, bBot, W, H - bBot); x.clip(); x.fillStyle = x.createPattern(t, 'repeat'); x.fillRect(0, bBot, W, H - bBot); x.restore();
+    /* expansion joints in perspective */
+    x.strokeStyle = 'rgba(70,70,65,.10)'; x.lineWidth = 2;
+    for (let k = -4; k <= 5; k++) { x.beginPath(); x.moveTo(W / 2 + k * 150, bBot); x.lineTo(W / 2 + k * 520, H); x.stroke(); }
+    for (let k = 1; k < 5; k++) { const y = bBot + (H - bBot) * (k * k) / 28; x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke(); }
+    /* vignette */
+    g = x.createRadialGradient(W / 2, H * .55, H * .35, W / 2, H * .55, W * .75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.16)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  }
+
   let BG = null;
   async function salesPhotos(box, items, reg) {
     let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos</h3>
       <div class="hint">Cuts each walkaround photo out, puts it on a clean studio backdrop and adds the logo watermark. Your original photos are not changed. The first run downloads the cut-out tool (about 40 MB) so allow a minute; after that each photo takes a few seconds. Check each result – tankers with pipes and ladders can leave rough edges.</div>
-      <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label>Backdrop <select id="ss_bg" style="padding:5px"><option value="studio">Light studio grey</option><option value="white">Plain white</option><option value="navy">Compton blue</option></select></label>
+      <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label>Backdrop <select id="ss_bg" style="padding:5px"><option value="yard">Industrial yard (building, sky, concrete)</option><option value="studio">Light studio grey</option><option value="white">Plain white</option><option value="navy">Compton blue</option></select></label>
       <button class="mini pri2" id="ss_go">Create ${items.length} sales photos</button><button class="mini" id="ss_all" style="display:none">Download all</button></div>
       <div id="ss_msg" class="small muted"></div><div id="ss_out" class="phg"></div></div>`);
     const q = (i) => box.querySelector(i); const msg = q('#ss_msg'), out = q('#ss_out');
@@ -158,12 +188,11 @@
     function bounds(im) { const c = document.createElement('canvas'), w = c.width = Math.min(im.width, 800), h = c.height = Math.round(im.height * w / im.width); const x = c.getContext('2d'); x.drawImage(im, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = 0, y1 = 0; for (let y = 0; y < h; y += 2) for (let xx = 0; xx < w; xx += 2) if (d[(y * w + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; } const k = im.width / w; return x1 > x0 ? { x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k } : { x: 0, y: 0, w: im.width, h: im.height }; }
     async function compose(cut, style) {
       const W = 1600, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-      const g = x.createLinearGradient(0, 0, 0, H);
-      if (style === 'white') { g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ffffff'); } else if (style === 'navy') { g.addColorStop(0, '#2a5db0'); g.addColorStop(1, '#0f2f6b'); } else { g.addColorStop(0, '#f7f8fb'); g.addColorStop(.62, '#e6eaf1'); g.addColorStop(1, '#cfd6e2'); }
-      x.fillStyle = g; x.fillRect(0, 0, W, H);
-      const b = bounds(cut), sc = Math.min(W * .86 / b.w, H * .62 / b.h), dw = b.w * sc, dh = b.h * sc, dx = (W - dw) / 2, dy = H * .70 - dh;
-      const sh = x.createRadialGradient(W / 2, H * .70, 10, W / 2, H * .70, dw * .55); sh.addColorStop(0, 'rgba(0,0,0,.35)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
-      x.save(); x.translate(0, H * .70); x.scale(1, .08); x.translate(0, -H * .70); x.fillStyle = sh; x.fillRect(W / 2 - dw * .6, H * .70 - dw * .6, dw * 1.2, dw * 1.2); x.restore();
+      drawBackdrop(x, W, H, style);
+      const b = bounds(cut), sc = Math.min(W * .86 / b.w, H * .62 / b.h), dw = b.w * sc, dh = b.h * sc, dx = (W - dw) / 2, dy = H * .78 - dh;
+      const fy = H * .78; x.save(); x.translate(W / 2, fy); x.scale(1, .07);
+      const sh = x.createRadialGradient(0, 0, 10, 0, 0, dw * .58); sh.addColorStop(0, 'rgba(0,0,0,.55)'); sh.addColorStop(.6, 'rgba(0,0,0,.25)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = sh; x.fillRect(-dw, -dw, dw * 2, dw * 2); x.restore();
       x.drawImage(cut, b.x, b.y, b.w, b.h, dx, dy, dw, dh);
       try { const lg = await img('assets/compton-logo.png'); const lw = W * .2, lh = lw * lg.height / lg.width; x.save(); x.globalAlpha = .6; if (style !== 'navy') { } x.fillStyle = style === 'navy' ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,0)'; if (style === 'navy') x.fillRect(W - lw - 50, H - lh - 50, lw + 20, lh + 20); x.drawImage(lg, W - lw - (style === 'navy' ? 40 : 40), H - lh - (style === 'navy' ? 40 : 40), lw, lh); x.restore(); } catch (e) { }
       return new Promise((res) => c.toBlob(res, 'image/jpeg', .9));
