@@ -296,7 +296,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
       <div class="hint">Uses every picture in the report – enhanced ones first, then the rest (ADR certificate, plates, detail shots). Reorder with ◀ ▶ and exclude anything you do not want public. The first picture is the lead. Defect photos start excluded.</div>
       <div id="ad_ph" class="phg" style="margin:10px 0"></div>
       <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div></div>`);
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini pri2" id="ad_pub">Publish photos (public links)</button><button class="mini" id="ad_unp">Unpublish</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div><div id="ad_pb" class="small" style="margin-top:8px"></div></div>`);
     const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' });
     async function draw() { const g = q('#ad_ph'); g.innerHTML = ''; let n = 0;
       for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p), it = by(p); if (on) n++; const u = await fileUrl(p);
@@ -310,6 +310,30 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
     q('#ad_cp').onclick = async () => { try { await navigator.clipboard.writeText(q('#ad_tx').value); q('#ad_cp').textContent = 'Copied ✓'; } catch (e) { q('#ad_tx').select(); } };
     q('#ad_dl').onclick = async () => { const L = ad.order.filter((p) => !ad.off.includes(p)); if (!L.length) { q('#ad_m').textContent = 'No photos selected.'; return; } try { await save(); } catch (e) { }
       for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i]); if (u) dl(await (await fetch(u)).blob(), (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
+    /* ---- public picture links for adverts / feeds ---- */
+    const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null'), SB = window.SUPABASE_CONFIG;
+    const pubUrl = (path) => SB.url + '/storage/v1/object/public/adverts/' + path;
+    const sh = (m, o) => ({ method: m, headers: Object.assign({ apikey: SB.anonKey, Authorization: 'Bearer ' + sess().access_token }, o || {}) });
+    function showPub() { const P = (ad.pub && ad.pub.items) || []; q('#ad_pb').innerHTML = P.length ? `<b>Public links (${P.length}) – in advert order</b> <button class="mini" id="ad_cu">Copy all links</button><ol style="margin:6px 0 0 18px;word-break:break-all">${P.map((p) => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a></li>`).join('')}</ol><div class="muted">These pictures are public to anyone with the link. Only pictures you included in the advert are published.</div>` : '<span class="muted">Not published yet. Publishing makes the included pictures available at web addresses that Truck Locator can read.</span>';
+      const cu = q('#ad_cu'); if (cu) cu.onclick = async () => { try { await navigator.clipboard.writeText(P.map((p) => p.url).join('\n')); cu.textContent = 'Copied ✓'; } catch (e) { } }; }
+    q('#ad_pub').onclick = async () => {
+      const L = ad.order.filter((p) => !ad.off.includes(p)); if (!L.length) { q('#ad_m').textContent = 'No photos selected.'; return; }
+      const old = (ad.pub && ad.pub.items) || [], folder = (ad.pub && ad.pub.folder) || (s.id + '-' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6));
+      const next = [];
+      try {
+        for (let i = 0; i < L.length; i++) {
+          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const ex = old.find((o) => o.src === L[i]); if (ex) { next.push(ex); continue; }
+          const u = await fileUrl(L[i]); if (!u) throw new Error('a picture could not be read'); const blob = await (await fetch(u)).blob(); const path = folder + '/' + Math.random().toString(36).slice(2, 12) + '.jpg';
+          const r = await fetch(SB.url + '/storage/v1/object/adverts/' + path, Object.assign(sh('POST', { 'Content-Type': 'image/jpeg' }), { body: blob })); if (!r.ok) throw new Error('upload failed (' + r.status + ')');
+          next.push({ src: L[i], path, url: pubUrl(path) });
+        }
+        for (const o of old) if (!next.some((n) => n.src === o.src)) await fetch(SB.url + '/storage/v1/object/adverts/' + o.path, sh('DELETE'));
+        ad.pub = { folder, items: next, at: new Date().toISOString() }; await save(); q('#ad_m').textContent = 'Published ✓'; showPub();
+      } catch (e) { q('#ad_m').innerHTML = '<span style="color:#b3261e">' + esc(e.message) + '</span>'; }
+    };
+    q('#ad_unp').onclick = async () => { const old = (ad.pub && ad.pub.items) || []; if (!old.length) return; if (!confirm('Take these pictures offline? Their public links will stop working.')) return;
+      try { for (const o of old) await fetch(SB.url + '/storage/v1/object/adverts/' + o.path, sh('DELETE')); ad.pub = null; await save(); q('#ad_m').textContent = 'Unpublished'; showPub(); } catch (e) { q('#ad_m').textContent = e.message; } };
+    showPub();
     draw();
   }
 
