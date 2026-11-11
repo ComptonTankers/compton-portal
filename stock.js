@@ -114,6 +114,8 @@
     const WALK = ['front_driver', 'front_pass', 'rear_pass', 'rear_driver', 'side_driver', 'side_pass', 'square_rear', 'square_front'];
     const hdr0 = box.querySelector('div[style*="display:flex;gap:8px"]');
     const sb = document.createElement('button'); sb.className = 'mini'; sb.textContent = 'Sales photos'; hdr0.insertBefore(sb, hdr0.firstChild);
+    const ab = document.createElement('button'); ab.className = 'mini'; ab.textContent = 'Advert pack'; hdr0.insertBefore(ab, hdr0.firstChild);
+    ab.onclick = () => advertPack(box, s, j, d);
     sb.onclick = () => salesPhotos(box, (d.photos || []).filter((p) => p.path && WALK.includes(p.key)), s.reg, j, d);
     /* ---- office editing: change values, add rows, add notes ---- */
     const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
@@ -198,6 +200,35 @@
     for (let k = 1; k < 5; k++) { const y = bBot + (H - bBot) * (k * k) / 28; x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke(); }
     /* vignette */
     g = x.createRadialGradient(W / 2, H * .55, H * .35, W / 2, H * .55, W * .75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.16)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  }
+
+  async function advertPack(box, s, j, d) {
+    let panel = box.querySelector('#s_adv'); if (panel) panel.remove();
+    const sales = d.sales || [], ad = Object.assign({ order: sales.map((x) => x.path), off: [], desc: '', web: false }, s.advert || {});
+    ad.order = ad.order.filter((p) => sales.some((x) => x.path === p)).concat(sales.map((x) => x.path).filter((p) => !ad.order.includes(p)));
+    const rows = (d.rows || []).filter((r) => r[2] !== '' && r[2] != null);
+    const autoDesc = () => { let g = '', t = `${TLAB[s.vehicle_type] || 'Vehicle'} – ${s.reg}\n`; if (s.asking_price) t += `Asking price: £${Number(s.asking_price).toLocaleString('en-GB')} + VAT\n`; t += '\n'; rows.forEach(([gr, l, v]) => { if (gr !== g) { t += `\n${gr}\n`; g = gr; } t += `${l}: ${v}\n`; }); if (d.office_notes) t += `\n${d.office_notes}\n`; t += '\nAvailable for inspection at our Leighton Buzzard yard. Part-exchange and finance enquiries welcome.'; return t.trim(); };
+    if (!ad.desc) ad.desc = autoDesc();
+    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_adv"><h3 style="margin-top:0">Advert pack – ${esc(s.reg)}</h3>
+      <div class="hint">Choose which enhanced photos go in the advert and in what order – the first one is the lead picture. Then copy the text and download the photos, numbered in order, ready to upload to Commercial Motor. ${sales.length ? '' : '<b>No enhanced photos saved yet – add them in Sales photos first.</b>'}</div>
+      <div id="ad_ph" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0"></div>
+      <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div></div>`);
+    const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' });
+    const name = (p) => (sales.find((x) => x.path === p) || {}).name || '';
+    async function draw() { const g = q('#ad_ph'); g.innerHTML = ''; let n = 0;
+      for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p); if (on) n++; const u = await fileUrl(p);
+        g.insertAdjacentHTML('beforeend', `<figure style="${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(name(p))}</span></figcaption></figure>`); }
+      g.querySelectorAll('[data-l]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.l; if (i > 0) { [ad.order[i - 1], ad.order[i]] = [ad.order[i], ad.order[i - 1]]; draw(); } });
+      g.querySelectorAll('[data-r]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.r; if (i < ad.order.length - 1) { [ad.order[i + 1], ad.order[i]] = [ad.order[i], ad.order[i + 1]]; draw(); } });
+      g.querySelectorAll('[data-t]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const p = ad.order[+a.dataset.t]; ad.off = ad.off.includes(p) ? ad.off.filter((x) => x !== p) : ad.off.concat(p); draw(); }); }
+    const save = async () => { ad.desc = q('#ad_tx').value; ad.web = q('#ad_web').checked; await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ advert: ad }) }); s.advert = ad; };
+    q('#ad_sv').onclick = async () => { try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
+    q('#ad_re').onclick = () => { if (confirm('Replace the text with a fresh one built from the inspection?')) q('#ad_tx').value = autoDesc(); };
+    q('#ad_cp').onclick = async () => { try { await navigator.clipboard.writeText(q('#ad_tx').value); q('#ad_cp').textContent = 'Copied ✓'; } catch (e) { q('#ad_tx').select(); } };
+    q('#ad_dl').onclick = async () => { const L = ad.order.filter((p) => !ad.off.includes(p)); if (!L.length) { q('#ad_m').textContent = 'No photos selected.'; return; } try { await save(); } catch (e) { }
+      for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i]); if (u) dl(await (await fetch(u)).blob(), (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
+    draw();
   }
 
   const PROMPT = (reg) => `Edit this photo of a commercial tanker vehicle for a sales listing.
