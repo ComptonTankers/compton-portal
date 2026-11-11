@@ -172,6 +172,29 @@ function enhance(table,o){if(!table||table.dataset.enh)return;table.dataset.enh=
  function go(){let n=0,sum=0;rows.forEach(r=>{const ok=pass(r,-1)&&(gi<0||!F[gi]||val(r,gi)===F[gi]||fi.indexOf(gi)<0);r.hidden=!ok;if(ok){n++;if(si>=0)sum+=num(r,si)}});cnt.textContent='Showing '+n+' of '+rows.length+(si>=0?' · '+th[si]+' '+gbp(sum):'');drawG()}
  q.oninput=go;clr.onclick=()=>{q.value='';for(const k in F)F[k]='';sels.forEach(s=>s.value='');go()};
  if(gi>=0&&fi.indexOf(gi)<0)fi.push(gi);go()}
+/* ---------- click a column heading to sort any list table ---------- */
+(function(){
+ const MS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+ const key=t=>{t=(t||'').trim();if(!t||t==='–'||t==='-'||t==='—')return{e:1};
+  let m=t.match(/^(\d{1,2})\s+([A-Za-z]{3,4})\w*\s+(\d{4})$/);if(m&&MS[m[2].toLowerCase()]!=null)return{n:new Date(+m[3],MS[m[2].toLowerCase()],+m[1]).getTime()};
+  m=t.match(/^([A-Za-z]{3,4})\w*\s+(\d{4})$/);if(m&&MS[m[1].toLowerCase()]!=null)return{n:new Date(+m[2],MS[m[1].toLowerCase()],1).getTime()};
+  m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return{n:new Date(+m[3],+m[2]-1,+m[1]).getTime()};
+  const c=t.replace(/[~£,%x\s]/g,'').replace(/^\+/,'').replace(/^−/,'-');if(c!==''&&!isNaN(+c)&&/\d/.test(c))return{n:+c};
+  return{s:t.toLowerCase()}};
+ const ok=t=>{if(!t.tHead||t.classList.contains('pv-tbl')||t.closest('.egrp,.cfgrid'))return false;const b=t.tBodies[0];if(!b||b.rows.length<3)return false;
+  if(b.querySelector('tr.tot,tr.sec,tr.sub,tr.grp,td[colspan],th[colspan]'))return false;return !!t.closest('.box2')};
+ const mark=()=>document.querySelectorAll('#main table:not([data-srt])').forEach(t=>{if(ok(t))t.dataset.srt='1'});
+ new MutationObserver(()=>{clearTimeout(mark.t);mark.t=setTimeout(mark,150)}).observe(document.body,{childList:true,subtree:true});
+ document.addEventListener('click',e=>{const th=e.target.closest&&e.target.closest('table[data-srt] thead th');if(!th)return;
+  const t=th.closest('table'),i=[...th.parentNode.children].indexOf(th),b=t.tBodies[0],dir=th.dataset.s==='a'?'d':'a';
+  t.querySelectorAll('thead th').forEach(x=>{delete x.dataset.s});th.dataset.s=dir;
+  const rows=[...b.rows].map((r,j)=>({r,j,k:key((r.children[i]&&(r.children[i].dataset.g||r.children[i].textContent))||'')}));
+  rows.sort((a,c)=>{if(a.k.e||c.k.e)return(a.k.e?1:0)-(c.k.e?1:0)||a.j-c.j;
+   let v;if(a.k.n!=null&&c.k.n!=null)v=a.k.n-c.k.n;else v=String(a.k.n!=null?a.k.n:a.k.s).localeCompare(String(c.k.n!=null?c.k.n:c.k.s),'en',{numeric:true});
+   return(dir==='a'?v:-v)||a.j-c.j});
+  rows.forEach(x=>b.appendChild(x.r))});
+ const st=document.createElement('style');st.textContent='table[data-srt] thead th{cursor:pointer;user-select:none}table[data-srt] thead th:hover{color:var(--accent,#E3641D)}table[data-srt] thead th[data-s]::after{content:" ▲";font-size:9px}table[data-srt] thead th[data-s=d]::after{content:" ▼"}';document.head.appendChild(st);
+})();
 /* ---------- HP overview ---------- */
 async function pageHP(el){
  el.innerHTML=head('HP overview','Live finance agreements, what we pay and when each one ends')+'<div class="empty">Loading…</div>';
