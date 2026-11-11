@@ -104,8 +104,8 @@
     /* ---- sales photos: cut out, studio backdrop, logo watermark (originals untouched) ---- */
     const WALK = ['front_driver', 'front_pass', 'rear_pass', 'rear_driver', 'side_driver', 'side_pass', 'square_rear', 'square_front'];
     const hdr0 = box.querySelector('div[style*="display:flex;gap:8px"]');
-    const sb = document.createElement('button'); sb.className = 'mini'; sb.textContent = 'Make sales photos'; hdr0.insertBefore(sb, hdr0.firstChild);
-    sb.onclick = () => salesPhotos(box, (d.photos || []).filter((p) => p.path && WALK.includes(p.key)), s.reg);
+    const sb = document.createElement('button'); sb.className = 'mini'; sb.textContent = 'Sales photos'; hdr0.insertBefore(sb, hdr0.firstChild);
+    sb.onclick = () => salesPhotos(box, (d.photos || []).filter((p) => p.path && WALK.includes(p.key)), s.reg, j, d);
     /* ---- office editing: change values, add rows, add notes ---- */
     const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
     const eb = document.createElement('button'); eb.className = 'mini'; eb.id = 's_edit'; eb.textContent = 'Edit report'; hdr.insertBefore(eb, hdr.firstChild);
@@ -173,49 +173,48 @@
     g = x.createRadialGradient(W / 2, H * .55, H * .35, W / 2, H * .55, W * .75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.16)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   }
 
-  let BG = null;
-  async function salesPhotos(box, items, reg) {
+  const PROMPT = (reg) => `Edit this photo of a commercial tanker vehicle for a sales listing.
+Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
+Replace ONLY the background and ground with a clean, realistic UK commercial yard: a modern industrial building behind, clean concrete hardstanding, soft overcast daylight, natural sky. Match the lighting and add a natural soft shadow under the vehicle so it sits realistically on the ground.
+Keep the same camera angle and framing. Photorealistic, professional dealer-quality finish. No text, no logos, no extra vehicles or people.`;
+  function dl(blob, name) { const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = name; document.body.appendChild(l); l.click(); l.remove(); }
+  async function salesPhotos(box, items, reg, j, d) {
     let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
-    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos</h3>
-      <div class="hint">Cuts each walkaround photo out, puts it on a clean studio backdrop and adds the logo watermark. Your original photos are not changed. The first run downloads the cut-out tool (about 40 MB) so allow a minute; after that each photo takes a few seconds. Check each result – tankers with pipes and ladders can leave rough edges.</div>
-      <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label>Backdrop <select id="ss_bg" style="padding:5px"><option value="yard">Industrial yard (building, sky, concrete)</option><option value="studio">Light studio grey</option><option value="white">Plain white</option><option value="navy">Compton blue</option></select></label>
-      <button class="mini pri2" id="ss_go">Create ${items.length} sales photos</button><button class="mini" id="ss_all" style="display:none">Download all</button></div>
+    const done = d.sales || [];
+    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos (ChatGPT)</h3>
+      <div class="hint">Three steps. Your original photos are never changed – the enhanced ones are stored alongside them.</div>
+      <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download the ${items.length} original photos</button> <span class="small muted">(saved one by one, named by angle)</span></div>
+      <div style="margin:10px 0"><b>2.</b> Open ChatGPT, attach a photo, paste this prompt (add your test background as a second image if you want that exact yard): <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
+        <textarea readonly id="ss_pr" rows="6" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
+      <div style="margin:10px 0"><b>3.</b> Save each result, then add them here: <input type="file" id="ss_up" accept="image/*" multiple> <label class="small"><input type="checkbox" id="ss_wm" checked> add Compton logo watermark</label></div>
       <div id="ss_msg" class="small muted"></div><div id="ss_out" class="phg"></div></div>`);
     const q = (i) => box.querySelector(i); const msg = q('#ss_msg'), out = q('#ss_out');
-    if (!items.length) { msg.textContent = 'No walkaround photos were sent on this inspection.'; q('#ss_go').disabled = true; return; }
     q('#s_sales').scrollIntoView({ behavior: 'smooth' });
     const img = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
-    function bounds(im) { const c = document.createElement('canvas'), w = c.width = Math.min(im.width, 800), h = c.height = Math.round(im.height * w / im.width); const x = c.getContext('2d'); x.drawImage(im, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = 0, y1 = 0; for (let y = 0; y < h; y += 2) for (let xx = 0; xx < w; xx += 2) if (d[(y * w + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; } const k = im.width / w; return x1 > x0 ? { x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k } : { x: 0, y: 0, w: im.width, h: im.height }; }
-    async function compose(cut, style) {
-      const W = 1600, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-      let done = false; if (style === 'yard') { try { const bg = await img('assets/backdrop-yard.jpg'); x.drawImage(bg, 0, 0, W, H); done = true; } catch (e) { } }
-      if (!done) drawBackdrop(x, W, H, style);
-      const b = bounds(cut), sc = Math.min(W * .86 / b.w, H * .62 / b.h), dw = b.w * sc, dh = b.h * sc, dx = (W - dw) / 2, dy = H * .78 - dh;
-      const fy = H * .78; x.save(); x.translate(W / 2, fy); x.scale(1, .07);
-      const sh = x.createRadialGradient(0, 0, 10, 0, 0, dw * .58); sh.addColorStop(0, 'rgba(0,0,0,.55)'); sh.addColorStop(.6, 'rgba(0,0,0,.25)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
-      x.fillStyle = sh; x.fillRect(-dw, -dw, dw * 2, dw * 2); x.restore();
-      x.drawImage(cut, b.x, b.y, b.w, b.h, dx, dy, dw, dh);
-      try { const lg = await img('assets/compton-logo.png'); const lw = W * .2, lh = lw * lg.height / lg.width; x.save(); x.globalAlpha = .6; if (style !== 'navy') { } x.fillStyle = style === 'navy' ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,0)'; if (style === 'navy') x.fillRect(W - lw - 50, H - lh - 50, lw + 20, lh + 20); x.drawImage(lg, W - lw - (style === 'navy' ? 40 : 40), H - lh - (style === 'navy' ? 40 : 40), lw, lh); x.restore(); } catch (e) { }
-      return new Promise((res) => c.toBlob(res, 'image/jpeg', .9));
-    }
-    const made = [];
-    q('#ss_go').onclick = async () => {
-      q('#ss_go').disabled = true; out.innerHTML = ''; made.length = 0; const style = q('#ss_bg').value;
-      try {
-        if (!BG) { msg.textContent = 'Loading the cut-out tool…'; BG = (await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm')).removeBackground; }
-      } catch (e) { msg.innerHTML = '<span style="color:#b3261e">Could not load the cut-out tool (' + esc(e.message) + '). Check the connection and try again.</span>'; q('#ss_go').disabled = false; return; }
-      for (let i = 0; i < items.length; i++) {
-        msg.textContent = `Working on photo ${i + 1} of ${items.length}: ${items[i].label}…`;
+    async function show() { out.innerHTML = ''; for (const it of (d.sales || [])) { const u = await fileUrl(it.path); out.insertAdjacentHTML('beforeend', `<figure>${u ? `<a href="${u}" target="_blank"><img src="${u}" alt=""></a>` : '<div class="phs">Not available</div>'}<figcaption>${esc(it.name || '')} · ${u ? `<a href="${u}" download="${esc(it.name || 'photo.jpg')}">Download</a> · ` : ''}<a href="#" data-rm="${esc(it.path)}">Remove</a></figcaption></figure>`); }
+      out.querySelectorAll('[data-rm]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); if (!confirm('Remove this enhanced photo? The original is not affected.')) return; d.sales = (d.sales || []).filter((x) => x.path !== a.dataset.rm); await save(); show(); }); }
+    async function save() { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: d }) }); }
+    q('#ss_cp').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT(reg)); q('#ss_cp').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr').select(); } };
+    q('#ss_dl').onclick = async () => { for (let i = 0; i < items.length; i++) { const u = await fileUrl(items[i].path); if (u) { const b = await (await fetch(u)).blob(); dl(b, (reg + '-' + (i + 1) + '-' + (items[i].label || items[i].key)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); } await new Promise((r) => setTimeout(r, 500)); } };
+    q('#ss_up').onchange = async (e) => {
+      const files = [...e.target.files]; if (!files.length) return; const wm = q('#ss_wm').checked; const s = JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
+      let lg = null; if (wm) { try { lg = await img('assets/compton-logo.png'); } catch (x) { } }
+      d.sales = d.sales || [];
+      for (let i = 0; i < files.length; i++) {
+        msg.textContent = `Uploading ${i + 1} of ${files.length}…`;
         try {
-          const u = await fileUrl(items[i].path); if (!u) throw new Error('photo not available');
-          const blob = await (await fetch(u)).blob(); const cutBlob = await BG(blob); const cu = URL.createObjectURL(cutBlob); const cut = await img(cu);
-          const res = await compose(cut, style); const ru = URL.createObjectURL(res); const name = (reg + '-' + items[i].label).replace(/[^A-Za-z0-9]+/g, '_') + '.jpg'; made.push({ ru, name });
-          out.insertAdjacentHTML('beforeend', `<figure><a href="${ru}" target="_blank"><img src="${ru}" alt=""></a><figcaption>${esc(items[i].label)} · <a href="${ru}" download="${name}">Download</a></figcaption></figure>`);
-        } catch (e) { out.insertAdjacentHTML('beforeend', `<div class="phs">${esc(items[i].label)}: ${esc(e.message || 'failed')}</div>`); }
+          const im = await img(URL.createObjectURL(files[i])); const sc = Math.min(1, 2000 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc); const x = c.getContext('2d'); x.drawImage(im, 0, 0, c.width, c.height);
+          if (lg) { const lw = c.width * .18, lh = lw * lg.height / lg.width; x.save(); x.globalAlpha = .65; x.drawImage(lg, c.width - lw - c.width * .02, c.height - lh - c.width * .02, lw, lh); x.restore(); }
+          const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', .92)); const path = 'sales/' + j.id + '/' + Date.now() + '-' + i + '.jpg';
+          const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + s.access_token, 'Content-Type': 'image/jpeg' }, body: blob });
+          if (!r.ok) throw new Error('upload failed (' + r.status + ')');
+          d.sales.push({ path, name: files[i].name.replace(/\.[^.]+$/, '') + '.jpg', at: new Date().toISOString() });
+        } catch (er) { msg.innerHTML = '<span style="color:#b3261e">' + esc(er.message) + '</span>'; }
       }
-      msg.textContent = `Done – ${made.length} of ${items.length} created. Not happy with one? Use the original, or edit it by hand.`; q('#ss_go').disabled = false;
-      if (made.length) { const a = q('#ss_all'); a.style.display = ''; a.onclick = () => made.forEach((m, k) => setTimeout(() => { const l = document.createElement('a'); l.href = m.ru; l.download = m.name; document.body.appendChild(l); l.click(); l.remove(); }, k * 400)); }
+      try { await save(); msg.textContent = 'Saved ✓'; } catch (er) { msg.textContent = 'Photos uploaded but could not be recorded: ' + er.message; }
+      e.target.value = ''; show();
     };
+    show();
   }
 
   const st = document.createElement('style');
