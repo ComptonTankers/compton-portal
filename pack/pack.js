@@ -2,9 +2,10 @@
 (function () {
   const SB = window.SUPABASE_CONFIG || {}; const $ = (i) => document.getElementById(i); const st = (m, bad) => { $('st').textContent = m || ''; $('st').style.color = bad ? '#ffb4a8' : '#cfe0ff'; };
   const sess = () => { try { return JSON.parse(localStorage.getItem('compton-dash-session') || 'null'); } catch (e) { return null; } };
+  async function refresh() { const cur = sess(); if (!cur || !cur.refresh_token) return false; try { const r = await fetch(SB.url + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { apikey: SB.anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: cur.refresh_token }) }); if (!r.ok) return false; const n = await r.json(); if (!n.access_token) return false; localStorage.setItem('compton-dash-session', JSON.stringify(Object.assign({}, cur, n))); return true; } catch (e) { return false; } }
   const H = () => ({ apikey: SB.anonKey, Authorization: 'Bearer ' + sess().access_token });
-  const rest = async (p) => { const r = await fetch(SB.url + '/rest/v1/' + p, { headers: H() }); if (!r.ok) throw new Error('could not load (' + r.status + ')'); return r.json(); };
-  const fileBlob = async (path) => { const r = await fetch(SB.url + '/storage/v1/object/authenticated/inspections/' + path, { headers: H() }); if (!r.ok) throw new Error('picture not available'); return r.blob(); };
+  const rest = async (p) => { let r = await fetch(SB.url + '/rest/v1/' + p, { headers: H() }); if (r.status === 401 && (await refresh())) r = await fetch(SB.url + '/rest/v1/' + p, { headers: H() }); if (!r.ok) throw new Error('could not load (' + r.status + ')'); return r.json(); };
+  const fileBlob = async (path) => { let r = await fetch(SB.url + '/storage/v1/object/authenticated/inspections/' + path, { headers: H() }); if (r.status === 400 || r.status === 401) { if (await refresh()) r = await fetch(SB.url + '/storage/v1/object/authenticated/inspections/' + path, { headers: H() }); } if (!r.ok) throw new Error('picture not available'); return r.blob(); };
   const SHORT = { artic_petroleum: 'Artic Petroleum Tanker', artic_bitumen: 'Artic Bitumen Tanker', artic_waste: 'Artic Waste Tanker', tractor_unit: 'Tractor Unit', rigid_fuel: 'Rigid Fuel Tanker', rigid_waste: 'Rigid Waste Tanker', rigid_combi: 'Rigid Combination Tanker' };
   const BAD = /^(|not available|skipped|expired|n\/a|none)$/i, SKIP = /inspector|inspection date|\bvin\b|chassis number|serial|tread|video|registration \/ id|vehicle type/i;
   const fmt = (n) => Number(n).toLocaleString('en-GB');
