@@ -37,7 +37,9 @@
         <td>${js ? `<span class="pill ${js[1]}">${js[0]}</span>` : '<span class="muted small">no job</span>'}</td>
         <td style="white-space:nowrap">${j && ['assigned', 'in_progress'].includes(j.status) ? `<button class="mini" data-copy="${j.id}" data-s="${s.id}">Copy link</button> <a class="mini" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg(s, j.id))}">WhatsApp</a> <a class="mini" style="text-decoration:none;display:inline-block" href="sms:?&body=${encodeURIComponent(msg(s, j.id))}">Text</a>` : ''}
           ${j && ['submitted', 'reviewed'].includes(j.status) ? `<button class="mini pri2" data-view="${s.id}">View inspection</button>` : ''}
-          ${!j || ['submitted', 'reviewed', 'cancelled'].includes(j.status) ? `<button class="mini" data-newjob="${s.id}">${j ? 'New inspection' : 'Create link'}</button>` : ''}</td></tr>`;
+          ${!j || ['submitted', 'reviewed', 'cancelled'].includes(j.status) ? `<button class="mini" data-newjob="${s.id}">${j ? 'New inspection' : 'Create link'}</button>` : ''}
+          ${j ? `<button class="mini" data-deljob="${s.id}" title="Remove this inspection request">${['assigned', 'in_progress'].includes(j.status) ? 'Cancel request' : 'Delete inspection'}</button>` : ''}
+          <button class="mini" data-delveh="${s.id}" title="Remove this vehicle from sales stock" style="color:#b3261e">✕</button></td></tr>`;
     }).join('');
     el.innerHTML = X.head('Sales stock', 'Vehicles held for sale and their inspections') +
       X.tiles([{ l: 'Vehicles in sales stock', v: held.length, s: ST.length - held.length + ' sold or moved to hire' },
@@ -70,6 +72,13 @@
     el.querySelectorAll('[data-st]').forEach((sel) => sel.addEventListener('change', async () => { try { await api('stock?id=eq.' + sel.dataset.st, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: sel.value, sold_at: sel.value === 'sold' ? new Date().toISOString().slice(0, 10) : null }) }); await load(); draw(el); } catch (e) { alert('Could not save: ' + e.message); } }));
     el.querySelectorAll('input.num').forEach((inp) => inp.addEventListener('change', async () => { const raw = inp.value.replace(/[£,\s]/g, ''); const v = raw === '' ? null : Number(raw); if (raw !== '' && !isFinite(v)) return; try { await api('stock?id=eq.' + inp.dataset.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ [inp.dataset.f]: v }) }); await load(); draw(el); } catch (e) { alert('Could not save: ' + e.message); } }));
     el.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => { const s = ST.find((x) => x.id == b.dataset.s); try { await navigator.clipboard.writeText(msg(s, b.dataset.copy)); b.textContent = 'Copied ✓'; } catch (e) { prompt('Copy this message', msg(s, b.dataset.copy)); } }));
+    el.querySelectorAll('[data-deljob]').forEach((b) => b.addEventListener('click', async () => { const s = ST.find((x) => x.id == b.dataset.deljob), j = JOBS[s.id]; if (!j) return;
+      const open = ['assigned', 'in_progress'].includes(j.status);
+      if (!confirm(open ? 'Cancel the inspection request for ' + s.reg + '? The link will stop working and the request is removed.' : 'Permanently delete the submitted inspection for ' + s.reg + ' (answers and report)? This cannot be undone.')) return;
+      try { await api('jobs?id=eq.' + j.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); if (s.status === 'awaiting_inspection' && open) { } const v = $('s_view'); if (v) v.innerHTML = ''; await load(); draw(el); } catch (e) { alert('Could not remove: ' + e.message); } }));
+    el.querySelectorAll('[data-delveh]').forEach((b) => b.addEventListener('click', async () => { const s = ST.find((x) => x.id == b.dataset.delveh); if (!s) return;
+      if (!confirm('Remove ' + s.reg + ' from sales stock, including its inspection requests and reports? This cannot be undone.')) return;
+      try { await api('jobs?stock_id=eq.' + s.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await api('stock?id=eq.' + s.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await load(); draw(el); } catch (e) { alert('Could not remove: ' + e.message); } }));
     el.querySelectorAll('[data-newjob]').forEach((b) => b.addEventListener('click', async () => { const s = ST.find((x) => x.id == b.dataset.newjob); try { const j = await newJob(s, s.notes || ''); await load(); draw(el); showLink(s, j); } catch (e) { alert('Could not create: ' + e.message); } }));
     el.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => view(b.dataset.view)));
   }
