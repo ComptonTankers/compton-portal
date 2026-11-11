@@ -147,8 +147,9 @@
       };
       draw();
     };
+    { const rowEl = box.querySelector('#s_card .row'); if (rowEl) { rowEl.style.display = 'block'; const cols = [...rowEl.children]; const phCol = cols.find((c) => c.querySelector('#s_ph')), dCol = cols.find((c) => c !== phCol); if (phCol && dCol) { rowEl.insertBefore(phCol, dCol); dCol.style.marginTop = '18px'; } } eb.style.display = 'none'; eb.onclick(); }
     const need = missingSD(rows, s.vehicle_type); const okb = $('s_ok');
-    if (okb && need.length) { okb.disabled = true; okb.style.opacity = '.5'; okb.title = 'Fill in the sales details first'; box.querySelector('.card').insertAdjacentHTML('afterbegin', `<div style="background:#fff3cd;border:1px solid #f0d58a;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:13px"><b>Needs office data before it can be approved for sale:</b> ${need.map(esc).join(', ')}. <a href="#" id="s_needfill">Fill in sales details</a></div>`); const nf = $('s_needfill'); if (nf) nf.onclick = (e) => { e.preventDefault(); eb.click(); }; }
+    if (okb && need.length) { okb.disabled = true; okb.style.opacity = '.5'; okb.title = 'Complete all the required details first'; box.querySelector('.card').insertAdjacentHTML('afterbegin', `<div style="background:#fff3cd;border:1px solid #f0d58a;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:13px"><b>Please ensure all details are completed</b> before approving for sale.</div>`); }
     const ok = $('s_ok'); if (ok) ok.onclick = async () => { try { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'reviewed', reviewed_at: new Date().toISOString() }) }); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'for_sale' }) }); await load(); draw(document.getElementById('main')); } catch (e) { alert(e.message); } };
     box.scrollIntoView({ behavior: 'smooth' });
     const ph = $('s_ph'); const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
