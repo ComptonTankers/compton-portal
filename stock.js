@@ -116,6 +116,7 @@
     const sb = document.createElement('button'); sb.className = 'mini'; sb.textContent = 'Sales photos'; hdr0.insertBefore(sb, hdr0.firstChild);
     const ab = document.createElement('button'); ab.className = 'mini'; ab.textContent = 'Advert pack'; hdr0.insertBefore(ab, hdr0.firstChild);
     ab.onclick = () => advertPack(box, s, j, d);
+    const pk = document.createElement('button'); pk.className = 'mini'; pk.textContent = 'Create asset pack'; hdr0.insertBefore(pk, hdr0.firstChild); pk.onclick = () => window.open('pack/#s=' + s.id, '_blank');
     sb.id = 's_salesbtn'; sb.onclick = () => salesPhotos(box, s.reg, j, d, async () => { await view(stockId); const b = $('s_salesbtn'); if (b) b.click(); });
     /* ---- office editing: change values, add rows, add notes ---- */
     const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
