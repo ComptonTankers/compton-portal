@@ -63,6 +63,13 @@
       busy = false;
     }
     sel.onchange = () => hero(false); $('cut').onclick = () => hero(true); $('prn').onclick = () => window.print();
+    const lib = (u) => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = u; sc.onload = res; sc.onerror = () => rej(new Error('could not load ' + u)); document.head.appendChild(sc); });
+    $('dlp').onclick = async () => { if (busy) { st('Wait for the picture to finish first.', true); return; } const b = $('dlp'); b.disabled = true;
+      try { st('Building PDF…'); if (!window.html2canvas) await lib('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'); if (!window.jspdf) await lib('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+        if (document.fonts && document.fonts.ready) await document.fonts.ready; document.body.classList.add('cap'); const sheets = [...document.querySelectorAll('.sheet')]; const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: [720, 540] });
+        for (let i = 0; i < sheets.length; i++) { st('Building PDF… page ' + (i + 1) + ' of ' + sheets.length); const c = await window.html2canvas(sheets[i], { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); if (i) pdf.addPage([720, 540], 'landscape'); pdf.addImage(c.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 720, 540); }
+        document.body.classList.remove('cap'); pdf.save((s.reg || 'vehicle').replace(/[^A-Za-z0-9-]+/g, '_') + '_asset_pack.pdf'); st('PDF saved to your Downloads folder.'); } catch (e) { document.body.classList.remove('cap'); st('Could not build the PDF: ' + (e.message || e), true); }
+      b.disabled = false; };
     if (empties.length) st('Boxes with no inspection data (fill in or leave): ' + empties.join(', '), false);
     await hero(true);
     if (empties.length) setTimeout(() => st('Boxes with no inspection data: ' + empties.join(', ') + ' – click any text to edit.'), 100);
