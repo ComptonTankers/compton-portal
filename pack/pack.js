@@ -1,4 +1,4 @@
-/* Asset pack: fills the Tanker Rent UK 4-page pack from a stock record + its inspection. Text is editable on screen; Print / Save as PDF to finish. */
+/* Compton Tankers sales asset pack: built from a stock record + its inspection. Cut-outs (d.cutouts) are used here only. */
 (function () {
   const SB = window.SUPABASE_CONFIG || {}; const $ = (i) => document.getElementById(i); const st = (m, bad) => { $('st').textContent = m || ''; $('st').style.color = bad ? '#ffb4a8' : '#cfe0ff'; };
   const sess = () => { try { return JSON.parse(localStorage.getItem('compton-dash-session') || 'null'); } catch (e) { return null; } };
@@ -6,108 +6,129 @@
   const H = () => ({ apikey: SB.anonKey, Authorization: 'Bearer ' + sess().access_token });
   const rest = async (p) => { let r = await fetch(SB.url + '/rest/v1/' + p, { headers: H() }); if (r.status === 401 && (await refresh())) r = await fetch(SB.url + '/rest/v1/' + p, { headers: H() }); if (!r.ok) throw new Error('could not load (' + r.status + ')'); return r.json(); };
   const fileBlob = async (path) => { let r = await fetch(SB.url + '/storage/v1/object/authenticated/inspections/' + path, { headers: H() }); if (r.status === 400 || r.status === 401) { if (await refresh()) r = await fetch(SB.url + '/storage/v1/object/authenticated/inspections/' + path, { headers: H() }); } if (!r.ok) throw new Error('picture not available'); return r.blob(); };
-  const SHORT = { artic_petroleum: 'Artic Petroleum Tanker', artic_bitumen: 'Artic Bitumen Tanker', artic_waste: 'Artic Waste Tanker', tractor_unit: 'Tractor Unit', rigid_fuel: 'Rigid Fuel Tanker', rigid_waste: 'Rigid Waste Tanker', rigid_combi: 'Rigid Combination Tanker' };
-  const BAD = /^(|not available|skipped|expired|n\/a|none)$/i, SKIP = /inspector|inspection date|\bvin\b|chassis number|serial|tread|video|registration \/ id|vehicle type/i;
+  const I = window.PACK_ICONS, esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (n) => Number(n).toLocaleString('en-GB');
-  const set = (k, v) => { document.querySelectorAll('[data-k="' + k + '"]').forEach((e) => { e.textContent = v || ''; }); };
-  const fit = (k, max, min) => document.querySelectorAll('[data-k="' + k + '"]').forEach((e) => { const p = e.parentElement; e.style.whiteSpace = 'pre'; let f = parseFloat(getComputedStyle(p).fontSize); while (e.offsetWidth > max && f > min) { f -= 1; p.style.fontSize = f + 'px'; } });
+  const SHORT = { artic_petroleum: 'Artic Petroleum Tanker', artic_bitumen: 'Artic Bitumen Tanker', artic_waste: 'Artic Waste Tanker', tractor_unit: 'Tractor Unit', rigid_fuel: 'Rigid Fuel Tanker', rigid_waste: 'Rigid Waste Tanker', rigid_combi: 'Rigid Combination Tanker' };
+  const BAD = /^(|not available|skipped|n\/a|none)$/i;
+  const CONTACT = { phone: '01525 371 707', mail: 'info@comptontankers.com', web: 'www.comptontankers.com' };
+  /* example shipping costs – edit here */
+  const SHIP = [['Durban, South Africa', '£6,250'], ['Walvis Bay, Namibia', '£5,975'], ['Dar es Salaam, Tanzania', '£5,750'], ['Maputo, Mozambique', '£6,450'], ['Tema, Ghana', '£5,250'], ['Georgetown, Guyana', '£6,950'], ['Kingston, Jamaica', '£4,750'], ['Jebel Ali, UAE', '£3,850']];
+  const UK = '<svg viewBox="0 0 60 40" width="22" height="15"><rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#fff" stroke-width="8"/><path d="M0 0L60 40M60 0L0 40" stroke="#C8102E" stroke-width="3"/><path d="M30 0V40M0 20H60" stroke="#fff" stroke-width="13"/><path d="M30 0V40M0 20H60" stroke="#C8102E" stroke-width="7"/></svg>';
+  const ZA = '<svg viewBox="0 0 60 40" width="22" height="15"><rect width="60" height="20" fill="#DE3831"/><rect y="20" width="60" height="20" fill="#002395"/><path d="M0 0L30 20H60M0 40L30 20" fill="none" stroke="#fff" stroke-width="13"/><path d="M0 0L30 20H60M0 40L30 20" fill="none" stroke="#007A4D" stroke-width="8"/><path d="M0 4L20 20 0 36z" fill="#FFB612"/><path d="M0 8L14 20 0 32z" fill="#000"/></svg>';
+
+  const FOOT = `<div class="a" style="left:20px;top:648px;width:960px;height:1px;background:#E4E7EC"></div><div class="a" style="left:20px;top:712px;width:960px;height:1px;background:#E4E7EC"></div>` +
+    [['phone', CONTACT.phone, 30], ['mail', CONTACT.mail, 222], ['web', CONTACT.web, 478]].map(([k, t, x]) => `<div class="a" style="left:${x}px;top:668px;width:28px;height:28px">${I[k].svg}</div><div class="a" style="left:${x + 38}px;top:672px;font-size:13px;color:var(--dk);font-weight:500;white-space:nowrap">${t}</div>`).join('') +
+    `<div class="a" style="left:770px;top:654px;display:flex;flex-direction:column;gap:3px">${[[UK, 'Leighton Buzzard'], [UK, 'Ellesmere Port'], [ZA, 'Mpumalanga']].map(([f, t]) => `<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dk);white-space:nowrap">${f}${t}</div>`).join('')}</div>` +
+    `<div class="a" style="left:0;top:716px;width:1000px;height:34px;background:#0F3A85;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:500;color:#FF8A4C;white-space:nowrap"><b style="font-weight:700;margin-right:8px">CONSIDERING TANKER HIRE?</b> Short or long term, we have you covered. Our hire fleet boasts over 250 waste, industrial and fuel tankers ready to support you.</div>`;
+  const HDR = `<div class="rule"></div><img class="a" src="brand-kit/compton-logo.png" style="right:24px;top:10px;height:56px">`;
+
+  /* white background -> transparent (flood from the edges), then crop. Transparent PNGs are only cropped. */
+  async function cleanCut(blob) {
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(blob); });
+    const sc = Math.min(1, 1800 / Math.max(im.width, im.height)); const w = Math.round(im.width * sc), h = Math.round(im.height * sc); const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(im, 0, 0, w, h);
+    const img = x.getImageData(0, 0, w, h), d = img.data; const clear = d[3] < 200; /* top-left already transparent */
+    if (!clear) { const seen = new Uint8Array(w * h), stack = []; const wh = (p) => d[p * 4] > 240 && d[p * 4 + 1] > 240 && d[p * 4 + 2] > 240;
+      const push = (p) => { if (!seen[p] && wh(p)) { seen[p] = 1; stack.push(p); } };
+      for (let i = 0; i < w; i++) { push(i); push((h - 1) * w + i); } for (let j = 0; j < h; j++) { push(j * w); push(j * w + w - 1); }
+      while (stack.length) { const p = stack.pop(), px = p % w, py = (p / w) | 0; if (px > 0) push(p - 1); if (px < w - 1) push(p + 1); if (py > 0) push(p - w); if (py < h - 1) push(p + w); }
+      for (let p = 0; p < w * h; p++) if (seen[p]) d[p * 4 + 3] = 0;
+      for (let p = 0; p < w * h; p++) if (!seen[p]) { const px = p % w, py = (p / w) | 0; if ((px > 0 && seen[p - 1]) || (px < w - 1 && seen[p + 1]) || (py > 0 && seen[p - w]) || (py < h - 1 && seen[p + w])) d[p * 4 + 3] = 170; }
+      x.putImageData(img, 0, 0); }
+    let x0 = w, y0 = h, x1 = 0, y1 = 0; for (let yy = 0; yy < h; yy += 2) for (let xx = 0; xx < w; xx += 2) if (d[(yy * w + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+    if (x1 <= x0 || y1 <= y0) return c.toDataURL('image/png'); const o = document.createElement('canvas'); o.width = x1 - x0 + 2; o.height = y1 - y0 + 2; o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height); return o.toDataURL('image/png');
+  }
 
   async function main() {
     if (!sess()) { st('Please sign in to the portal first, then open this again.', true); return; }
-    const id = new URLSearchParams(location.hash.slice(1)).get('s'); if (!id) { st('Open this from a vehicle in Stock & inspections.', true); return; }
+    const prm = new URLSearchParams(location.hash.slice(1)); const id = prm.get('s'); if (!id) { st('Open this from a vehicle in Stock & inspections.', true); return; }
+    $('mode').onchange = () => { if ($('mode').value === 'hire') location.href = 'hire.html' + location.hash; };
     st('Loading…'); const [s] = await rest('stock?id=eq.' + id); const [job] = await rest('jobs?stock_id=eq.' + id + '&order=created_at.desc&limit=1');
     if (!s) { st('Vehicle not found.', true); return; } const d = (job && job.data) || {};
-    $('who').textContent = '– ' + s.reg; document.title = s.reg + ' – Tanker Rent UK asset pack'; $('unitname') && ($('unitname').textContent = s.reg);
-    const rows = (d.rows || []).filter((r) => !BAD.test(String(r[2] || '').trim()) && !SKIP.test(r[1] || '') && !/^(Job|Walkaround video)$/.test(r[0]));
-    const get = (re) => { const r = (d.rows || []).find((x) => re.test(x[1]) && !BAD.test(String(x[2] || '').trim())); return r ? String(r[2]).trim() : ''; };
-    const year = get(/^year/i), make = get(/^make$/i), model = get(/^model$/i), cond = get(/^condition$/i), susp = get(/suspension/i), pump = get(/^pump make/i), mat = get(/tank material/i), mileage = get(/mileage|odometer/i), axle = get(/axle layout/i);
+    $('who').textContent = '– ' + s.reg; document.title = s.reg + ' – Compton Tankers asset pack';
+    const allRows = d.rows || [];
+    const raw = (re) => { const r = allRows.find((x) => re.test(x[1])); return r ? String(r[2] == null ? '' : r[2]).trim() : ''; };
+    const get = (re) => { const v = raw(re); return BAD.test(v) ? '' : v; };
+    const year = get(/^year/i), make = get(/^make$/i), model = get(/^model$/i), cond = get(/^condition$/i), vin = get(/chassis number|vin/i), bodyT = get(/^body type/i);
     const comps = get(/number of compartments/i), sizes = get(/compartment sizes/i); let litres = get(/total plated capacity/i).replace(/[^\d]/g, ''); if (!litres) { const m = sizes.match(/=\s*([\d,]+)\s*L/i); if (m) litres = m[1].replace(/,/g, ''); }
-    const type = SHORT[s.vehicle_type] || 'Commercial Vehicle', name = [year, make && make.toUpperCase() === make ? make : make, model].filter(Boolean).join(' ');
-    const TERMS = 'Short-term hire, long-term hire, rent to buy or outright purchase.';
-    const modeSel = $('mode'); const prm = new URLSearchParams(location.hash.slice(1)); if (prm.get('m') === 'hire') modeSel.value = 'hire';
-    const ORIG = new Map(); const keep = (el, html) => { if (!ORIG.has(el)) ORIG.set(el, el.innerHTML); el.innerHTML = html; }; const restore = () => ORIG.forEach((v, el) => { el.innerHTML = v; }); const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-    const mm = [make, model].filter(Boolean).join(' '); const price = Number(s.asking_price) || 0;
-    const PICS = {}; const picUrl = async (path) => PICS[path] || (PICS[path] = URL.createObjectURL(await fileBlob(path)));
+    const split = sizes.replace(/\s*=.*$/, '');
+    const type = SHORT[s.vehicle_type] || 'Commercial Vehicle'; const title = [make, model].filter(Boolean).join(' ').toUpperCase() || s.reg;
+    const price = Number(s.asking_price) || 0; const what = [year, [make, model].filter(Boolean).join(' ')].filter(Boolean).join(' ');
+    const kv = (rows) => { const r = rows.filter((x) => x[1]); return r.length ? r.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('') : '<div class="kv"><span>Details on request</span></div>'; };
+    const box = (k, t, rows, x, y, w, h) => `<div class="card" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;padding:14px 18px"><div class="hd"><div style="width:36px;height:36px">${I[k].svg}</div><h3>${t}</h3></div><div class="u" style="width:52px;height:4px;margin:0 0 4px"></div>${kv(rows)}</div>`;
+    /* certificates */
+    const parse = (v) => { const m = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+    const cert = (name, re) => { const v = raw(re); if (BAD.test(v)) return ''; const dt = parse(v); const exp = /expired/i.test(v) || (dt && dt < new Date()); const ok = !!dt && !exp; return `<div class="kv"><span>${name}</span><b>${/expired/i.test(v) ? 'Expired' : esc(dt ? 'Expires ' + v : v)}${exp ? '<i class="pill exp">EXPIRED</i>' : ok ? '<i class="pill ok">VALID</i>' : ''}</b></div>`; };
+    const certs = [cert('MOT', /mot expiry|^mot/i), cert('Safe loading pass', /safe loading pass expiry|slp/i), cert('ADR', /adr expiry/i), cert('VTG plating', /vtg.*(expiry|date)/i), cert('Tank test', /tank test due|tank test date/i)].filter(Boolean);
+    const tyres = [get(/^tyre make/i), get(/^tyre size/i)].filter(Boolean).join(', ');
+    const cap = [['Total capacity', litres ? fmt(litres) + ' L' : ''], ['Compartments', comps], ['Split, front to rear', split]];
+    const veh = [['Make', make], ['Model', model], ['Year', year], ['Chassis / VIN', vin], ['Condition', cond], ['Mileage', get(/^mileage/i)]];
+    const tank = [['Material', get(/tank material/i)], ['Insulation', get(/insulation/i)], ['Test pressure', get(/test pressure/i)], ['ADR class / tank code', get(/adr class|tank code/i)], ['Body type', bodyT]];
+    const gear = [['Axle layout', get(/axle layout/i)], ['Suspension', get(/suspension/i)], ['Axles', get(/axle make/i)], ['Brakes', get(/^brakes?$/i)], ['Tyres', tyres], ['Landing legs', get(/landing legs/i)]];
+    const disch = [['Pump', get(/^pump make/i)], ['Vac pump', get(/^vac pump make/i)], ['Jetting pump', get(/jetting pump make/i)], ['API couplers', get(/api coupler/i)], ['Vapour recovery', get(/vapour recovery/i)], ['Control box', get(/^control box/i)]];
+    const dims = [['Length', get(/^length/i)], ['Width', get(/^width/i)], ['Height', get(/^height/i)], ['Unladen weight', get(/^unladen/i)], ['Plated weight', get(/^plated weight/i)]];
+
+    const ben = (k, t, p, x, y) => `<div class="band" style="left:${x}px;top:${y}px;width:170px"><div style="width:40px;height:40px;flex:none">${I[k].svg}</div><div style="width:112px"><div class="bt">${t}</div><div class="bp">${p}</div></div></div>`;
+    const BAND = (y) => `<div class="a" style="left:20px;top:${y - 14}px;width:960px;height:1px;background:#E4E7EC"></div><div class="a" style="left:20px;top:${y}px;width:250px;font-size:19px;font-weight:700;color:var(--dk);line-height:1.24">STRAIGHTFORWARD BUYING FROM <span style="color:var(--or)">COMPTON TANKERS</span></div>` + [283, 469, 645, 821].map((x) => `<div class="a" style="left:${x}px;top:${y - 6}px;width:1px;height:88px;background:#E3E7EE"></div>`).join('') +
+      ben('contact', 'ONE POINT OF CONTACT', 'One experienced contact from enquiry to handover.', 296, y - 2) + ben('fast', 'FAST RESPONSE', 'Clear availability, quick action, straight answers.', 482, y - 2) + ben('terms', 'FLEXIBLE TERMS', 'Hire, rent to buy or outright purchase.', 658, y - 2) + ben('export', 'UK SHIPPING OR WORLDWIDE EXPORT', 'We help arrange shipping and documents.', 834, y - 2);
+    /* picture slots: cut-outs (page 1, 2, 4) or a framed photo if no cut-out has been added */
+    const cuts = {}; (d.cutouts || []).forEach((c) => { cuts[c.n] = c.path; });
+    const hero = (n, boxCss, fallbackKeys) => { const key = fallbackKeys.map((k) => (d.photos || []).find((p) => p.key === k && p.path)).find(Boolean); if (cuts[n]) return `<img class="a" data-cut="${n}" style="${boxCss};object-fit:contain;object-position:center bottom">`; if (key) return `<img class="a pic" data-p="${esc(key.path)}" style="${boxCss}">`; return ''; };
+
+    const showP = $('o_price').checked;
+    const priceHtml = showP ? (price ? `£${fmt(price)}<span style="font-size:20px;color:var(--dk);font-weight:600;letter-spacing:0"> + VAT</span>` : '<span style="font-size:30px">Price on application</span>') : '';
+    const p1 = `<div class="sheet"><img class="a" src="brand-kit/bg_swoosh.png" style="right:-118px;top:-236px;height:760px"><img class="a" src="brand-kit/compton-logo.png" style="right:36px;top:26px;width:250px">
+<div class="a" style="left:48px;top:56px;width:250px;height:46px;background:var(--or);color:#fff;font-weight:700;font-size:28px;display:flex;align-items:center;padding-left:20px">For Sale</div>
+<div class="a" style="left:52px;top:130px;font-size:45px;font-weight:700;color:var(--dk);letter-spacing:-.5px;white-space:nowrap" id="c_t">${esc(title)}</div>
+<div class="a" style="left:52px;top:188px;font-size:25px;font-weight:700;color:var(--dk)">${esc([year, type].filter(Boolean).join(' ').toUpperCase())}</div>
+<div class="a" style="left:52px;top:228px;font-size:25px;font-weight:700;color:var(--or)">${esc([litres ? fmt(litres) + ' LITRES' : '', comps ? comps + ' COMPARTMENTS' : ''].filter(Boolean).join(' · '))}</div>
+<div class="a" style="left:52px;top:300px;font-size:50px;font-weight:700;color:var(--or);letter-spacing:-1px;line-height:1">${priceHtml}</div>
+${hero(1, 'left:420px;top:225px;width:560px;height:375px', ['rear_pass', 'front_driver'])}${BAND(620)}</div>`;
+    const p2 = `<div class="sheet">${HDR}
+<div class="a" style="left:28px;top:88px;width:620px;font-size:27px;font-weight:700;color:var(--dk);line-height:1.15;letter-spacing:-.3px">${esc(title)}<br>${esc(type.toUpperCase())} FOR SALE</div>
+<div class="a" style="left:28px;top:164px;font-size:10.5px;font-weight:700;color:var(--or);letter-spacing:.3px">FULLY INSPECTED. FULLY DOCUMENTED. READY TO WORK.</div>
+<div class="a body" style="left:28px;top:188px;width:600px;font-size:11.5px">${esc(`This ${what} ${type.toLowerCase()}${litres ? ` carries ${fmt(litres)} litres${comps ? ' across ' + comps + ' compartments' : ''}` : ''}.${cond ? ' Condition: ' + cond.toLowerCase() + '.' : ''} Full specification and certificate expiry dates are below, with a complete photo record on the following pages.`)}</div>
+${hero(2, 'left:650px;top:78px;width:325px;height:170px', ['rear_driver', 'front_pass'])}
+${box('capacity', 'CAPACITY &amp; SPLIT', cap, 35, 262, 296, 176)}${box('condition', 'VEHICLE', veh, 352, 262, 296, 176)}${box('material', 'TANK', tank, 669, 262, 296, 176)}
+${box('running', 'RUNNING GEAR', gear, 35, 450, 296, 186)}${box('pump', 'DISCHARGE &amp; EQUIPMENT', disch, 352, 450, 296, 186)}
+<div class="card" style="left:669px;top:450px;width:296px;height:186px;padding:14px 18px"><div class="hd"><div style="width:36px;height:36px">${I.certs.svg}</div><h3>CERTIFICATES</h3></div><div class="u" style="width:52px;height:4px;margin:0 0 4px"></div>${certs.join('') || '<div class="kv"><span>Certificate details on request</span></div>'}</div>${FOOT}</div>`;
+    const p4 = `<div class="sheet"><img class="a" src="brand-kit/bg_swoosh.png" style="right:-118px;top:-236px;height:760px"><img class="a" src="brand-kit/compton-logo.png" style="right:44px;top:30px;width:300px">
+<div class="a" style="left:35px;top:60px;font-size:42px;font-weight:700;color:var(--dk);line-height:1.25;letter-spacing:-.6px">For sale.<br>Ready to go.</div><div class="a u" style="left:35px;top:178px;width:52px;height:5px"></div>
+<div class="a body" style="left:35px;top:196px;width:500px;font-size:10.5px">${esc(`This ${what} ${type.toLowerCase()} is for sale now. It has been inspected, photographed and documented, so you know what you are buying before you visit.`)}<br><br>Compton Tankers deals straight: quick answers, clear options, fair terms and one experienced point of contact from enquiry to handover.</div>
+${hero(3, 'left:640px;top:122px;width:340px;height:200px', ['front_pass', 'front_driver'])}
+<div class="card" style="left:25px;top:350px;width:630px;height:276px;padding:14px 18px"><div style="display:flex;align-items:center;gap:12px"><div style="width:46px;height:46px">${I.export.svg}</div><div><div style="font-size:16px;font-weight:700;color:var(--dk)">UK SHIPPING OR WORLDWIDE EXPORT</div><div style="font-size:9.5px;color:var(--grey)">We support export to buyers worldwide – shipping, documents and loading.</div></div></div>
+ <div style="display:flex;gap:24px;margin-top:10px"><div style="width:240px"><div style="font-size:10px;font-weight:700;color:var(--or);margin-bottom:2px">DIMENSIONS &amp; WEIGHT</div>${kv(dims).replace(/class="kv"/g, 'class="kv" style="padding:8px 0"')}</div>
+ <div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--or);margin-bottom:2px">EXAMPLE SHIPPING COSTS</div>${SHIP.map(([a, b]) => `<div class="kv" style="padding:4px 0"><span>${a}</span><b>${b}</b></div>`).join('')}</div></div></div>
+<div class="card" style="left:675px;top:350px;width:300px;height:276px;padding:14px 18px"><div style="display:flex;align-items:center;gap:12px"><div style="width:56px;height:56px;flex:none">${I.workshop.svg}</div><div><div style="font-size:17px;font-weight:700;color:var(--dk);line-height:1.15">NEEDS WORK DOING?</div><div style="font-size:9.5px;color:var(--or);font-weight:600;margin-top:2px">COMPTON SPECIALIST WORKSHOPS</div></div></div>
+ <div style="font-size:11.5px;line-height:1.55;color:var(--grey);margin-top:12px">Our specialist tanker workshops can assist with:</div>
+ <ul style="margin-top:8px">${['Testing and recertifying expired certificates', 'ADR inspections and compliance', 'Resprays and repaints', 'Repairs and general tanker work'].map((t) => `<li style="font-size:11.5px;color:var(--dk);padding:4px 0 4px 18px;position:relative;border-bottom:1px solid #EEF0F4"><span style="position:absolute;left:2px;top:11px;width:6px;height:6px;border-radius:50%;background:var(--or)"></span>${t}</li>`).join('')}</ul><div style="font-size:10.5px;color:var(--grey);margin-top:10px">Ask us for a quote when you enquire.</div></div>${FOOT}</div>`;
+    /* gallery */
     function galleryList() {
-      const ad = s.advert || {}; const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, cap: p.label || p.key })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, cap: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), def: true }))];
-      const wantDef = $('o_def').checked; let list;
+      const ad = s.advert || {}; const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, cap: p.label || p.key, doc: /_cert$|_plate$/.test(p.key), key: p.key })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, cap: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), def: true }))];
+      const W = ['front_driver', 'front_pass', 'rear_pass', 'rear_driver', 'side_driver', 'side_pass', 'square_rear', 'square_front', 'pump', 'control_box', 'apis_compartments', 'axle_hub', 'brakes', 'additional_equipment', 'vtg_plate', 'mot_cert', 'adr_cert', 'slp_cert', 'tank_test_cert']; let list;
       if (ad.order && ad.order.length) { list = ad.order.map((p) => all.find((x) => x.path === p)).filter(Boolean).filter((x) => !(ad.off || []).includes(x.path)); all.filter((x) => !ad.order.includes(x.path) && !x.def).forEach((x) => list.push(x)); }
-      else list = all.filter((x) => !x.def);
-      list = list.filter((x) => wantDef || !x.def); if (wantDef) all.filter((x) => x.def && !list.includes(x)).forEach((x) => list.push(x)); return list;
+      else { const ky = (x) => { const i = W.indexOf(x.key); return i < 0 ? 98 : i; }; all.sort((a, b) => ky(a) - ky(b)); list = all.filter((x) => !x.def); }
+      if ($('o_def').checked) all.filter((x) => x.def && !list.includes(x)).forEach((x) => list.push(x)); else list = list.filter((x) => !x.def); return list;
     }
-    const FOOT = `<div class="foot-rule" style="left:20px; top:648px; width:960px;"></div><div class="foot-rule" style="left:20px; top:712px; width:960px;"></div><img src="brand-kit/ico_c_phone.png" style="position:absolute; left:30px; top:662px; width:38px;"><div style="position:absolute; left:82px; top:670px; font-size:13px; color:var(--navy);">+44 (0) 1525 374 732</div><div class="divider" style="left:245px; top:660px; height:42px;"></div><img src="brand-kit/ico_c_mobile.png" style="position:absolute; left:272px; top:662px; width:38px;"><div style="position:absolute; left:324px; top:670px; font-size:13px; color:var(--navy);">+44 (0) 7540 800 552</div><div class="divider" style="left:490px; top:660px; height:42px;"></div><img src="brand-kit/ico_c_mail.png" style="position:absolute; left:518px; top:662px; width:38px;"><div style="position:absolute; left:570px; top:670px; font-size:13px; color:var(--navy);">hire@tankers-r-us.com</div><div class="divider" style="left:735px; top:660px; height:42px;"></div><img src="brand-kit/ico_c_web.png" style="position:absolute; left:762px; top:662px; width:38px;"><div style="position:absolute; left:814px; top:670px; font-size:13px; color:var(--navy);">www.tankers-r-us.com</div>`;
-    async function gallery(on) {
-      document.querySelectorAll('.sheet.gal').forEach((e) => e.remove()); if (!on) return; const list = galleryList(); if (!list.length) return; const pages = Math.ceil(list.length / 6); const last = document.querySelectorAll('.sheet')[3]; const tok = ++galTok;
-      for (let p = 0; p < pages; p++) { const chunk = list.slice(p * 6, p * 6 + 6); const sh = document.createElement('div'); sh.className = 'sheet gal'; let cells = '';
-        chunk.forEach((it, i) => { const col = i % 3, row = Math.floor(i / 3); cells += `<div style="position:absolute; left:${20 + col * 326}px; top:${150 + row * 250}px; width:308px;"><div style="width:308px; height:231px; background:#eef1f5; border-radius:6px; overflow:hidden;"><img data-p="${esc(it.path)}" style="width:100%; height:100%; object-fit:cover; display:block;"></div><div style="font-size:11px; color:var(--grey); margin-top:5px;">${esc(it.cap)}</div></div>`; });
-        sh.innerHTML = `<div class="page"><div class="rule-top" style="left:20px; top:72px; width:960px;"></div><img class="logo-h" src="brand-kit/logo_h.png" style="right:22px; top:20px; width:232px;"><div style="position:absolute; left:35px; top:96px; font-size:28px; font-weight:700; color:var(--navy);">Photo gallery <span style="font-size:15px; color:var(--grey); font-weight:500;">${esc(mm || s.reg)}${pages > 1 ? ' · ' + (p + 1) + ' of ' + pages : ''}</span></div><div class="u" style="position:absolute; left:35px; top:136px; width:52px; height:5px;"></div>${cells}${FOOT}</div>`;
-        last.parentNode.insertBefore(sh, last); }
-      for (const im of document.querySelectorAll('.sheet.gal img[data-p]')) { if (tok !== galTok) return; try { im.src = await picUrl(im.dataset.p); } catch (e) { im.alt = 'not available'; } }
-    }
-    let galTok = 0;
-    function render() {
-      const sales = modeSel.value === 'sales', fin = $('o_fin').checked, showP = $('o_price').checked; restore();
-      const lead = [year, type].filter(Boolean).join(' ').toUpperCase();
-      set('COVER_BADGE', sales ? 'For Sale' : 'Available Now');
-      set('COVER_H1', (mm || lead).toUpperCase()); set('COVER_H2', [year, type].filter(Boolean).join(' ').toUpperCase() + (litres ? ' · ' + fmt(litres) + ' LITRES' : ''));
-      set('COVER_NOTE', sales ? ((showP ? (price ? 'Asking price £' + fmt(price) + ' + VAT' : 'Price on application') + '\n' : '') + 'Inspected and ready to view') : 'For long or short-term hire, rent to buy or outright purchase');
-      set('P2_HEADLINE', sales ? ((mm || type) + '\n' + type + ' for sale').toUpperCase() : (type + ' capacity\nwithout the wait').toUpperCase());
-      set('P2_KICKER', sales ? 'INSPECTED IN OUR YARD, FULLY PHOTOGRAPHED AND AVAILABLE TO VIEW.' : 'FOR CONTRACT DEMAND, FLEET PRESSURE, DOWNTIME COVER OR SEASONAL PEAKS.');
-      const what = `${['This', year, mm].filter(Boolean).join(' ')} ${type.toLowerCase()}`;
-      set('P2_BODY', sales ? `${what}${litres ? ` carries ${fmt(litres)} litres${comps ? ' across ' + comps + ' compartments' : ''}` : ''}${cond ? `. Condition: ${cond.toLowerCase()}` : ''}. It has been inspected and photographed from every angle, and is available to view by appointment.${fin ? ' Finance and part-exchange enquiries are welcome.' : ''}` : `${what}${litres ? ` carries ${fmt(litres)} litres${comps ? ' across ' + comps + ' compartments' : ''}` : ''}${cond ? `. Condition: ${cond.toLowerCase()}` : ''}. It is available now for operators who need extra capacity without waiting for a build slot. ${TERMS}`);
-      const T = []; if (litres) T.push([fmt(litres) + ' litre capacity', sizes ? 'Compartments front to rear: ' + sizes.replace(/\s*=.*$/, '') + '.' : 'Total plated capacity.']);
-      if (comps) T.push([comps + ' compartments', sizes ? sizes.replace(/\s*=.*$/, '') + '.' : 'Separate compartments for different products.']);
-      if (pump) T.push([pump, 'Pump fitted as inspected.']); if (susp) T.push([susp + ' suspension', 'Fitted to this unit.']); if (axle) T.push([axle + ' axle layout', 'As inspected.']);
-      if (year) T.push([year + ' build', 'Year of registration.']); if (mileage) T.push([mileage + ' miles', 'Recorded at inspection.']); if (mat) T.push([mat + ' tank', 'Tank material as inspected.']);
-      (sales ? [['Inspected unit', 'Checked in our yard with a full photo record.'], ['View by appointment', 'See it in person before you decide.'], ['Straight answers', 'Clear pricing and no surprises.'], ['One point of contact', 'One experienced contact throughout.']] : [['Inspected unit', 'Checked in our yard before it is offered.'], ['Available now', 'No build slot wait.'], ['Flexible terms', TERMS], ['One point of contact', 'Quick answers and straight advice.']]).forEach((x) => { if (T.length < 4) T.push(x); });
-      for (let i = 0; i < 4; i++) { set('TILE' + (i + 1) + '_TITLE', T[i][0].toUpperCase()); set('TILE' + (i + 1) + '_BODY', T[i][1]); }
-      set('P3_INTRO', `Key build, capacity and operating details for the ${[year, mm].filter(Boolean).join(' ') || type}.`);
-      const GROUPS = [['VEHICLE', ['Vehicle'], 3], ['TANK & EQUIPMENT', ['Tank & equipment'], 3], ['CHASSIS & RUNNING GEAR', ['Chassis & driveline', 'Tyres'], 3], ['WEIGHTS & DIMENSIONS', ['Weights & dimensions'], 3], ['CERTIFICATES & PAPERWORK', ['Dates & certificates', 'Paperwork & keys'], 4]];
-      const empties = [];
-      GROUPS.forEach(([title, gs, max], i) => { const b = rows.filter((r) => gs.includes(r[0])).map((r) => `${r[1]}: ${String(r[2]).trim()}`).slice(0, max);
-        set('SPEC' + (i + 1) + '_TITLE', title); for (let k = 1; k <= max; k++) { const el = document.querySelector('[data-k="SPEC' + (i + 1) + '_B' + k + '"]'); if (!el) continue; const li = el.parentElement; li.classList.remove('ph'); li.style.display = ''; if (b[k - 1]) el.textContent = b[k - 1]; else if (k === 1) { el.textContent = 'Add detail'; li.classList.add('ph'); empties.push(title); } else { li.style.display = 'none'; } } });
-      set('P3_CTA', sales ? 'For sale now – call us to arrange a viewing' : 'Ready for long or short-term hire, rent to buy or outright purchase');
-      set('P4_H1_LINE1', sales ? 'For sale.' : 'Available now.'); set('P4_H1_LINE2', 'Ready to go.');
-      set('P4_BODY1', sales ? `${what} is for sale now. It has been inspected, photographed and documented, so you know what you are buying before you visit.${fin ? ' Finance and part-exchange enquiries are welcome.' : ''}` : `${what} is available now for operators who need extra capacity without waiting for a long build slot. It is available for short-term hire, long-term hire, rent to buy or outright purchase.`);
-      set('P4_BODY2', sales ? 'Tanker Rent UK is built around straightforward dealing: quick answers, clear options, fair terms and one experienced point of contact from enquiry through to handover.' : 'Tanker Rent UK is built around straightforward hire: quick answers, clear options, fair terms and one experienced point of contact from enquiry through to return. That means less chasing, fewer surprises and a faster route to getting the right equipment working.');
-      /* fixed wording on pages 2 and 4 that differs between hire and sales */
-      if (sales) {
-        keep($('bandtitle'), 'STRAIGHTFORWARD BUYING<br>FROM <span style="color:var(--orange)">TANKER RENT UK</span>');
-        const bt = [['INSPECTED UNIT', 'Checked in our yard with a full photo record.'], ['VIEW BY APPOINTMENT', 'See it in person before you decide.'], ['STRAIGHT ANSWERS', 'Clear pricing, no surprises and no wasted time.'], ['ONE POINT OF CONTACT', 'One experienced contact from enquiry to handover.']];
-        document.querySelectorAll('.bt').forEach((e, i) => bt[i] && keep(e, bt[i][0])); document.querySelectorAll('.bp').forEach((e, i) => bt[i] && keep(e, bt[i][1]));
-        const tt = [['INSPECTED &amp; DOCUMENTED', 'Full photo record of the unit.'], ['VIEW BY APPOINTMENT', 'See it before you buy.'], ['STRAIGHT ANSWERS', 'Clear pricing and no surprises.'], ['ONE POINT OF CONTACT', 'One contact throughout.']];
-        document.querySelectorAll('.tt').forEach((e, i) => { if (!tt[i]) return; keep(e, tt[i][0]); const p = e.parentElement.querySelector('p'); if (p) keep(p, tt[i][1]); });
-      }
-      fit('COVER_H1', 640, 24); fit('COVER_H2', 640, 18); fit('P2_HEADLINE', 520, 16);
-      gallery(sales && $('o_gal').checked); return empties;
-    }
-    const empties = render(); ['mode', 'o_price', 'o_gal', 'o_def', 'o_fin'].forEach((i) => { $(i).onchange = () => { const e = render(); st(e.length ? 'Boxes with no inspection data: ' + e.join(', ') : ''); }; });
-    /* ---- vehicle picture ---- */
-    const photos = (d.photos || []).filter((p) => p.path && /front_driver|front_pass|rear_|side_|square_/.test(p.key));
-    const orig = (p) => { const a = (d.archive || []).filter((x) => x.key === p.key && !x.enhanced).pop(); return p.enhanced && a ? a.path : p.path; };
-    const sel = $('pick'); sel.innerHTML = photos.map((p, i) => `<option value="${i}">${(p.label || p.key).replace(/</g, '')}${p.enhanced ? ' ✨' : ''}</option>`).join(''); const fd = photos.findIndex((p) => p.key === 'front_driver'); if (fd > 0) sel.value = fd;
-    const setHero = (u) => document.querySelectorAll('img.hero').forEach((i) => { i.src = u; });
-    let busy = false; let BG = null;
-    async function hero(doCut) {
-      if (busy || !photos.length) { if (!photos.length) st('No walkaround photos on this inspection – add them first.', true); return; } busy = true;
-      try { const p = photos[+sel.value]; st('Loading picture…'); const blob = await fileBlob(orig(p)); setHero(URL.createObjectURL(blob));
-        if (doCut) { st('Cutting out the vehicle – first time takes a minute…'); if (!BG) BG = (await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm')).removeBackground; const cut = await BG(blob);
-          const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(cut); }); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); const dd = x.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0; for (let y = 0; y < c.height; y += 2) for (let xx = 0; xx < c.width; xx += 2) if (dd[(y * c.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-          const o = document.createElement('canvas'); o.width = x1 - x0; o.height = y1 - y0; o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height); setHero(o.toDataURL('image/png')); }
-        st(doCut ? 'Done. Check the cut-out looks right.' : 'Picture loaded (not cut out).'); } catch (e) { st('Could not prepare the picture: ' + (e.message || e), true); }
-      busy = false;
-    }
-    sel.onchange = () => hero(false); $('cut').onclick = () => hero(true); $('prn').onclick = () => window.print();
+    const gl = $('o_gal').checked ? galleryList() : []; const pages = Math.ceil(gl.length / 6); let gp = '';
+    for (let p = 0; p < pages; p++) gp += `<div class="sheet">${HDR}<div class="a" style="left:35px;top:96px;font-size:28px;font-weight:700;color:var(--dk)">Photo gallery <span style="font-size:15px;color:var(--grey);font-weight:500">${esc(title)} · ${p + 1} of ${pages}</span></div><div class="a u" style="left:35px;top:136px;width:52px;height:5px"></div>${gl.slice(p * 6, p * 6 + 6).map((it, i) => `<div class="a" style="left:${20 + (i % 3) * 326}px;top:${150 + Math.floor(i / 3) * 250}px;width:308px"><div style="width:308px;height:231px;background:#eef1f5;border-radius:6px;overflow:hidden"><img data-p="${esc(it.path)}" style="width:100%;height:100%;object-fit:${it.doc ? 'contain' : 'cover'};display:block;${it.doc ? 'background:#fff;border:1px solid #e1e5ec' : ''}"></div><div style="font-size:11px;color:var(--grey);margin-top:5px">${esc(it.cap)}</div></div>`).join('')}${FOOT}</div>`;
+    $('out').innerHTML = p1 + p2 + gp + p4;
+    const t = $('c_t'); if (t) { let f = 45; while (t.offsetWidth > 560 && f > 22) { f--; t.style.fontSize = f + 'px'; } }
+    /* fill pictures */
+    const cache = {}; const url = async (path) => cache[path] || (cache[path] = URL.createObjectURL(await fileBlob(path)));
+    st('Loading pictures…'); let miss = 0;
+    for (const im of document.querySelectorAll('img[data-p]')) { try { im.src = await url(im.dataset.p); } catch (e) { im.alt = ''; miss++; } }
+    for (const im of document.querySelectorAll('img[data-cut]')) { try { im.src = await cleanCut(await fileBlob(cuts[im.dataset.cut])); } catch (e) { miss++; } }
+    const nc = Object.keys(cuts).length; const missing = [];
+    [['Axle make', /axle make/i], ['Brakes', /^brakes?$/i], ['Unladen weight', /^unladen/i], ['Length', /^length/i], ['Width', /^width/i], ['Height', /^height/i], ['MOT date', /mot expiry/i]].forEach(([n, re]) => { if (!get(re)) missing.push(n); });
+    st((nc < 3 ? 'Cut-outs added: ' + nc + ' of 3 (framed photos used for the rest). ' : '') + (missing.length ? 'Not yet recorded: ' + missing.join(', ') + '.' : 'All key details recorded.') + (miss ? ' ' + miss + ' picture(s) could not load.' : ''), false);
+    ['o_price', 'o_gal', 'o_def'].forEach((i) => { $(i).onchange = () => main().catch(() => { }); });
+    $('prn').onclick = () => window.print();
     const lib = (u) => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = u; sc.onload = res; sc.onerror = () => rej(new Error('could not load ' + u)); document.head.appendChild(sc); });
-    $('dlp').onclick = async () => { if (busy) { st('Wait for the picture to finish first.', true); return; } const b = $('dlp'); b.disabled = true;
-      try { st('Building PDF…'); if (!window.html2canvas) await lib('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'); if (!window.jspdf) await lib('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    $('dlp').onclick = async () => { const b = $('dlp'); b.disabled = true; try { st('Building PDF…'); if (!window.html2canvas) await lib('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'); if (!window.jspdf) await lib('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
         if (document.fonts && document.fonts.ready) await document.fonts.ready; document.body.classList.add('cap'); const sheets = [...document.querySelectorAll('.sheet')]; const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: [720, 540] });
-        for (let i = 0; i < sheets.length; i++) { st('Building PDF… page ' + (i + 1) + ' of ' + sheets.length); const c = await window.html2canvas(sheets[i], { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); if (i) pdf.addPage([720, 540], 'landscape'); pdf.addImage(c.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 720, 540); }
+        for (let i = 0; i < sheets.length; i++) { st('Building PDF… page ' + (i + 1) + ' of ' + sheets.length); const c = await window.html2canvas(sheets[i], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, width: 1000, height: 750 }); if (i) pdf.addPage([720, 540], 'landscape'); pdf.addImage(c.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 720, 540); }
         document.body.classList.remove('cap'); pdf.save((s.reg || 'vehicle').replace(/[^A-Za-z0-9-]+/g, '_') + '_asset_pack.pdf'); st('PDF saved to your Downloads folder.'); } catch (e) { document.body.classList.remove('cap'); st('Could not build the PDF: ' + (e.message || e), true); }
       b.disabled = false; };
-    if (empties.length) st('Boxes with no inspection data (fill in or leave): ' + empties.join(', '), false);
-    await hero(true);
-    if (empties.length) setTimeout(() => st('Boxes with no inspection data: ' + empties.join(', ') + ' – click any text to edit.'), 100);
   }
   main().catch((e) => st('Something went wrong: ' + (e.message || e), true));
 })();

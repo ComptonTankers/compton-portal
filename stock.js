@@ -117,6 +117,7 @@
     const ab = document.createElement('button'); ab.className = 'mini'; ab.textContent = 'Advert pack'; hdr0.insertBefore(ab, hdr0.firstChild);
     ab.onclick = () => advertPack(box, s, j, d);
     const pk = document.createElement('button'); pk.className = 'mini'; pk.textContent = 'Create asset pack'; hdr0.insertBefore(pk, hdr0.firstChild); pk.onclick = () => window.open('pack/#s=' + s.id, '_blank');
+    const sdb = document.createElement('button'); sdb.className = 'mini'; sdb.textContent = 'Sales details'; hdr0.insertBefore(sdb, hdr0.firstChild); sdb.onclick = () => salesDetails(box, s, j, d, async () => { await view(stockId); const b = $('s_sdbtn'); if (b) b.click(); }); sdb.id = 's_sdbtn';
     sb.id = 's_salesbtn'; sb.onclick = () => salesPhotos(box, s.reg, j, d, async () => { await view(stockId); const b = $('s_salesbtn'); if (b) b.click(); });
     /* ---- office editing: change values, add rows, add notes ---- */
     const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
@@ -146,6 +147,8 @@
       };
       draw();
     };
+    const need = missingSD(rows, s.vehicle_type); const okb = $('s_ok');
+    if (okb && need.length) { okb.disabled = true; okb.style.opacity = '.5'; okb.title = 'Fill in the sales details first'; box.querySelector('.card').insertAdjacentHTML('afterbegin', `<div style="background:#fff3cd;border:1px solid #f0d58a;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:13px"><b>Needs office data before it can be approved for sale:</b> ${need.map(esc).join(', ')}. <a href="#" id="s_needfill">Fill in sales details</a></div>`); const nf = $('s_needfill'); if (nf) nf.onclick = (e) => { e.preventDefault(); sdb.click(); }; }
     const ok = $('s_ok'); if (ok) ok.onclick = async () => { try { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'reviewed', reviewed_at: new Date().toISOString() }) }); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'for_sale' }) }); await load(); draw(document.getElementById('main')); } catch (e) { alert(e.message); } };
     box.scrollIntoView({ behavior: 'smooth' });
     const ph = $('s_ph'); const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
@@ -229,6 +232,69 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
   /* swap an enhanced picture into a report slot; the old picture goes to the archive */
   function putEnhanced(d, idx, path) { const p = d.photos[idx]; d.archive = d.archive || []; d.archive.push({ key: p.key, label: p.label, path: p.path, enhanced: !!p.enhanced, at: new Date().toISOString() }); p.path = path; p.enhanced = true; p.status = 'ok'; }
 
+
+  /* ---------- pack cut-outs (asset packs only – never published) ---------- */
+  const CUTPROMPT = `Cut out this commercial tanker vehicle for use in a brochure.
+Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
+Remove the entire background and ground. Place the vehicle on a PURE WHITE background (#FFFFFF), with clean, precise edges and no halo, no shadow, no reflection, no floor and nothing else in the picture. No watermark or logo.
+Keep the same camera angle. Leave a small even white margin around the whole vehicle.`;
+  const CUT_SLOTS = [{ n: 1, use: 'Cover page', key: 'rear_pass', alt: 'rear_driver' }, { n: 2, use: 'Specification page', key: 'rear_driver', alt: 'front_driver' }, { n: 3, use: 'Last page', key: 'front_pass', alt: 'front_driver' }];
+  async function uploadCut(file, jobId, n) {
+    let blob = file, ext = /png$/i.test(file.type) ? 'png' : 'jpg';
+    if (ext === 'jpg') { const im = await loadImg(URL.createObjectURL(file)); const sc = Math.min(1, 2400 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', .93)); }
+    const path = 'enhanced/' + jobId + '/cut-' + n + '-' + Date.now() + '.' + ext; const sess = JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
+    const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': ext === 'png' ? 'image/png' : 'image/jpeg' }, body: blob });
+    if (!r.ok) throw new Error('upload failed (' + r.status + ')'); return path;
+  }
+  async function cutoutPanel(host, reg, j, d, refresh) {
+    d.photos = d.photos || []; d.cutouts = d.cutouts || [];
+    host.insertAdjacentHTML('beforeend', `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #e3e7ee"><h3 style="margin:0 0 4px">Asset-pack cut-outs (ChatGPT)</h3>
+      <div class="hint">3 cut-out pictures on a plain white background, used <b>only</b> in the asset pack (cover, specification page and last page). They are never added to the advert, the website or the public links. If a slot is empty the pack uses a framed photo instead.</div>
+      <div style="margin:8px 0"><button class="mini" id="cu_cp">Copy cut-out prompt</button> <span class="small muted">Attach the picture shown for each slot to ChatGPT and paste this prompt. No logo needed.</span>
+        <textarea readonly rows="5" id="cu_pr" style="width:100%;margin-top:6px;font-size:12px">${esc(CUTPROMPT)}</textarea></div><div id="cu_slots" class="phg"></div><div id="cu_msg" class="small muted"></div></div>`);
+    const q = (i) => host.querySelector(i);
+    q('#cu_cp').onclick = async () => { try { await navigator.clipboard.writeText(CUTPROMPT); q('#cu_cp').textContent = 'Copied ✓'; } catch (e) { q('#cu_pr').select(); } };
+    const pick = (k, alt) => d.photos.find((p) => p.key === k && p.path) || d.photos.find((p) => p.key === alt && p.path) || d.photos.find((p) => WALKK.includes(p.key) && p.path);
+    for (const sl of CUT_SLOTS) {
+      const have = d.cutouts.find((c) => c.n === sl.n); const src = pick(sl.key, sl.alt); const u = have ? await fileUrl(have.path) : null;
+      q('#cu_slots').insertAdjacentHTML('beforeend', `<figure><div style="background:#fff;border:1px solid #e3e7ee">${u ? `<img src="${u}" alt="">` : '<div class="phs">empty</div>'}</div><figcaption><b>Cut-out ${sl.n}</b> – ${sl.use} ${have ? '<span class="pill g">added</span>' : '<span class="pill a">needed</span>'}<br>${src ? `<a href="#" data-src="${sl.n}">Download source (${esc(src.label || src.key)})</a><br>` : ''}<a href="#" data-up="${sl.n}">${have ? 'Replace cut-out' : 'Upload cut-out'}</a>${have ? ` · <a href="#" data-rm="${sl.n}">Remove</a>` : ''}</figcaption></figure>`);
+      sl.src = src;
+    }
+    q('#cu_slots').querySelectorAll('[data-src]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); const sl = CUT_SLOTS.find((x) => x.n === +a.dataset.src); const uu = sl.src && await fileUrl(sl.src.path); if (uu) dl(await (await fetch(uu)).blob(), reg + '-cutout-' + sl.n + '-source.jpg'); });
+    q('#cu_slots').querySelectorAll('[data-up]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const n = +a.dataset.up; const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*'; f.onchange = async () => { if (!f.files[0]) return; try { q('#cu_msg').textContent = 'Uploading…'; const path = await uploadCut(f.files[0], j.id, n); d.cutouts = d.cutouts.filter((c) => c.n !== n).concat([{ n, path }]); await saveJob(j, d); await refresh(); } catch (er) { q('#cu_msg').innerHTML = '<span style="color:#b3261e">' + esc(er.message || 'failed') + '</span>'; } }; f.click(); });
+    q('#cu_slots').querySelectorAll('[data-rm]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); d.cutouts = d.cutouts.filter((c) => c.n !== +a.dataset.rm); await saveJob(j, d); await refresh(); });
+  }
+
+  /* ---------- sales details: the fields the asset pack (and Truck Locator) need ---------- */
+  const SD = [
+    ['Vehicle', 'Make', 'text', 1], ['Vehicle', 'Model', 'text', 1], ['Vehicle', 'Year of registration', 'num', 1], ['Vehicle', 'Chassis number (VIN)', 'text', 1], ['Vehicle', 'Condition', ['New', 'Used – excellent', 'Used – good', 'Used – fair', 'Used – poor'], 1],
+    ['Weights & dimensions', 'Unladen weight', 'kg', 1], ['Weights & dimensions', 'Plated weight (GVW / GTW)', 'kg', 0], ['Weights & dimensions', 'Length', 'mm', 1], ['Weights & dimensions', 'Width', 'mm', 1], ['Weights & dimensions', 'Height', 'mm', 1],
+    ['Chassis & driveline', 'Suspension', ['Air', 'Steel / leaf', 'Steel front / air rear', 'Other'], 1], ['Chassis & driveline', 'Axle make', 'text', 1], ['Chassis & driveline', 'Brakes', 'text', 1], ['Chassis & driveline', 'Landing legs', 'text', 0],
+    ['Tyres', 'Tyre make(s)', 'text', 1], ['Tyres', 'Tyre size', 'text', 0],
+    ['Tank & equipment', 'Total plated capacity', 'litres', 0], ['Tank & equipment', 'Tank material', ['Aluminium', 'Stainless steel', 'Mild / carbon steel', 'GRP', 'Other'], 'tank'], ['Tank & equipment', 'Tank insulation', ['Insulated', 'Not insulated'], 0], ['Tank & equipment', 'Tank test pressure', 'text', 0], ['Tank & equipment', 'ADR class / tank code', 'text', 0],
+    ['Tank & equipment', 'Pump make and model', 'text', 0], ['Tank & equipment', 'API couplers', 'text', 0], ['Tank & equipment', 'Vapour recovery', ['Yes', 'No'], 0], ['Tank & equipment', 'Control box', 'text', 0],
+    ['Dates & certificates', 'MOT expiry date', 'date', 1], ['Dates & certificates', 'ADR expiry date', 'date', 'adr'], ['Dates & certificates', 'Safe loading pass expiry date', 'date', 'adr'], ['Dates & certificates', 'VTG plating expiry date', 'date', 0], ['Dates & certificates', 'Tank test due date', 'date', 'tank']];
+  const TANKT = ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel', 'rigid_waste', 'rigid_combi'], ADRT = ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel'];
+  const isReq = (f, type) => f[3] === 1 || (f[3] === 'tank' && TANKT.includes(type)) || (f[3] === 'adr' && ADRT.includes(type));
+  const rowVal = (rows, label) => { const r = rows.find((x) => String(x[1]).toLowerCase() === label.toLowerCase()); return r ? String(r[2] == null ? '' : r[2]).trim() : ''; };
+  const okVal = (v) => !/^(|not available|skipped|n\/a|none)$/i.test(v);
+  const missingSD = (rows, type) => SD.filter((f) => isReq(f, type) && !okVal(rowVal(rows, f[1]))).map((f) => f[1]);
+  function salesDetails(box, s, j, d, refresh) {
+    box.querySelector('#s_sd')?.remove(); const rows = (d.rows || []).map((r) => r.slice());
+    const toIso = (v) => { const m = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : ''; };
+    let sec = ''; const fld = (f, i) => { const v = rowVal(rows, f[1]), req = isReq(f, s.vehicle_type), t = f[2];
+      const inp = Array.isArray(t) ? `<select data-i="${i}" style="padding:5px"><option value=""></option>${t.map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : t === 'date' ? `<input type="date" data-i="${i}" value="${toIso(v)}" style="padding:5px">` : ['kg', 'mm', 'litres'].includes(t) ? `<input type="number" data-i="${i}" value="${esc(v.replace(/[^\d.]/g, ''))}" style="padding:5px;width:130px"> <span class="muted small">${t}</span>` : t === 'num' ? `<input type="number" data-i="${i}" value="${esc(v)}" style="padding:5px;width:100px">` : `<input data-i="${i}" value="${esc(okVal(v) ? v : '')}" style="padding:5px;width:100%">`;
+      const h = f[0] !== sec ? `<tr><th colspan="2">${esc(f[0])}</th></tr>` : ''; sec = f[0]; return h + `<tr><td class="muted">${esc(f[1])}${req ? ' <b style="color:#b3261e">*</b>' : ''}</td><td>${inp}</td></tr>`; };
+    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sd"><h3 style="margin-top:0">Sales details – ${esc(s.reg)}</h3><div class="hint">These feed the asset pack (and later Truck Locator). <b style="color:#b3261e">*</b> = needed before the vehicle can be approved for sale. Leave anything that does not apply blank.</div><div class="box2"><table>${SD.map(fld).join('')}</table></div>
+      <div style="margin-top:8px;display:flex;gap:8px"><button class="mini pri2" id="sd_sv">Save</button><button class="mini" id="sd_x">Cancel</button><span id="sd_m" class="small muted"></span></div></div>`);
+    box.querySelector('#s_sd').scrollIntoView({ behavior: 'smooth' }); box.querySelector('#sd_x').onclick = () => box.querySelector('#s_sd').remove();
+    box.querySelector('#sd_sv').onclick = async () => { try { const R = (d.rows || []).map((r) => r.slice());
+      box.querySelectorAll('#s_sd [data-i]').forEach((el) => { const f = SD[+el.dataset.i]; let v = el.value.trim(); const old = rowVal(R, f[1]); if (v === '' && !old) return;
+        if (f[2] === 'date' && v) { const m = v.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) v = m[3] + '/' + m[2] + '/' + m[1]; } else if (['kg', 'mm', 'litres'].includes(f[2]) && v) v = Number(v).toLocaleString('en-GB') + ' ' + f[2];
+        const k = R.findIndex((x) => String(x[1]).toLowerCase() === f[1].toLowerCase()); if (k >= 0) R[k][2] = v; else if (v) R.push([f[0], f[1], v]); });
+      d.rows = R; await saveJob(j, d); await refresh(); } catch (er) { box.querySelector('#sd_m').textContent = 'Could not save: ' + (er.message || er); } };
+  }
+
   async function salesPhotos(box, reg, j, d, refresh) {
     box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
     d.photos = d.photos || [];
@@ -242,7 +308,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
       <div id="ss_slots" class="phg"></div>
       <div style="margin:10px 0"><input type="file" id="ss_up" accept="image/*,.zip,application/zip" multiple> <span id="ss_msg" class="small muted"></span></div>
       <div id="ss_leg"></div></div>`);
-    const q = (i) => box.querySelector(i), msg = q('#ss_msg'); q('#s_sales').scrollIntoView({ behavior: 'smooth' });
+    const q = (i) => box.querySelector(i), msg = q('#ss_msg'); q('#s_sales').scrollIntoView({ behavior: 'smooth' }); cutoutPanel(q('#s_sales'), reg, j, d, refresh);
     const wm = () => q('#ss_wm').checked, fail = (er) => { msg.innerHTML = '<span style="color:#b3261e">' + esc((er && er.message) || 'failed') + '</span>'; };
     const doneRefresh = async () => { await saveJob(j, d); await refresh(); };
     q('#ss_cp').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT(reg)); q('#ss_cp').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr').select(); } };

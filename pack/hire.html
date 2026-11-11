@@ -1,0 +1,379 @@
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Tanker Rent UK asset pack</title>
+<style>
+  @page { size: 720pt 540pt; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #fff; }
+  body { font-family: 'Poppins', Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  :root {
+    --navy: #082956;
+    --navy2: #102D61;
+    --orange: #F15C16;
+    --grey: #82868C;
+    --line: #E6E9EE;
+  }
+
+  .sheet { width: 720pt; height: 540pt; overflow: hidden; position: relative; page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
+  .page {
+    width: 1000px; height: 750px; position: absolute; top: 0; left: 0;
+    transform: scale(0.96); transform-origin: top left;
+    background: #fff; overflow: hidden;
+  }
+
+  .swoosh { position: absolute; }
+  .logo-h { position: absolute; }
+  .rule-top { position: absolute; height: 2px; background: var(--orange); }
+  .divider { position: absolute; width: 1px; background: #E9ECF1; }
+  .foot-rule { position: absolute; height: 1px; background: #E4E7EC; }
+
+  /* ---------- page 1 ---------- */
+  .p1-badge {
+    position: absolute; background: var(--orange); color: #fff;
+    font-weight: 700; display: flex; align-items: center;
+  }
+  .p1-note { position: absolute; color: #6E7379; line-height: 1.5; }
+  .p1-line { position: absolute; width: 1px; background: #D8DBE0; }
+
+  /* ---------- shared ---------- */
+  .h-lead { color: var(--navy); font-weight: 700; line-height: 1.16; letter-spacing: -.3px; }
+  .kicker { color: var(--orange); font-weight: 700; }
+  .body { color: var(--grey); line-height: 1.62; }
+
+  .card {
+    position: absolute; background: #fff; border: 1px solid var(--line);
+    border-radius: 5px; box-shadow: 0 2px 6px rgba(16,45,97,.07);
+  }
+  .u { background: var(--orange); }
+
+  /* feature tiles (page 2) */
+  .feat { display: flex; align-items: flex-start; height: 100%; padding: 20px 12px 18px 10px; }
+  .feat .ic { flex: 0 0 auto; display:flex; align-items:center; height: 108px; }
+  .feat .tx { padding-left: 12px; }
+  .feat h3 { color: var(--navy); font-weight: 700; font-size: 16.5px; line-height: 1.16; letter-spacing: -.2px; }
+  .feat .u { width: 48px; height: 7px; margin: 12px 0 13px; }
+  .feat p { color: var(--grey); font-size: 10.5px; line-height: 1.15; }
+
+  /* spec cards (page 3) */
+  .spec { padding: 22px 14px 18px 13px; }
+  .spec h3 { color: var(--navy); font-weight: 700; font-size: 16px; letter-spacing: -.2px; }
+  .spec .u { width: 79px; height: 7px; margin: 15px 0 14px; }
+  .spec li { color: var(--grey); font-size: 10.5px; line-height: 1.17; margin-bottom: 4px; padding-left: 18px; position: relative; }
+  .spec li:before { content: ""; position: absolute; left: 3px; top: .48em; width: 3.5px; height: 3.5px; border-radius: 50%; background: var(--orange); }
+  ul { list-style: none; }
+
+  /* benefit blocks (page 2 band) */
+  .ben { position: absolute; display: flex; align-items: flex-start; }
+  .ben .bt { color: var(--navy); font-weight: 700; font-size: 12.5px; line-height: 1.18; }
+  .ben .bp { color: var(--grey); font-size: 9px; line-height: 1.32; margin-top: 9px; }
+
+  /* value tiles (page 4) */
+  .tile { display: flex; align-items: flex-start; padding: 13px 10px 13px 11px; }
+  .tile .tt { color: var(--navy); font-weight: 700; font-size: 9.5px; line-height: 1.2; }
+  .tile .u { width: 57px; height: 2px; margin: 7px 0 9px; }
+  .tile p { color: var(--grey); font-size: 7.6px; line-height: 1.55; }
+
+  @media screen { body { background:#e4e8ef; padding-top:100px; } .sheet { margin:18px auto; box-shadow:0 4px 18px rgba(8,41,86,.18); } .ed:hover, .ed:focus { outline:2px dashed #F15C16; outline-offset:2px; } .ed:empty:before { content:"(add text)"; color:#d33; font-weight:400; } li.ph { color:#d33 !important; } }
+  body.cap li.ph{display:none!important} body.cap .ed:empty:before{content:""!important} body.cap .ed{outline:none!important}
+  @media print { .noprint { display:none !important; } li.ph { display:none; } }
+  .ed { white-space:pre-wrap; }
+  #bar { position:fixed; top:0; left:0; right:0; z-index:50; background:#082956; color:#fff; font:13px/1.3 Poppins,Arial,sans-serif; padding:10px 16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  #bar button, #bar select { font:inherit; padding:6px 12px; border-radius:6px; border:0; cursor:pointer; }
+  #bar .go { background:#F15C16; color:#fff; font-weight:600; }
+</style>
+
+<div id="bar" class="noprint"><b>Asset pack</b> <span id="who"></span> <label>Pack <select id="mode"><option value="sales">Sales pack</option><option value="hire">Hire pack</option></select></label> <label><input type="checkbox" id="o_price" checked> Show price</label> <label><input type="checkbox" id="o_gal" checked> Photo gallery</label> <label><input type="checkbox" id="o_def"> Defect photos</label> <label><input type="checkbox" id="o_fin"> Finance / part-ex line</label> <label>Cover picture <select id="pick"></select></label> <button id="cut">Cut out vehicle</button> <button class="go" id="dlp">Download PDF</button> <button id="prn">Print…</button> <span id="st"></span></div>
+<!-- ===================== PAGE 1 ===================== -->
+<div class="sheet"><div class="page">
+  <img class="swoosh" src="brand-kit/bg_swoosh.png" style="right:-118px; top:-236px; height:760px;">
+
+  <img class="logo-h" src="brand-kit/logo_p1.png" style="left:52px; top:52px; width:278px;">
+
+  <div class="p1-badge" style="left:48px; top:114px; width:284px; height:50px; font-size:31px; padding-left:20px;"><span class="ed" data-k="COVER_BADGE" contenteditable="true" spellcheck="false"></span></div>
+
+  <div style="position:absolute; left:52px; top:180px; font-size:47px; font-weight:700; color:var(--navy); letter-spacing:-.5px;"><span class="ed" data-k="COVER_H1" contenteditable="true" spellcheck="false"></span></div>
+  <div style="position:absolute; left:52px; top:238px; font-size:31px; font-weight:700; color:var(--navy); letter-spacing:-.2px;"><span class="ed" data-k="COVER_H2" contenteditable="true" spellcheck="false"></span></div>
+
+  <div class="p1-line" style="left:319px; top:296px; height:310px;"></div>
+  <img src="brand-kit/ico_check.png" style="position:absolute; left:38px; top:334px; width:30px;">
+  <div class="p1-note" style="left:83px; top:310px; width:250px; font-size:17px;"><span class="ed" data-k="COVER_NOTE" contenteditable="true" spellcheck="false"></span></div>
+
+  <img class="hero" src="" style="position:absolute; left:248px; top:280px; width:752px;">
+</div></div>
+
+<!-- ===================== PAGE 2 ===================== -->
+<div class="sheet"><div class="page">
+  <div class="rule-top" style="left:20px; top:72px; width:960px;"></div>
+  <img class="logo-h" src="brand-kit/logo_h.png" style="right:22px; top:20px; width:232px;">
+
+  <div class="h-lead" style="position:absolute; left:22px; top:106px; width:520px; font-size:26px;"><span class="ed" data-k="P2_HEADLINE" contenteditable="true" spellcheck="false"></span></div>
+  <div class="kicker" style="position:absolute; left:22px; top:172px; width:560px; font-size:10.5px;"><span class="ed" data-k="P2_KICKER" contenteditable="true" spellcheck="false"></span></div>
+  <div class="body" style="position:absolute; left:22px; top:212px; width:460px; font-size:12.5px;">
+    <span class="ed" data-k="P2_BODY" contenteditable="true" spellcheck="false"></span>
+  </div>
+
+  <img class="hero" src="" style="position:absolute; left:626px; top:118px; width:358px;">
+
+  <div class="rule-top" style="left:20px; top:355px; width:960px;"></div>
+
+  <!-- feature tiles -->
+  <div class="card" style="left:20px; top:372px; width:238px; height:158px;">
+    <div class="feat">
+      <div class="ic"><img src="brand-kit/ico_tank.png" style="width:80px;"></div>
+      <div class="tx">
+        <h3><span class="ed" data-k="TILE1_TITLE" contenteditable="true" spellcheck="false"></span></h3>
+        <div class="u"></div>
+        <p><span class="ed" data-k="TILE1_BODY" contenteditable="true" spellcheck="false"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="left:274px; top:372px; width:238px; height:158px;">
+    <div class="feat">
+      <div class="ic"><img src="brand-kit/ico_split.png" style="width:76px;"></div>
+      <div class="tx">
+        <h3><span class="ed" data-k="TILE2_TITLE" contenteditable="true" spellcheck="false"></span></h3>
+        <div class="u"></div>
+        <p><span class="ed" data-k="TILE2_BODY" contenteditable="true" spellcheck="false"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="left:528px; top:372px; width:238px; height:158px;">
+    <div class="feat">
+      <div class="ic"><img src="brand-kit/ico_pump.png" style="width:72px;"></div>
+      <div class="tx">
+        <h3><span class="ed" data-k="TILE3_TITLE" contenteditable="true" spellcheck="false"></span></h3>
+        <div class="u"></div>
+        <p><span class="ed" data-k="TILE3_BODY" contenteditable="true" spellcheck="false"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="left:782px; top:372px; width:198px; height:158px;">
+    <div class="feat" style="padding-left:6px;">
+      <div class="ic"><img src="brand-kit/ico_jet.png" style="width:58px;"></div>
+      <div class="tx" style="padding-left:10px;">
+        <h3><span class="ed" data-k="TILE4_TITLE" contenteditable="true" spellcheck="false"></span></h3>
+        <div class="u"></div>
+        <p><span class="ed" data-k="TILE4_BODY" contenteditable="true" spellcheck="false"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- benefits band -->
+  <div id="bandtitle" style="position:absolute; left:20px; top:552px; width:252px; font-size:19px; font-weight:700; color:var(--navy); line-height:1.24;">STRAIGHTFORWARD HIRE<br>FROM <span style="color:var(--orange)">TANKER RENT UK</span></div>
+
+  <div class="divider" style="left:283px; top:546px; height:88px;"></div>
+  <div class="divider" style="left:469px; top:546px; height:88px;"></div>
+  <div class="divider" style="left:645px; top:546px; height:88px;"></div>
+  <div class="divider" style="left:821px; top:546px; height:88px;"></div>
+
+  <div class="ben" style="left:298px; top:550px; width:160px;">
+    <img src="brand-kit/ico_headset.png" style="width:40px; margin-top:2px;">
+    <div style="padding-left:11px; width:112px;">
+      <div class="bt">ONE POINT OF CONTACT</div>
+      <div class="bp">One experienced contact, clear advice and a straightforward process from start to finish.</div>
+    </div>
+  </div>
+
+  <div class="ben" style="left:482px; top:550px; width:158px;">
+    <img src="brand-kit/ico_stopwatch.png" style="width:40px; margin-top:2px;">
+    <div style="padding-left:11px; width:104px;">
+      <div class="bt">FAST RESPONSE</div>
+      <div class="bp">Clear availability, quick action and straight answers.</div>
+    </div>
+  </div>
+
+  <div class="ben" style="left:658px; top:550px; width:158px;">
+    <img src="brand-kit/ico_handshake.png" style="width:42px; margin-top:4px;">
+    <div style="padding-left:10px; width:104px;">
+      <div class="bt">FLEXIBLE TERMS</div>
+      <div class="bp">Short-term hire, long-term hire, rent to buy or outright purchase.</div>
+    </div>
+  </div>
+
+  <div class="ben" style="left:834px; top:550px; width:150px;">
+    <img src="brand-kit/ico_speech.png" style="width:40px; margin-top:4px;">
+    <div style="padding-left:11px; width:98px;">
+      <div class="bt">NO SURPRISES</div>
+      <div class="bp">Clear costs, no return hire surprises and no wasted time.</div>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div class="foot-rule" style="left:20px; top:648px; width:960px;"></div>
+  <div class="foot-rule" style="left:20px; top:712px; width:960px;"></div>
+
+  <img src="brand-kit/ico_c_phone.png" style="position:absolute; left:30px; top:662px; width:38px;">
+  <div style="position:absolute; left:82px; top:670px; font-size:13px; color:var(--navy);">+44 (0) 1525 374 732</div>
+  <div class="divider" style="left:245px; top:660px; height:42px;"></div>
+
+  <img src="brand-kit/ico_c_mobile.png" style="position:absolute; left:272px; top:662px; width:38px;">
+  <div style="position:absolute; left:324px; top:670px; font-size:13px; color:var(--navy);">+44 (0) 7540 800 552</div>
+  <div class="divider" style="left:490px; top:660px; height:42px;"></div>
+
+  <img src="brand-kit/ico_c_mail.png" style="position:absolute; left:518px; top:662px; width:38px;">
+  <div style="position:absolute; left:570px; top:670px; font-size:13px; color:var(--navy);">hire@tankers-r-us.com</div>
+  <div class="divider" style="left:735px; top:660px; height:42px;"></div>
+
+  <img src="brand-kit/ico_c_web.png" style="position:absolute; left:762px; top:662px; width:38px;">
+  <div style="position:absolute; left:814px; top:670px; font-size:13px; color:var(--navy);">www.tankers-r-us.com</div>
+</div></div>
+
+<!-- ===================== PAGE 3 ===================== -->
+<div class="sheet"><div class="page">
+  <div class="rule-top" style="left:20px; top:72px; width:960px;"></div>
+  <img class="logo-h" src="brand-kit/logo_h.png" style="right:22px; top:20px; width:232px;">
+
+  <div style="position:absolute; left:35px; top:104px; font-size:33px; font-weight:700; color:var(--navy); letter-spacing:-.4px;">Technical Specification</div>
+  <div class="u" style="position:absolute; left:35px; top:158px; width:52px; height:5px;"></div>
+  <div class="body" style="position:absolute; left:35px; top:184px; width:430px; font-size:12px;">
+    <span class="ed" data-k="P3_INTRO" contenteditable="true" spellcheck="false"></span>
+  </div>
+
+  <img class="hero" src="" style="position:absolute; left:576px; top:92px; width:378px;">
+
+  <div class="card" style="left:35px; top:264px; width:296px; height:182px;">
+    <div class="spec">
+      <h3><span class="ed" data-k="SPEC1_TITLE" contenteditable="true" spellcheck="false"></span></h3><div class="u"></div>
+      <ul>
+        <li><span class="ed" data-k="SPEC1_B1" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC1_B2" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC1_B3" contenteditable="true" spellcheck="false"></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="left:352px; top:264px; width:296px; height:182px;">
+    <div class="spec">
+      <h3><span class="ed" data-k="SPEC2_TITLE" contenteditable="true" spellcheck="false"></span></h3><div class="u"></div>
+      <ul>
+        <li><span class="ed" data-k="SPEC2_B1" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC2_B2" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC2_B3" contenteditable="true" spellcheck="false"></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="left:669px; top:264px; width:296px; height:182px;">
+    <div class="spec">
+      <h3><span class="ed" data-k="SPEC3_TITLE" contenteditable="true" spellcheck="false"></span></h3><div class="u"></div>
+      <ul>
+        <li><span class="ed" data-k="SPEC3_B1" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC3_B2" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC3_B3" contenteditable="true" spellcheck="false"></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="left:35px; top:458px; width:455px; height:178px;">
+    <div class="spec">
+      <h3><span class="ed" data-k="SPEC4_TITLE" contenteditable="true" spellcheck="false"></span></h3><div class="u"></div>
+      <ul>
+        <li><span class="ed" data-k="SPEC4_B1" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC4_B2" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC4_B3" contenteditable="true" spellcheck="false"></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="left:510px; top:458px; width:455px; height:178px;">
+    <div class="spec">
+      <h3><span class="ed" data-k="SPEC5_TITLE" contenteditable="true" spellcheck="false"></span></h3><div class="u"></div>
+      <ul>
+        <li><span class="ed" data-k="SPEC5_B1" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC5_B2" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC5_B3" contenteditable="true" spellcheck="false"></span></li>
+        <li><span class="ed" data-k="SPEC5_B4" contenteditable="true" spellcheck="false"></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="position:absolute; left:35px; top:648px; width:930px; height:56px; background:var(--orange); border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:21px;">
+    <span class="ed" data-k="P3_CTA" contenteditable="true" spellcheck="false"></span>
+  </div>
+</div></div>
+
+<!-- ===================== PAGE 4 ===================== -->
+<div class="sheet"><div class="page">
+  <img class="swoosh" src="brand-kit/bg_swoosh.png" style="right:-118px; top:-236px; height:760px;">
+  <img src="brand-kit/logo_stack.png" style="position:absolute; right:44px; top:38px; width:250px;">
+
+  <div style="position:absolute; left:35px; top:66px; font-size:44px; font-weight:700; color:var(--navy); line-height:1.32; letter-spacing:-.6px;"><span class="ed" data-k="P4_H1_LINE1" contenteditable="true" spellcheck="false"></span><br><span class="ed" data-k="P4_H1_LINE2" contenteditable="true" spellcheck="false"></span></div>
+  <div class="u" style="position:absolute; left:35px; top:196px; width:52px; height:5px;"></div>
+
+  <div class="body" style="position:absolute; left:33px; top:230px; width:450px; font-size:10.5px;">
+    <span class="ed" data-k="P4_BODY1" contenteditable="true" spellcheck="false"></span>
+  </div>
+  <div class="body" style="position:absolute; left:33px; top:310px; width:450px; font-size:10.5px;">
+    <span class="ed" data-k="P4_BODY2" contenteditable="true" spellcheck="false"></span>
+  </div>
+
+  <img class="hero" src="" style="position:absolute; left:406px; top:310px; width:572px;">
+
+  <div class="card" style="left:25px; top:376px; width:174px; height:108px;">
+    <div class="tile">
+      <img src="brand-kit/ico_o_clock.png" style="width:38px;">
+      <div style="padding-left:9px; width:104px;">
+        <div class="tt">IMMEDIATE AVAILABILITY</div>
+        <div class="u"></div>
+        <p>In stock and ready to move quickly.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="left:217px; top:376px; width:174px; height:108px;">
+    <div class="tile">
+      <img src="brand-kit/ico_o_cal.png" style="width:38px;">
+      <div style="padding-left:9px; width:104px;">
+        <div class="tt">FLEXIBLE TERMS</div>
+        <div class="u"></div>
+        <p>Short-term hire, long-term hire, rent to buy or outright purchase.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="left:25px; top:496px; width:174px; height:108px;">
+    <div class="tile">
+      <img src="brand-kit/ico_o_speech.png" style="width:38px;">
+      <div style="padding-left:9px; width:104px;">
+        <div class="tt">STRAIGHT ANSWERS</div>
+        <div class="u"></div>
+        <p>Clear pricing, clear options and no surprises.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="left:217px; top:496px; width:174px; height:108px;">
+    <div class="tile">
+      <img src="brand-kit/ico_o_person.png" style="width:38px;">
+      <div style="padding-left:9px; width:104px;">
+        <div class="tt">ONE POINT OF CONTACT</div>
+        <div class="u"></div>
+        <p>One experienced contact and a simple process throughout.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- footer panel -->
+  <div style="position:absolute; left:18px; top:625px; width:962px; height:88px; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 2px 5px rgba(16,45,97,.06);"></div>
+  <img src="brand-kit/ico_bigphone.png" style="position:absolute; left:40px; top:643px; width:52px;">
+  <div style="position:absolute; left:110px; top:658px; font-size:17px; font-weight:700; color:var(--navy);">Speak to Tanker Rent UK</div>
+
+  <img src="brand-kit/ico_sq_phone.png" style="position:absolute; left:358px; top:655px; width:34px;">
+  <div style="position:absolute; left:400px; top:663px; font-size:9px; color:var(--navy);">+44 (0) 1525 374 732</div>
+
+  <img src="brand-kit/ico_sq_mobile.png" style="position:absolute; left:508px; top:655px; width:34px;">
+  <div style="position:absolute; left:550px; top:663px; font-size:9px; color:var(--navy);">+44 (0) 7540 800 552</div>
+
+  <img src="brand-kit/ico_sq_mail.png" style="position:absolute; left:653px; top:655px; width:34px;">
+  <div style="position:absolute; left:695px; top:663px; font-size:9px; color:var(--navy);">hire@tankers-r-us.com</div>
+
+  <img src="brand-kit/ico_sq_web.png" style="position:absolute; left:806px; top:655px; width:34px;">
+  <div style="position:absolute; left:848px; top:663px; font-size:9px; color:var(--navy);">www.tankers-r-us.com</div>
+</div></div>
+
+<script src="../dashboard/js/supabase-config.js"></script>
+<script src="hire.js?v=4"></script>
