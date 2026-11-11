@@ -148,7 +148,7 @@
     const ok = $('s_ok'); if (ok) ok.onclick = async () => { try { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'reviewed', reviewed_at: new Date().toISOString() }) }); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'for_sale' }) }); await load(); draw(document.getElementById('main')); } catch (e) { alert(e.message); } };
     box.scrollIntoView({ behavior: 'smooth' });
     const ph = $('s_ph'); const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
-    const items = [...(d.photos || []).map((p, i) => ({ arr: 'photos', i, p })).filter((o) => o.p.path), ...(d.defects || []).map((p, i) => ({ arr: 'defects', i, p })).filter((o) => o.p.path)].map((o) => ({ ...o, path: o.p.path, cap: o.arr === 'photos' ? o.p.label : 'Defect ' + (o.i + 1) + (o.p.note ? ' – ' + o.p.note : '') }));
+    const items = [...(d.photos || []).map((p, i) => ({ arr: 'photos', i, p })).filter((o) => o.p.path), ...(d.defects || []).map((p, i) => ({ arr: 'defects', i, p })).filter((o) => o.p.path)].map((o) => ({ ...o, path: o.p.path, cap: o.arr === 'photos' ? (o.p.enhanced ? '✨ ' : '') + o.p.label : 'Defect ' + (o.i + 1) + (o.p.note ? ' – ' + o.p.note : '') }));
     const skipped = (d.photos || []).map((p, i) => ({ p, i })).filter((o) => o.p.status === 'skipped');
     const saveD = async () => { d.edited_at = new Date().toISOString(); await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: d }) }); j.data = d; };
     const up = async (file) => {
@@ -229,7 +229,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
   function putEnhanced(d, idx, path) { const p = d.photos[idx]; d.archive = d.archive || []; d.archive.push({ key: p.key, label: p.label, path: p.path, enhanced: !!p.enhanced, at: new Date().toISOString() }); p.path = path; p.enhanced = true; p.status = 'ok'; }
 
   async function salesPhotos(box, reg, j, d, refresh) {
-    let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
+    box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
     d.photos = d.photos || [];
     const slots = d.photos.map((p, i) => ({ p, i })).filter((o) => o.p.path && WALKK.includes(o.p.key));
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos (ChatGPT)</h3>
@@ -238,7 +238,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
       <div style="margin:10px 0"><b>2.</b> In ChatGPT attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), then paste this prompt: <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
         <textarea readonly id="ss_pr" rows="5" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
       <div style="margin:10px 0"><b>3.</b> Add the finished pictures. Either put a picture in each slot below, or add them all at once (a zip works) and they are matched by the number in the file name, otherwise in order. <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT added it)</label></div>
-      <div id="ss_slots" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px"></div>
+      <div id="ss_slots" class="phg"></div>
       <div style="margin:10px 0"><input type="file" id="ss_up" accept="image/*,.zip,application/zip" multiple> <span id="ss_msg" class="small muted"></span></div>
       <div id="ss_leg"></div></div>`);
     const q = (i) => box.querySelector(i), msg = q('#ss_msg'); q('#s_sales').scrollIntoView({ behavior: 'smooth' });
@@ -264,7 +264,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
       } catch (er) { fail(er); }
     };
     /* pictures saved earlier before replacing existed */
-    if ((d.sales || []).length) { const L = q('#ss_leg'); L.innerHTML = '<div class="hint"><b>Saved earlier, not yet placed:</b> choose which slot each belongs in.</div><div id="ss_lg" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px"></div>';
+    if ((d.sales || []).length) { const L = q('#ss_leg'); L.innerHTML = '<div class="hint"><b>Saved earlier, not yet placed:</b> choose which slot each belongs in.</div><div id="ss_lg" class="phg"></div>';
       for (let n = 0; n < d.sales.length; n++) { const it = d.sales[n]; const u = await fileUrl(it.path); q('#ss_lg').insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : ''}<figcaption><select data-lg="${n}"><option value="">Place in…</option>${slots.map((o, k) => `<option value="${o.i}">${k + 1}. ${esc(o.p.label || o.p.key)}</option>`).join('')}</select> <a href="#" data-lgx="${n}">Discard</a></figcaption></figure>`); }
       L.querySelectorAll('[data-lg]').forEach((sel) => sel.onchange = async () => { if (sel.value === '') return; const n = +sel.dataset.lg; putEnhanced(d, +sel.value, d.sales[n].path); d.sales.splice(n, 1); await doneRefresh(); });
       L.querySelectorAll('[data-lgx]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); if (!confirm('Discard this saved picture?')) return; d.sales.splice(+a.dataset.lgx, 1); await doneRefresh(); }); }
@@ -273,7 +273,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
   /* archive of replaced originals, shown under the photos */
   async function archivePanel(box, j, d, refresh) {
     const A = d.archive || []; if (!A.length) return; box.querySelector('#s_arch')?.remove();
-    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_arch"><details><summary><b>Archived pictures (${A.length})</b> – originals replaced by enhanced ones</summary><div id="ar_g" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px"></div></details></div>`);
+    (box.querySelector('#s_card') || box).insertAdjacentHTML('beforeend', `<div id="s_arch" style="margin-top:12px"><details><summary><b>Archived pictures (${A.length})</b> – originals replaced by enhanced ones</summary><div id="ar_g" class="phg" style="margin-top:10px"></div></details></div>`);
     const g = box.querySelector('#ar_g');
     for (let i = 0; i < A.length; i++) { const u = await fileUrl(A[i].path); g.insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption>${esc(A[i].label || A[i].key || '')}${A[i].enhanced ? ' (earlier enhanced)' : ' (original)'}<br>${u ? `<a href="${u}" download="${esc((j.reg || 'photo') + '-' + (A[i].key || i))}.jpg">Download</a> · ` : ''}<a href="#" data-rs="${i}">Restore</a></figcaption></figure>`); }
     g.querySelectorAll('[data-rs]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); const i = +a.dataset.rs, it = A[i]; const k = d.photos.findIndex((p) => p.key === it.key); if (k < 0 || !confirm('Put this picture back in the report? The current one goes to the archive.')) return;
@@ -281,7 +281,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
   }
 
   async function advertPack(box, s, j, d) {
-    box.querySelector('#s_adv')?.remove();
+    box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
     const defKeys = new Set((d.defects || []).filter((x) => x.path).map((x) => x.path));
     const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, name: p.label || p.key, enh: !!p.enhanced, def: false, w: WALKK.indexOf(p.key) })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, name: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), enh: false, def: true, w: 99 }))];
     const ad = Object.assign({ order: [], off: [], desc: '', web: false }, s.advert || {}); const known = new Set(ad.order);
@@ -294,7 +294,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
     if (!ad.desc) ad.desc = autoDesc();
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_adv"><h3 style="margin-top:0">Advert pack – ${esc(s.reg)}</h3>
       <div class="hint">Uses every picture in the report – enhanced ones first, then the rest (ADR certificate, plates, detail shots). Reorder with ◀ ▶ and exclude anything you do not want public. The first picture is the lead. Defect photos start excluded.</div>
-      <div id="ad_ph" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0"></div>
+      <div id="ad_ph" class="phg" style="margin:10px 0"></div>
       <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div></div>`);
     const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' });
