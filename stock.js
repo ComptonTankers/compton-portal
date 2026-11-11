@@ -194,7 +194,8 @@
   const PROMPT = (reg) => `Edit this photo of a commercial tanker vehicle for a sales listing.
 Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
 Replace ONLY the background and ground with a clean, realistic UK commercial yard: a modern industrial building behind, clean concrete hardstanding, soft overcast daylight, natural sky. Match the lighting and add a natural soft shadow under the vehicle so it sits realistically on the ground.
-Keep the same camera angle and framing. Photorealistic, professional dealer-quality finish. No text, no logos, no extra vehicles or people.`;
+Keep the same camera angle and framing. Photorealistic, professional dealer-quality finish. No extra vehicles or people, and no other text.
+WATERMARK: I have attached the Compton Tankers logo as a second image. Place it small (about 15% of the image width) in the bottom-right corner with a modest margin, slightly translucent (about 85% opacity). The logo has white lettering, so put it on a subtle dark navy rounded translucent panel so it stays readable. Do not alter the logo's colours, shape or spelling, and keep it clear of the vehicle.`;
   function dl(blob, name) { const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = name; document.body.appendChild(l); l.click(); l.remove(); }
   async function salesPhotos(box, items, reg, j, d) {
     let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
@@ -202,9 +203,9 @@ Keep the same camera angle and framing. Photorealistic, professional dealer-qual
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos (ChatGPT)</h3>
       <div class="hint">Three steps. Your original photos are never changed – the enhanced ones are stored alongside them.</div>
       <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download the ${items.length} original photos</button> <span class="small muted">(saved one by one, named by angle)</span></div>
-      <div style="margin:10px 0"><b>2.</b> Open ChatGPT, attach a photo, paste this prompt (add your test background as a second image if you want that exact yard): <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
+      <div style="margin:10px 0"><b>2.</b> Open ChatGPT, attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), paste this prompt (add your test background as a further image if you want that exact yard): <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
         <textarea readonly id="ss_pr" rows="6" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
-      <div style="margin:10px 0"><b>3.</b> Save each result, then add them here: <input type="file" id="ss_up" accept="image/*" multiple> <label class="small"><input type="checkbox" id="ss_wm" checked> add Compton logo watermark</label></div>
+      <div style="margin:10px 0"><b>3.</b> Save each result, then add them here: <input type="file" id="ss_up" accept="image/*" multiple> <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT already added it)</label></div>
       <div id="ss_msg" class="small muted"></div><div id="ss_out" class="phg"></div></div>`);
     const q = (i) => box.querySelector(i); const msg = q('#ss_msg'), out = q('#ss_out');
     q('#s_sales').scrollIntoView({ behavior: 'smooth' });
