@@ -74,7 +74,7 @@
   .tile .u { width: 57px; height: 2px; margin: 7px 0 9px; }
   .tile p { color: var(--grey); font-size: 7.6px; line-height: 1.55; }
 
-  @media screen { body { background:#e4e8ef; padding-top:64px; } .sheet { margin:18px auto; box-shadow:0 4px 18px rgba(8,41,86,.18); } .ed:hover, .ed:focus { outline:2px dashed #F15C16; outline-offset:2px; } .ed:empty:before { content:"(add text)"; color:#d33; font-weight:400; } li.ph { color:#d33 !important; } }
+  @media screen { body { background:#e4e8ef; padding-top:100px; } .sheet { margin:18px auto; box-shadow:0 4px 18px rgba(8,41,86,.18); } .ed:hover, .ed:focus { outline:2px dashed #F15C16; outline-offset:2px; } .ed:empty:before { content:"(add text)"; color:#d33; font-weight:400; } li.ph { color:#d33 !important; } }
   body.cap li.ph{display:none!important} body.cap .ed:empty:before{content:""!important} body.cap .ed{outline:none!important}
   @media print { .noprint { display:none !important; } li.ph { display:none; } }
   .ed { white-space:pre-wrap; }
@@ -83,7 +83,7 @@
   #bar .go { background:#F15C16; color:#fff; font-weight:600; }
 </style>
 
-<div id="bar" class="noprint"><b>Asset pack</b> <span id="who"></span> <label>Vehicle picture <select id="pick"></select></label> <button id="cut">Cut out vehicle</button> <button class="go" id="dlp">Download PDF</button> <button id="prn">Print…</button> <span id="st"></span></div>
+<div id="bar" class="noprint"><b>Asset pack</b> <span id="who"></span> <label>Pack <select id="mode"><option value="sales">Sales pack</option><option value="hire">Hire pack</option></select></label> <label><input type="checkbox" id="o_price" checked> Show price</label> <label><input type="checkbox" id="o_gal" checked> Photo gallery</label> <label><input type="checkbox" id="o_def"> Defect photos</label> <label><input type="checkbox" id="o_fin"> Finance / part-ex line</label> <label>Cover picture <select id="pick"></select></label> <button id="cut">Cut out vehicle</button> <button class="go" id="dlp">Download PDF</button> <button id="prn">Print…</button> <span id="st"></span></div>
 <!-- ===================== PAGE 1 ===================== -->
 <div class="sheet"><div class="page">
   <img class="swoosh" src="brand-kit/bg_swoosh.png" style="right:-118px; top:-236px; height:760px;">
@@ -163,7 +163,7 @@
   </div>
 
   <!-- benefits band -->
-  <div style="position:absolute; left:20px; top:552px; width:252px; font-size:19px; font-weight:700; color:var(--navy); line-height:1.24;">STRAIGHTFORWARD HIRE<br>FROM <span style="color:var(--orange)">TANKER RENT UK</span></div>
+  <div id="bandtitle" style="position:absolute; left:20px; top:552px; width:252px; font-size:19px; font-weight:700; color:var(--navy); line-height:1.24;">STRAIGHTFORWARD HIRE<br>FROM <span style="color:var(--orange)">TANKER RENT UK</span></div>
 
   <div class="divider" style="left:283px; top:546px; height:88px;"></div>
   <div class="divider" style="left:469px; top:546px; height:88px;"></div>
@@ -376,4 +376,4 @@
 </div></div>
 
 <script src="../dashboard/js/supabase-config.js"></script>
-<script src="pack.js?v=2"></script>
+<script src="pack.js?v=3"></script>
