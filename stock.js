@@ -205,7 +205,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
       <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download the ${items.length} original photos</button> <span class="small muted">(saved one by one, named by angle)</span></div>
       <div style="margin:10px 0"><b>2.</b> Open ChatGPT, attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), paste this prompt (add your test background as a further image if you want that exact yard): <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
         <textarea readonly id="ss_pr" rows="6" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
-      <div style="margin:10px 0"><b>3.</b> Save each result, then add them here: <input type="file" id="ss_up" accept="image/*" multiple> <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT already added it)</label></div>
+      <div style="margin:10px 0"><b>3.</b> Save each result, then add them here: <input type="file" id="ss_up" accept="image/*,.zip,application/zip" multiple> <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT already added it)</label></div>
       <div id="ss_msg" class="small muted"></div><div id="ss_out" class="phg"></div></div>`);
     const q = (i) => box.querySelector(i); const msg = q('#ss_msg'), out = q('#ss_out');
     q('#s_sales').scrollIntoView({ behavior: 'smooth' });
@@ -216,7 +216,14 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
     q('#ss_cp').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT(reg)); q('#ss_cp').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr').select(); } };
     q('#ss_dl').onclick = async () => { for (let i = 0; i < items.length; i++) { const u = await fileUrl(items[i].path); if (u) { const b = await (await fetch(u)).blob(); dl(b, (reg + '-' + (i + 1) + '-' + (items[i].label || items[i].key)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); } await new Promise((r) => setTimeout(r, 500)); } };
     q('#ss_up').onchange = async (e) => {
-      const files = [...e.target.files]; if (!files.length) return; const wm = q('#ss_wm').checked; const s = JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
+      let files = [...e.target.files]; if (!files.length) return;
+      if (files.some((f) => /\.zip$/i.test(f.name))) {
+        try {
+          msg.textContent = 'Opening zip…'; if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the zip tool')); document.head.appendChild(sc); });
+          const out2 = []; for (const f of files) { if (!/\.zip$/i.test(f.name)) { out2.push(f); continue; } const z = await window.JSZip.loadAsync(f); const names = Object.keys(z.files).filter((n) => !z.files[n].dir && /\.(jpe?g|png|webp)$/i.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(); for (const n of names) { const b = await z.files[n].async('blob'); out2.push(new File([b], n.split('/').pop(), { type: /png$/i.test(n) ? 'image/png' : /webp$/i.test(n) ? 'image/webp' : 'image/jpeg' })); } }
+          files = out2; if (!files.length) { msg.textContent = 'No pictures found in that zip.'; e.target.value = ''; return; }
+        } catch (er) { msg.innerHTML = '<span style="color:#b3261e">' + esc(er.message || 'Could not read the zip') + '</span>'; e.target.value = ''; return; }
+      } const wm = q('#ss_wm').checked; const s = JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
       let lg = null; if (wm) { try { lg = await img('assets/compton-logo.png'); } catch (x) { } }
       d.sales = d.sales || [];
       for (let i = 0; i < files.length; i++) {
@@ -228,7 +235,7 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
           const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + s.access_token, 'Content-Type': 'image/jpeg' }, body: blob });
           if (!r.ok) throw new Error('upload failed (' + r.status + ')');
           d.sales.push({ path, name: files[i].name.replace(/\.[^.]+$/, '') + '.jpg', at: new Date().toISOString() });
-        } catch (er) { msg.innerHTML = '<span style="color:#b3261e">' + esc(er.message) + '</span>'; }
+        } catch (er) { msg.innerHTML = '<span style="color:#b3261e">' + esc((er && er.message) || ('Could not read ' + files[i].name)) + '</span>'; }
       }
       try { await save(); msg.textContent = 'Saved ✓'; } catch (er) { msg.textContent = 'Photos uploaded but could not be recorded: ' + er.message; }
       e.target.value = ''; show();
