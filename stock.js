@@ -3,7 +3,7 @@
   const X = window.CT; if (!X) return;
   const { api, all, gbp, esc, T, C } = X;
   const $ = (id) => document.getElementById(id);
-  const TYPES = [['artic_petroleum', 'Artic – petroleum tanker'], ['artic_bitumen', 'Artic – bitumen tanker'], ['artic_waste', 'Artic – waste tanker'], ['tractor_unit', 'Tractor unit'], ['rigid_fuel', 'Rigid – fuel tanker']];
+  const TYPES = [['artic_petroleum', 'Artic – petroleum tanker'], ['artic_bitumen', 'Artic – bitumen tanker'], ['artic_waste', 'Artic – waste tanker'], ['tractor_unit', 'Tractor unit'], ['rigid_fuel', 'Rigid – fuel tanker'], ['rigid_waste', 'Rigid – waste tanker'], ['rigid_combi', 'Rigid – combination tanker (waste)']];
   const TLAB = Object.fromEntries(TYPES);
   const STAT = { awaiting_inspection: ['Awaiting inspection', 'a'], inspected: ['Inspected', 'b'], for_sale: ['For sale', 'g'], reserved: ['Reserved', 'a'], sold: ['Sold', 'r'], moved_to_hire: ['Moved to hire fleet', 'b'] };
   const JS = { assigned: ['Link sent', 'a'], in_progress: ['In progress', 'b'], submitted: ['Submitted', 'g'], reviewed: ['Reviewed', 'g'], cancelled: ['Cancelled', 'r'] };
