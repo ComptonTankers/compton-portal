@@ -59,7 +59,7 @@
     const parse = (v) => { const m = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
     const cert = (name, re) => { const v = raw(re); if (BAD.test(v)) return ''; const dt = parse(v); const exp = /expired/i.test(v) || (dt && dt < new Date()); const ok = !!dt && !exp; return `<div class="kv"><span>${name}</span><b style="white-space:nowrap">${/expired/i.test(v) ? '' : esc(dt ? (exp ? v : 'Expires ' + v) : v)}${exp ? '<i class="pill exp">EXPIRED</i>' : ok ? '<i class="pill ok">VALID</i>' : ''}</b></div>`; };
     const certs = [cert('MOT', /mot expiry|^mot/i), cert('Safe loading pass', /safe loading pass expiry|slp/i), cert('ADR', /adr expiry/i), cert('VTG plating', /vtg.*(expiry|date)/i), cert('Tank test', /tank test due|tank test date/i)].filter(Boolean);
-    const tyres = [...new Set([get(/^tyre make/i), get(/^tyre size/i)].filter(Boolean))].join(', ');
+    const tyres = [get(/^tyre make/i), get(/^tyre size/i)].filter(Boolean).filter((v, i, a) => a.findIndex((w) => w.toLowerCase() === v.toLowerCase()) === i).join(', ');
     const cap = [['Total capacity', litres ? fmt(litres) + ' L' : ''], ['Compartments', comps], ['Split, front to rear', split]];
     const veh = [['Make', make], ['Model', model], ['Year', year], ['Chassis / VIN', vin], ['Condition', cond], ['Mileage', get(/^mileage/i)]];
     const tank = [['Material', get(/tank material/i)], ['Insulation', get(/insulation/i)], ['Test pressure', get(/test pressure/i)], ['ADR class / tank code', get(/adr class|tank code/i)], ['Body type', bodyT]];
