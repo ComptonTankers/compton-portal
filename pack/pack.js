@@ -63,7 +63,7 @@
     const cap = [['Total capacity', litres ? fmt(litres) + ' L' : ''], ['Compartments', comps], ['Split, front to rear', split]];
     const veh = [['Make', make], ['Model', model], ['Year', year], ['Chassis / VIN', vin], ['Condition', cond], ['Mileage', get(/^mileage/i)]];
     const tank = [['Material', get(/tank material/i)], ['Insulation', get(/insulation/i)], ['Test pressure', get(/test pressure/i)], ['ADR class / tank code', get(/adr class|tank code/i)], ['Body type', bodyT]];
-    const gear = [['Axle layout', get(/axle layout/i)], ['Suspension', get(/suspension/i)], ['Axles', get(/axle make/i)], ['Brakes', get(/^brakes?$/i)], ['Tyres', tyres], ['Landing legs', get(/landing legs/i)]];
+    const gear = [['Axle layout', get(/axle layout/i)], ['Suspension', get(/suspension/i)], ['Axles', get(/axle (make|manufacturer)/i)], ['Brakes', get(/^brake/i)], ['Tyres', tyres], ['Landing legs', get(/landing legs/i)]];
     const disch = [['Pump', get(/^pump make/i)], ['Vac pump', get(/^vac pump make/i)], ['Jetting pump', get(/jetting pump make/i)], ['API couplers', get(/api coupler/i)], ['Vapour recovery', get(/vapour recovery/i)], ['Control box', get(/^control box/i)]];
     const dims = [['Length', get(/^length/i)], ['Width', get(/^width/i)], ['Height', get(/^height/i)], ['Unladen weight', get(/^unladen/i)], ['Plated weight', get(/^plated weight/i)]];
 
@@ -119,7 +119,7 @@ ${hero(3, 'left:640px;top:122px;width:340px;height:200px', ['front_pass', 'front
     for (const im of document.querySelectorAll('img[data-p]')) { try { im.src = await url(im.dataset.p); } catch (e) { im.alt = ''; miss++; } }
     for (const im of document.querySelectorAll('img[data-cut]')) { try { im.src = await cleanCut(await fileBlob(cuts[im.dataset.cut])); } catch (e) { miss++; } }
     const nc = Object.keys(cuts).length; const missing = [];
-    [['Axle make', /axle make/i], ['Brakes', /^brakes?$/i], ['Unladen weight', /^unladen/i], ['Length', /^length/i], ['Width', /^width/i], ['Height', /^height/i], ['MOT date', /mot expiry/i]].forEach(([n, re]) => { if (!get(re)) missing.push(n); });
+    [['Axle manufacturer', /axle (make|manufacturer)/i], ['Brake type', /^brake/i], ['Unladen weight', /^unladen/i], ['Length', /^length/i], ['Width', /^width/i], ['Height', /^height/i], ['MOT date', /mot expiry/i]].forEach(([n, re]) => { if (!get(re)) missing.push(n); });
     st((nc < 3 ? 'Cut-outs added: ' + nc + ' of 3 (framed photos used for the rest). ' : '') + (missing.length ? 'Not yet recorded: ' + missing.join(', ') + '.' : 'All key details recorded.') + (miss ? ' ' + miss + ' picture(s) could not load.' : ''), false);
     ['o_price', 'o_gal', 'o_def'].forEach((i) => { $(i).onchange = () => main().catch(() => { }); });
     $('prn').onclick = () => window.print();
