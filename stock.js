@@ -116,7 +116,7 @@
     const sb = document.createElement('button'); sb.className = 'mini'; sb.textContent = 'Sales photos'; hdr0.insertBefore(sb, hdr0.firstChild);
     const ab = document.createElement('button'); ab.className = 'mini'; ab.textContent = 'Advert pack'; hdr0.insertBefore(ab, hdr0.firstChild);
     ab.onclick = () => advertPack(box, s, j, d);
-    sb.onclick = () => salesPhotos(box, (d.photos || []).filter((p) => p.path && WALK.includes(p.key)), s.reg, j, d);
+    sb.id = 's_salesbtn'; sb.onclick = () => salesPhotos(box, s.reg, j, d, async () => { await view(stockId); const b = $('s_salesbtn'); if (b) b.click(); });
     /* ---- office editing: change values, add rows, add notes ---- */
     const hdr = box.querySelector('div[style*="display:flex;gap:8px"]');
     const eb = document.createElement('button'); eb.className = 'mini'; eb.id = 's_edit'; eb.textContent = 'Edit report'; hdr.insertBefore(eb, hdr.firstChild);
@@ -168,6 +168,7 @@
     ph.querySelectorAll('[data-rl]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const o = items[+a.dataset.rl]; const v = prompt('Label for this photo', o.arr === 'photos' ? o.p.label : (o.p.note || '')); if (v !== null) run(async () => { d[o.arr][o.i][o.arr === 'photos' ? 'label' : 'note'] = v; }); });
     ph.querySelectorAll('[data-rm]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const o = items[+a.dataset.rm]; if (confirm('Remove this photo from the report?')) run(async () => { d[o.arr].splice(o.i, 1); }); });
     ph.querySelectorAll('[data-sk]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); const i = +a.dataset.sk; const [f] = await pick(false); if (f) run(async () => { d.photos[i].path = await up(f); d.photos[i].status = 'ok'; }); });
+    archivePanel(box, j, d, async () => { await view(stockId); });
     items.forEach(async (it, i) => { const u = await fileUrl(it.path); const f = $('ph' + i); if (f) f.firstChild.outerHTML = u ? `<a href="${u}" target="_blank"><img src="${u}" alt=""></a>` : '<div class="phs">Not available</div>'; });
     if (d.video && d.video.path) { const u = await fileUrl(d.video.path); const v = $('s_vid'); if (v) v.innerHTML = u ? `<video src="${u}" controls style="width:100%;max-height:360px;border-radius:8px"></video>` : 'Not available'; }
   }
@@ -202,23 +203,104 @@
     g = x.createRadialGradient(W / 2, H * .55, H * .35, W / 2, H * .55, W * .75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.16)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   }
 
+  const WALKK = ['front_driver', 'front_pass', 'rear_pass', 'rear_driver', 'side_driver', 'side_pass', 'square_rear', 'square_front'];
+  const PROMPT = (reg) => `Edit this photo of a commercial tanker vehicle for a sales listing.
+Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
+Replace ONLY the background and ground with a clean, realistic UK commercial yard: a modern industrial building behind, clean concrete hardstanding, soft overcast daylight, natural sky. Match the lighting and add a natural soft shadow under the vehicle so it sits realistically on the ground.
+Keep the same camera angle and framing. Photorealistic, professional dealer-quality finish. No extra vehicles or people, and no other text.
+WATERMARK: I have attached the Compton Tankers logo as a second image. Place it small (about 15% of the image width) in the bottom-right corner with a modest margin, slightly translucent (about 85% opacity). The logo has white lettering, so put it on a subtle dark navy rounded translucent panel so it stays readable. Do not alter the logo's colours, shape or spelling, and keep it clear of the vehicle.`;
+  function dl(blob, name) { const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = name; document.body.appendChild(l); l.click(); l.remove(); }
+  const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('not a readable picture')); i.src = src; });
+  async function uploadPic(file, jobId, wm) {
+    const im = await loadImg(URL.createObjectURL(file)); const sc = Math.min(1, 2000 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc); const x = c.getContext('2d'); x.drawImage(im, 0, 0, c.width, c.height);
+    if (wm) { try { const lg = await loadImg('assets/compton-logo.png'); const lw = c.width * .18, lh = lw * lg.height / lg.width; x.save(); x.globalAlpha = .65; x.drawImage(lg, c.width - lw - c.width * .02, c.height - lh - c.width * .02, lw, lh); x.restore(); } catch (e) { } }
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', .92)); const path = 'enhanced/' + jobId + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) + '.jpg'; const sess = JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
+    const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'image/jpeg' }, body: blob });
+    if (!r.ok) throw new Error('upload failed (' + r.status + ')'); return path;
+  }
+  async function unzip(files) {
+    if (!files.some((f) => /\.zip$/i.test(f.name))) return files;
+    if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the zip tool')); document.head.appendChild(sc); });
+    const out = []; for (const f of files) { if (!/\.zip$/i.test(f.name)) { out.push(f); continue; } const z = await window.JSZip.loadAsync(f); const names = Object.keys(z.files).filter((n) => !z.files[n].dir && /\.(jpe?g|png|webp)$/i.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(); for (const n of names) { const b = await z.files[n].async('blob'); out.push(new File([b], n.split('/').pop(), { type: /png$/i.test(n) ? 'image/png' : /webp$/i.test(n) ? 'image/webp' : 'image/jpeg' })); } }
+    return out;
+  }
+  const saveJob = async (j, d) => { d.edited_at = new Date().toISOString(); await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: d }) }); j.data = d; };
+  /* swap an enhanced picture into a report slot; the old picture goes to the archive */
+  function putEnhanced(d, idx, path) { const p = d.photos[idx]; d.archive = d.archive || []; d.archive.push({ key: p.key, label: p.label, path: p.path, enhanced: !!p.enhanced, at: new Date().toISOString() }); p.path = path; p.enhanced = true; p.status = 'ok'; }
+
+  async function salesPhotos(box, reg, j, d, refresh) {
+    let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
+    d.photos = d.photos || [];
+    const slots = d.photos.map((p, i) => ({ p, i })).filter((o) => o.p.path && WALKK.includes(o.p.key));
+    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos (ChatGPT)</h3>
+      <div class="hint">Enhanced pictures <b>replace</b> the originals in this report. The originals are moved to an archive (shown under the photos) and can be restored or downloaded any time.</div>
+      <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download the ${slots.length} original photos</button> <span class="small muted">(files are numbered 1–${slots.length} – keep the number in the name)</span></div>
+      <div style="margin:10px 0"><b>2.</b> In ChatGPT attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), then paste this prompt: <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
+        <textarea readonly id="ss_pr" rows="5" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
+      <div style="margin:10px 0"><b>3.</b> Add the finished pictures. Either put a picture in each slot below, or add them all at once (a zip works) and they are matched by the number in the file name, otherwise in order. <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT added it)</label></div>
+      <div id="ss_slots" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px"></div>
+      <div style="margin:10px 0"><input type="file" id="ss_up" accept="image/*,.zip,application/zip" multiple> <span id="ss_msg" class="small muted"></span></div>
+      <div id="ss_leg"></div></div>`);
+    const q = (i) => box.querySelector(i), msg = q('#ss_msg'); q('#s_sales').scrollIntoView({ behavior: 'smooth' });
+    const wm = () => q('#ss_wm').checked, fail = (er) => { msg.innerHTML = '<span style="color:#b3261e">' + esc((er && er.message) || 'failed') + '</span>'; };
+    const doneRefresh = async () => { await saveJob(j, d); await refresh(); };
+    q('#ss_cp').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT(reg)); q('#ss_cp').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr').select(); } };
+    q('#ss_dl').onclick = async () => { for (let n = 0; n < slots.length; n++) { const u = await fileUrl(slots[n].p.path); if (u) dl(await (await fetch(u)).blob(), (reg + '-' + (n + 1) + '-' + (slots[n].p.label || slots[n].p.key)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
+    const sl = q('#ss_slots');
+    for (let n = 0; n < slots.length; n++) { const o = slots[n]; const u = await fileUrl(o.p.path);
+      sl.insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption><b>${n + 1}. ${esc(o.p.label || o.p.key)}</b> ${o.p.enhanced ? '<span class="pill g">enhanced</span>' : '<span class="pill a">original</span>'}<br><a href="#" data-slot="${o.i}">${o.p.enhanced ? 'Replace again' : 'Put enhanced picture here'}</a></figcaption></figure>`); }
+    sl.querySelectorAll('[data-slot]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*'; f.onchange = async () => { if (!f.files[0]) return; try { msg.textContent = 'Uploading…'; const path = await uploadPic(f.files[0], j.id, wm()); putEnhanced(d, +a.dataset.slot, path); await doneRefresh(); } catch (er) { fail(er); } }; f.click(); });
+    q('#ss_up').onchange = async (e) => {
+      let files = [...e.target.files]; if (!files.length) return;
+      try { msg.textContent = 'Reading files…'; files = await unzip(files); if (!files.length) { msg.textContent = 'No pictures found.'; return; }
+        const free = slots.slice(); const map = []; const rest = [];
+        files.forEach((f) => { const m = f.name.match(/(?:^|[-_ ])(\d{1,2})(?:[-_ .]|$)/g); let hit = null; const mm = f.name.match(/-(\d{1,2})-/) || f.name.match(/(?:^|[^0-9])(\d{1,2})(?:[^0-9]|$)/); if (mm) { const k = +mm[1] - 1; if (k >= 0 && k < slots.length && free[k]) { hit = free[k]; free[k] = null; } } if (hit) map.push([f, hit]); else rest.push(f); });
+        rest.forEach((f) => { const k = free.findIndex(Boolean); if (k >= 0) { map.push([f, free[k]]); free[k] = null; } });
+        const lines = map.map(([f, o]) => f.name + '  →  ' + (slots.indexOf(o) + 1) + '. ' + (o.p.label || o.p.key)).join('\n');
+        if (!map.length) { msg.textContent = 'No free slots to put them in.'; return; }
+        if (!confirm('Replace these originals (originals are archived):\n\n' + lines + (files.length > map.length ? '\n\n' + (files.length - map.length) + ' extra file(s) will be skipped.' : ''))) { e.target.value = ''; msg.textContent = ''; return; }
+        for (let k = 0; k < map.length; k++) { msg.textContent = `Uploading ${k + 1} of ${map.length}…`; const path = await uploadPic(map[k][0], j.id, wm()); putEnhanced(d, map[k][1].i, path); }
+        await doneRefresh();
+      } catch (er) { fail(er); }
+    };
+    /* pictures saved earlier before replacing existed */
+    if ((d.sales || []).length) { const L = q('#ss_leg'); L.innerHTML = '<div class="hint"><b>Saved earlier, not yet placed:</b> choose which slot each belongs in.</div><div id="ss_lg" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px"></div>';
+      for (let n = 0; n < d.sales.length; n++) { const it = d.sales[n]; const u = await fileUrl(it.path); q('#ss_lg').insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : ''}<figcaption><select data-lg="${n}"><option value="">Place in…</option>${slots.map((o, k) => `<option value="${o.i}">${k + 1}. ${esc(o.p.label || o.p.key)}</option>`).join('')}</select> <a href="#" data-lgx="${n}">Discard</a></figcaption></figure>`); }
+      L.querySelectorAll('[data-lg]').forEach((sel) => sel.onchange = async () => { if (sel.value === '') return; const n = +sel.dataset.lg; putEnhanced(d, +sel.value, d.sales[n].path); d.sales.splice(n, 1); await doneRefresh(); });
+      L.querySelectorAll('[data-lgx]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); if (!confirm('Discard this saved picture?')) return; d.sales.splice(+a.dataset.lgx, 1); await doneRefresh(); }); }
+  }
+
+  /* archive of replaced originals, shown under the photos */
+  async function archivePanel(box, j, d, refresh) {
+    const A = d.archive || []; if (!A.length) return; box.querySelector('#s_arch')?.remove();
+    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_arch"><details><summary><b>Archived pictures (${A.length})</b> – originals replaced by enhanced ones</summary><div id="ar_g" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px"></div></details></div>`);
+    const g = box.querySelector('#ar_g');
+    for (let i = 0; i < A.length; i++) { const u = await fileUrl(A[i].path); g.insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption>${esc(A[i].label || A[i].key || '')}${A[i].enhanced ? ' (earlier enhanced)' : ' (original)'}<br>${u ? `<a href="${u}" download="${esc((j.reg || 'photo') + '-' + (A[i].key || i))}.jpg">Download</a> · ` : ''}<a href="#" data-rs="${i}">Restore</a></figcaption></figure>`); }
+    g.querySelectorAll('[data-rs]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); const i = +a.dataset.rs, it = A[i]; const k = d.photos.findIndex((p) => p.key === it.key); if (k < 0 || !confirm('Put this picture back in the report? The current one goes to the archive.')) return;
+      const cur = d.photos[k]; A.splice(i, 1); A.push({ key: cur.key, label: cur.label, path: cur.path, enhanced: !!cur.enhanced, at: new Date().toISOString() }); cur.path = it.path; cur.enhanced = !!it.enhanced; d.archive = A; await saveJob(j, d); await refresh(); });
+  }
+
   async function advertPack(box, s, j, d) {
-    let panel = box.querySelector('#s_adv'); if (panel) panel.remove();
-    const sales = d.sales || [], ad = Object.assign({ order: sales.map((x) => x.path), off: [], desc: '', web: false }, s.advert || {});
-    ad.order = ad.order.filter((p) => sales.some((x) => x.path === p)).concat(sales.map((x) => x.path).filter((p) => !ad.order.includes(p)));
+    box.querySelector('#s_adv')?.remove();
+    const defKeys = new Set((d.defects || []).filter((x) => x.path).map((x) => x.path));
+    const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, name: p.label || p.key, enh: !!p.enhanced, def: false, w: WALKK.indexOf(p.key) })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, name: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), enh: false, def: true, w: 99 }))];
+    const ad = Object.assign({ order: [], off: [], desc: '', web: false }, s.advert || {}); const known = new Set(ad.order);
+    if (!ad.order.length) all.sort((a, b) => (b.enh - a.enh) || ((a.w < 0 ? 50 : a.w) - (b.w < 0 ? 50 : b.w)));
+    all.forEach((it) => { if (!known.has(it.path)) { ad.order.push(it.path); if (it.def) ad.off.push(it.path); } });
+    ad.order = ad.order.filter((p) => all.some((x) => x.path === p));
+    const by = (p) => all.find((x) => x.path === p) || {};
     const rows = (d.rows || []).filter((r) => r[2] !== '' && r[2] != null);
-    const autoDesc = () => { let g = '', t = `${TLAB[s.vehicle_type] || 'Vehicle'} – ${s.reg}\n`; if (s.asking_price) t += `Asking price: £${Number(s.asking_price).toLocaleString('en-GB')} + VAT\n`; t += '\n'; rows.forEach(([gr, l, v]) => { if (gr !== g) { t += `\n${gr}\n`; g = gr; } t += `${l}: ${v}\n`; }); if (d.office_notes) t += `\n${d.office_notes}\n`; t += '\nAvailable for inspection at our Leighton Buzzard yard. Part-exchange and finance enquiries welcome.'; return t.trim(); };
+    const autoDesc = () => { let g = '', t = `${TLAB[s.vehicle_type] || 'Vehicle'} – ${s.reg}\n`; if (s.asking_price) t += `Asking price: £${Number(s.asking_price).toLocaleString('en-GB')} + VAT\n`; rows.forEach(([gr, l, v]) => { if (gr !== g) { t += `\n${gr}\n`; g = gr; } t += `${l}: ${v}\n`; }); if (d.office_notes) t += `\n${d.office_notes}\n`; t += '\nAvailable for inspection at our Leighton Buzzard yard. Part-exchange and finance enquiries welcome.'; return t.trim(); };
     if (!ad.desc) ad.desc = autoDesc();
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_adv"><h3 style="margin-top:0">Advert pack – ${esc(s.reg)}</h3>
-      <div class="hint">Choose which enhanced photos go in the advert and in what order – the first one is the lead picture. Then copy the text and download the photos, numbered in order, ready to upload to Commercial Motor. ${sales.length ? '' : '<b>No enhanced photos saved yet – add them in Sales photos first.</b>'}</div>
+      <div class="hint">Uses every picture in the report – enhanced ones first, then the rest (ADR certificate, plates, detail shots). Reorder with ◀ ▶ and exclude anything you do not want public. The first picture is the lead. Defect photos start excluded.</div>
       <div id="ad_ph" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0"></div>
       <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div></div>`);
     const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' });
-    const name = (p) => (sales.find((x) => x.path === p) || {}).name || '';
     async function draw() { const g = q('#ad_ph'); g.innerHTML = ''; let n = 0;
-      for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p); if (on) n++; const u = await fileUrl(p);
-        g.insertAdjacentHTML('beforeend', `<figure style="${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(name(p))}</span></figcaption></figure>`); }
+      for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p), it = by(p); if (on) n++; const u = await fileUrl(p);
+        g.insertAdjacentHTML('beforeend', `<figure style="${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
       g.querySelectorAll('[data-l]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.l; if (i > 0) { [ad.order[i - 1], ad.order[i]] = [ad.order[i], ad.order[i - 1]]; draw(); } });
       g.querySelectorAll('[data-r]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.r; if (i < ad.order.length - 1) { [ad.order[i + 1], ad.order[i]] = [ad.order[i], ad.order[i + 1]]; draw(); } });
       g.querySelectorAll('[data-t]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const p = ad.order[+a.dataset.t]; ad.off = ad.off.includes(p) ? ad.off.filter((x) => x !== p) : ad.off.concat(p); draw(); }); }
@@ -229,59 +311,6 @@
     q('#ad_dl').onclick = async () => { const L = ad.order.filter((p) => !ad.off.includes(p)); if (!L.length) { q('#ad_m').textContent = 'No photos selected.'; return; } try { await save(); } catch (e) { }
       for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i]); if (u) dl(await (await fetch(u)).blob(), (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
     draw();
-  }
-
-  const PROMPT = (reg) => `Edit this photo of a commercial tanker vehicle for a sales listing.
-Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
-Replace ONLY the background and ground with a clean, realistic UK commercial yard: a modern industrial building behind, clean concrete hardstanding, soft overcast daylight, natural sky. Match the lighting and add a natural soft shadow under the vehicle so it sits realistically on the ground.
-Keep the same camera angle and framing. Photorealistic, professional dealer-quality finish. No extra vehicles or people, and no other text.
-WATERMARK: I have attached the Compton Tankers logo as a second image. Place it small (about 15% of the image width) in the bottom-right corner with a modest margin, slightly translucent (about 85% opacity). The logo has white lettering, so put it on a subtle dark navy rounded translucent panel so it stays readable. Do not alter the logo's colours, shape or spelling, and keep it clear of the vehicle.`;
-  function dl(blob, name) { const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = name; document.body.appendChild(l); l.click(); l.remove(); }
-  async function salesPhotos(box, items, reg, j, d) {
-    let panel = box.querySelector('#s_sales'); if (panel) panel.remove();
-    const done = d.sales || [];
-    box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos (ChatGPT)</h3>
-      <div class="hint">Three steps. Your original photos are never changed – the enhanced ones are stored alongside them.</div>
-      <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download the ${items.length} original photos</button> <span class="small muted">(saved one by one, named by angle)</span></div>
-      <div style="margin:10px 0"><b>2.</b> Open ChatGPT, attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), paste this prompt (add your test background as a further image if you want that exact yard): <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
-        <textarea readonly id="ss_pr" rows="6" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
-      <div style="margin:10px 0"><b>3.</b> Save each result, then add them here: <input type="file" id="ss_up" accept="image/*,.zip,application/zip" multiple> <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT already added it)</label></div>
-      <div id="ss_msg" class="small muted"></div><div style="margin:8px 0"><button class="mini" id="ss_dall">Download all enhanced photos</button></div><div id="ss_out" class="phg"></div></div>`);
-    const q = (i) => box.querySelector(i); const msg = q('#ss_msg'), out = q('#ss_out');
-    q('#s_sales').scrollIntoView({ behavior: 'smooth' });
-    const img = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
-    async function show() { out.innerHTML = ''; for (const it of (d.sales || [])) { const u = await fileUrl(it.path); out.insertAdjacentHTML('beforeend', `<figure>${u ? `<a href="${u}" target="_blank"><img src="${u}" alt=""></a>` : '<div class="phs">Not available</div>'}<figcaption>${esc(it.name || '')} · ${u ? `<a href="${u}" download="${esc(it.name || 'photo.jpg')}">Download</a> · ` : ''}<a href="#" data-rm="${esc(it.path)}">Remove</a></figcaption></figure>`); }
-      out.querySelectorAll('[data-rm]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); if (!confirm('Remove this enhanced photo? The original is not affected.')) return; d.sales = (d.sales || []).filter((x) => x.path !== a.dataset.rm); await save(); show(); }); }
-    async function save() { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: d }) }); }
-    q('#ss_dall').onclick = async () => { const L = d.sales || []; if (!L.length) { msg.textContent = 'No enhanced photos saved yet.'; return; } for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i].path); if (u) dl(await (await fetch(u)).blob(), (reg + '-sales-' + (i + 1)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
-    q('#ss_cp').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT(reg)); q('#ss_cp').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr').select(); } };
-    q('#ss_dl').onclick = async () => { for (let i = 0; i < items.length; i++) { const u = await fileUrl(items[i].path); if (u) { const b = await (await fetch(u)).blob(); dl(b, (reg + '-' + (i + 1) + '-' + (items[i].label || items[i].key)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); } await new Promise((r) => setTimeout(r, 500)); } };
-    q('#ss_up').onchange = async (e) => {
-      let files = [...e.target.files]; if (!files.length) return;
-      if (files.some((f) => /\.zip$/i.test(f.name))) {
-        try {
-          msg.textContent = 'Opening zip…'; if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the zip tool')); document.head.appendChild(sc); });
-          const out2 = []; for (const f of files) { if (!/\.zip$/i.test(f.name)) { out2.push(f); continue; } const z = await window.JSZip.loadAsync(f); const names = Object.keys(z.files).filter((n) => !z.files[n].dir && /\.(jpe?g|png|webp)$/i.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(); for (const n of names) { const b = await z.files[n].async('blob'); out2.push(new File([b], n.split('/').pop(), { type: /png$/i.test(n) ? 'image/png' : /webp$/i.test(n) ? 'image/webp' : 'image/jpeg' })); } }
-          files = out2; if (!files.length) { msg.textContent = 'No pictures found in that zip.'; e.target.value = ''; return; }
-        } catch (er) { msg.innerHTML = '<span style="color:#b3261e">' + esc(er.message || 'Could not read the zip') + '</span>'; e.target.value = ''; return; }
-      } const wm = q('#ss_wm').checked; const s = JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
-      let lg = null; if (wm) { try { lg = await img('assets/compton-logo.png'); } catch (x) { } }
-      d.sales = d.sales || [];
-      for (let i = 0; i < files.length; i++) {
-        msg.textContent = `Uploading ${i + 1} of ${files.length}…`;
-        try {
-          const im = await img(URL.createObjectURL(files[i])); const sc = Math.min(1, 2000 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc); const x = c.getContext('2d'); x.drawImage(im, 0, 0, c.width, c.height);
-          if (lg) { const lw = c.width * .18, lh = lw * lg.height / lg.width; x.save(); x.globalAlpha = .65; x.drawImage(lg, c.width - lw - c.width * .02, c.height - lh - c.width * .02, lw, lh); x.restore(); }
-          const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', .92)); const path = 'sales/' + j.id + '/' + Date.now() + '-' + i + '.jpg';
-          const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + s.access_token, 'Content-Type': 'image/jpeg' }, body: blob });
-          if (!r.ok) throw new Error('upload failed (' + r.status + ')');
-          d.sales.push({ path, name: files[i].name.replace(/\.[^.]+$/, '') + '.jpg', at: new Date().toISOString() });
-        } catch (er) { msg.innerHTML = '<span style="color:#b3261e">' + esc((er && er.message) || ('Could not read ' + files[i].name)) + '</span>'; }
-      }
-      try { await save(); msg.textContent = 'Saved ✓'; } catch (er) { msg.textContent = 'Photos uploaded but could not be recorded: ' + er.message; }
-      e.target.value = ''; show();
-    };
-    show();
   }
 
   const st = document.createElement('style');
