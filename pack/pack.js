@@ -57,9 +57,9 @@
     const box = (k, t, rows, x, y, w, h) => `<div class="card" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;padding:14px 18px"><div class="hd"><div style="width:36px;height:36px">${I[k].svg}</div><h3>${t}</h3></div><div class="u" style="width:52px;height:4px;margin:0 0 4px"></div>${kv(rows)}</div>`;
     /* certificates */
     const parse = (v) => { const m = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
-    const cert = (name, re) => { const v = raw(re); if (BAD.test(v)) return ''; const dt = parse(v); const exp = /expired/i.test(v) || (dt && dt < new Date()); const ok = !!dt && !exp; return `<div class="kv"><span>${name}</span><b>${/expired/i.test(v) ? 'Expired' : esc(dt ? 'Expires ' + v : v)}${exp ? '<i class="pill exp">EXPIRED</i>' : ok ? '<i class="pill ok">VALID</i>' : ''}</b></div>`; };
+    const cert = (name, re) => { const v = raw(re); if (BAD.test(v)) return ''; const dt = parse(v); const exp = /expired/i.test(v) || (dt && dt < new Date()); const ok = !!dt && !exp; return `<div class="kv"><span>${name}</span><b style="white-space:nowrap">${/expired/i.test(v) ? '' : esc(dt ? (exp ? v : 'Expires ' + v) : v)}${exp ? '<i class="pill exp">EXPIRED</i>' : ok ? '<i class="pill ok">VALID</i>' : ''}</b></div>`; };
     const certs = [cert('MOT', /mot expiry|^mot/i), cert('Safe loading pass', /safe loading pass expiry|slp/i), cert('ADR', /adr expiry/i), cert('VTG plating', /vtg.*(expiry|date)/i), cert('Tank test', /tank test due|tank test date/i)].filter(Boolean);
-    const tyres = [get(/^tyre make/i), get(/^tyre size/i)].filter(Boolean).join(', ');
+    const tyres = [...new Set([get(/^tyre make/i), get(/^tyre size/i)].filter(Boolean))].join(', ');
     const cap = [['Total capacity', litres ? fmt(litres) + ' L' : ''], ['Compartments', comps], ['Split, front to rear', split]];
     const veh = [['Make', make], ['Model', model], ['Year', year], ['Chassis / VIN', vin], ['Condition', cond], ['Mileage', get(/^mileage/i)]];
     const tank = [['Material', get(/tank material/i)], ['Insulation', get(/insulation/i)], ['Test pressure', get(/test pressure/i)], ['ADR class / tank code', get(/adr class|tank code/i)], ['Body type', bodyT]];
