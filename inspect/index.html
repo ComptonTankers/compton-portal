@@ -171,6 +171,8 @@ const PHOTOS = {
   ladder:{label:"Ladder and hand rails",section:"Detail photos",tip:"Full ladder and top hand rails in shot."},
   heating:{label:"Heating system",section:"Detail photos",tip:"Burner / heating system and any controls."},
   control_box:{label:"Control box",section:"Detail photos",tip:"Control box with the door open, controls visible."},
+  boom:{label:"Loading boom",section:"Detail photos",tip:"Whole boom stowed on the vehicle, plus the make plate if visible."},
+  hose_reels:{label:"Hose reels",section:"Detail photos",tip:"Main hose reel (and the second reel if fitted), showing the hose and the controls."},
   additional_equipment:{label:"Additional equipment",section:"Detail photos",tip:"Any extra equipment (hose reels, meters, lockers etc.). If none, use “Can't take this photo”."}
 };
 
@@ -221,6 +223,16 @@ const FIELDS = {
   pump_make_model:{label:"Pump make and model",group:"Tank & equipment",type:"text"},
   vac_pump_make_model:{label:"Vac pump make and model",group:"Tank & equipment",type:"text"},
   jet_pump_make_model:{label:"Jetting pump make and model",group:"Tank & equipment",type:"text"},
+  comp_use:{label:"Compartment use (front to rear)",group:"Tank & equipment",type:"text",ph:"e.g. Process water / Jetting water / Waste"},
+  tank_construction:{label:"Tank construction",group:"Tank & equipment",type:"text",ph:"e.g. 5 mm carbon steel, BS EN 10025 S275"},
+  tipping:{label:"Tipping tank?",group:"Tank & equipment",type:"select",options:["Yes","No"]},
+  rear_door:{label:"Rear door",group:"Tank & equipment",type:"select",options:["Hydraulic","Manual / bolted","Other"]},
+  vac_flow:{label:"Vacuum pump airflow",group:"Tank & equipment",type:"text",ph:"e.g. 3,400 m³/h"},
+  jet_perf:{label:"Jetting pressure / flow",group:"Tank & equipment",type:"text",ph:"e.g. 155 bar / 269 lpm"},
+  hose_reels:{label:"Hose reels (number / lengths)",group:"Tank & equipment",type:"text",ph:"e.g. Main 180 m x 1 in, second 90 m x 1/2 in"},
+  boom:{label:"Loading boom (make / reach)",group:"Tank & equipment",type:"text",ph:"e.g. Jurop 5 in, 300° rotation"},
+  outlet_valve:{label:"Outlet valve / connection",group:"Tank & equipment",type:"text",ph:"e.g. 6 in air-operated slide valve, 6 in Bauer"},
+  pto_drive:{label:"PTO / pump drive",group:"Tank & equipment",type:"text",ph:"e.g. Split-shaft transfer box, air clutches"},
   additional_equipment_notes:{label:"Additional equipment",group:"Tank & equipment",type:"textarea",optional:1,ph:"List anything extra fitted"},
 
   v5c:{label:"V5C (logbook) present?",group:"Paperwork & keys",type:"select",options:["Yes","No"],cats:["rigid","tractor"]},
@@ -242,12 +254,12 @@ const BASE_FIELDS = ["make","model","year_reg","chassis_number","body_type","con
 
 /* Vehicle types. cat: rigid | tractor | trailer (drives axle options and the diagram). */
 const WASTE_RIGID = {
-  photos:["incab","odometer","pump","vac_pump","axle_hub","brakes","compartment_sizes","mot_cert","tank_test_cert"],
-  fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","tank_test_date","tank_serial","plated_capacity","tank_material","vac_pump_make_model","compartments"]
+  photos:["incab","odometer","pump","vac_pump","axle_hub","brakes","compartment_sizes","outlet","control_box","additional_equipment","mot_cert","tank_test_cert"],
+  fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","tank_test_date","tank_serial","plated_capacity","tank_material","tank_construction","tipping","rear_door","vac_pump_make_model","vac_flow","boom","outlet_valve","pto_drive","additional_equipment_notes","compartments"]
 };
 const WASTE_COMBI = {
-  photos:["incab","odometer","pump","vac_pump","jetting_pump","axle_hub","brakes","compartment_sizes","mot_cert","tank_test_cert"],
-  fields:[...WASTE_RIGID.fields,"jet_pump_make_model"]
+  photos:["incab","odometer","pump","vac_pump","jetting_pump","axle_hub","brakes","compartment_sizes","outlet","boom","hose_reels","control_box","additional_equipment","mot_cert","tank_test_cert"],
+  fields:[...WASTE_RIGID.fields,"comp_use","jet_pump_make_model","jet_perf","hose_reels"]
 };
 const TYPES = {
   artic_petroleum:{label:"Artic – petroleum tanker",cat:"trailer",body:"Petroleum tanker trailer",
@@ -258,7 +270,7 @@ const TYPES = {
     fields:["adr_expiry","slp_expiry","vtg_expiry","tank_test_date","suspension","tank_serial","plated_capacity","tank_material","tank_insulation","test_pressure","adr_tank_code","pump_make_model","control_box_notes","compartments"]},
   artic_waste:{label:"Artic – waste tanker",cat:"trailer",body:"Waste tanker trailer",
     photos:["pump","axle_hub","brakes","outlet","ladder","control_box","mot_cert","tank_test_cert"],
-    fields:["tank_test_date","suspension","tank_serial","plated_capacity","tank_material","pump_make_model","control_box_notes","compartments"]},
+    fields:["tank_test_date","suspension","tank_serial","plated_capacity","tank_material","tank_construction","rear_door","outlet_valve","pump_make_model","control_box_notes","additional_equipment_notes","compartments"]},
   tractor_unit:{label:"Tractor unit",cat:"tractor",body:"Tractor unit",
     photos:["incab","odometer","fifth_wheel","pump_wetkit","axle_hub","brakes","mot_cert"],
     fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","wet_kit"]},
