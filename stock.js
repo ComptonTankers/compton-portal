@@ -30,7 +30,7 @@
     const toReview = ST.filter((s) => JOBS[s.id] && JOBS[s.id].status === 'submitted').length;
     const rows = ST.map((s) => {
       const j = JOBS[s.id], st = STAT[s.status] || [s.status, 'b'], js = j ? JS[j.status] : null;
-      return `<tr data-id="${s.id}"><td><b>${esc(s.reg)}</b><div class="small muted">${esc(s.stock_ref || '')}</div></td><td>${esc(TLAB[s.vehicle_type] || s.vehicle_type || '')}</td>
+      return `<tr data-id="${s.id}"><td><b>${esc(s.reg)}</b><div class="small muted">${esc(s.stock_ref || '')}</div></td><td class="tcell" data-tc="${s.id}">${esc(TLAB[s.vehicle_type] || s.vehicle_type || '')} <a href="#" class="small" data-chtype="${s.id}">change</a></td>
         <td><select data-st="${s.id}">${Object.entries(STAT).map(([k, v]) => `<option value="${k}" ${k === s.status ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></td>
         <td class="n"><input class="num" data-f="cost" data-id="${s.id}" value="${s.cost == null ? '' : Number(s.cost).toLocaleString('en-GB')}" placeholder="0"></td>
         <td class="n"><input class="num" data-f="asking_price" data-id="${s.id}" value="${s.asking_price == null ? '' : Number(s.asking_price).toLocaleString('en-GB')}" placeholder="0"></td>
@@ -76,6 +76,16 @@
       const open = ['assigned', 'in_progress'].includes(j.status);
       if (!confirm(open ? 'Cancel the inspection request for ' + s.reg + '? The link will stop working and the request is removed.' : 'Permanently delete the submitted inspection for ' + s.reg + ' (answers and report)? This cannot be undone.')) return;
       try { await api('jobs?id=eq.' + j.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); if (s.status === 'awaiting_inspection' && open) { } const v = $('s_view'); if (v) v.innerHTML = ''; await load(); draw(el); } catch (e) { alert('Could not remove: ' + e.message); } }));
+    /* change the vehicle type (stock record and its inspection jobs); blank questions that no longer apply are dropped */
+    el.querySelectorAll('[data-chtype]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); const s = ST.find((x) => x.id == a.dataset.chtype); if (!s) return; const td = a.closest('td');
+      td.innerHTML = `<select id="ct_sel">${TYPES.map(([k, v]) => `<option value="${k}" ${k === s.vehicle_type ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select> <button class="mini pri2" id="ct_ok">Save</button> <button class="mini" id="ct_no">Cancel</button>`;
+      td.querySelector('#ct_no').onclick = () => draw(el);
+      td.querySelector('#ct_ok').onclick = async () => { const nt = td.querySelector('#ct_sel').value; if (nt === s.vehicle_type) { draw(el); return; }
+        if (!confirm('Change ' + s.reg + ' from "' + TLAB[s.vehicle_type] + '" to "' + TLAB[nt] + '"?\n\nAnswers already given are kept. Blank questions that do not apply to the new type are removed, and the new type’s questions are added.')) return;
+        try { await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ vehicle_type: nt }) });
+          const jobs = await api('jobs?stock_id=eq.' + s.id + '&select=id,data');
+          for (const jb of jobs || []) { const body = { vehicle_type: nt }; const d = jb.data || {}; if (Array.isArray(d.rows)) { const keep = d.rows.filter((r) => { const f = SD.find((x) => x[1].toLowerCase() === String(r[1]).toLowerCase()); return !f || applies(f, nt) || okVal(String(r[2] == null ? '' : r[2]).trim()); }); body.data = Object.assign({}, d, { rows: keep }); } await api('jobs?id=eq.' + jb.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); }
+          await load(); draw(el); } catch (er) { alert('Could not change the type: ' + er.message); } }; }));
     el.querySelectorAll('[data-delveh]').forEach((b) => b.addEventListener('click', async () => { const s = ST.find((x) => x.id == b.dataset.delveh); if (!s) return;
       if (!confirm('Remove ' + s.reg + ' from sales stock, including its inspection requests and reports? This cannot be undone.')) return;
       try { await api('jobs?stock_id=eq.' + s.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await api('stock?id=eq.' + s.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await load(); draw(el); } catch (e) { alert('Could not remove: ' + e.message); } }));
