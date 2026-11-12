@@ -172,7 +172,7 @@ const PHOTOS = {
   heating:{label:"Heating system",section:"Detail photos",tip:"Burner / heating system and any controls."},
   control_box:{label:"Control box",section:"Detail photos",tip:"Control box with the door open, controls visible."},
   boom:{label:"Loading boom",section:"Detail photos",tip:"Whole boom stowed on the vehicle, plus the make plate if visible."},
-  hose_reels:{label:"Hose reels",section:"Detail photos",tip:"Main hose reel (and the second reel if fitted), showing the hose and the controls."},
+  hose_reels:{label:"Hose reels",section:"Detail photos",tip:"Main hose reel and the secondary reel (if fitted), showing the hose and the controls."},
   additional_equipment:{label:"Additional equipment",section:"Detail photos",tip:"Any extra equipment (hose reels, meters, lockers etc.). If none, use “Can't take this photo”."}
 };
 
@@ -229,7 +229,8 @@ const FIELDS = {
   rear_door:{label:"Rear door",group:"Tank & equipment",type:"select",options:["Hydraulic","Manual / bolted","Other"]},
   vac_flow:{label:"Vacuum pump airflow",group:"Tank & equipment",type:"text",ph:"e.g. 3,400 m³/h"},
   jet_perf:{label:"Jetting pressure / flow",group:"Tank & equipment",type:"text",ph:"e.g. 155 bar / 269 lpm"},
-  hose_reels:{label:"Hose reels (number / lengths)",group:"Tank & equipment",type:"text",ph:"e.g. Main 180 m x 1 in, second 90 m x 1/2 in"},
+  hose_main:{label:"Main hose reel (length / hose)",group:"Tank & equipment",type:"text",ph:"e.g. 180 m x 1 in HP"},
+  hose_second:{label:"Secondary hose reel (length / hose)",group:"Tank & equipment",type:"text",ph:"e.g. 90 m x 1/2 in HP, or None"},
   boom:{label:"Loading boom (make / reach)",group:"Tank & equipment",type:"text",ph:"e.g. Jurop 5 in, 300° rotation"},
   outlet_valve:{label:"Outlet valve / connection",group:"Tank & equipment",type:"text",ph:"e.g. 6 in air-operated slide valve, 6 in Bauer"},
   pto_drive:{label:"PTO / pump drive",group:"Tank & equipment",type:"text",ph:"e.g. Split-shaft transfer box, air clutches"},
@@ -259,7 +260,7 @@ const WASTE_RIGID = {
 };
 const WASTE_COMBI = {
   photos:["incab","odometer","pump","vac_pump","jetting_pump","axle_hub","brakes","compartment_sizes","outlet","boom","hose_reels","control_box","additional_equipment","mot_cert","tank_test_cert"],
-  fields:[...WASTE_RIGID.fields,"comp_use","jet_pump_make_model","jet_perf","hose_reels"]
+  fields:[...WASTE_RIGID.fields,"comp_use","jet_pump_make_model","jet_perf","hose_main","hose_second"]
 };
 const TYPES = {
   artic_petroleum:{label:"Artic – petroleum tanker",cat:"trailer",body:"Petroleum tanker trailer",
