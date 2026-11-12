@@ -261,19 +261,23 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
       const txt = d.spec_text || '';
       host.innerHTML = `<h3 style="margin:0 0 4px;font-size:16px">Manufacturer spec</h3><div class="hint">Add the spec / quote for this vehicle (PDF or pictures), or paste the text. Then tell Claude <b>“fill ${esc((ST.find((x) => x.id == j.stock_id) || {}).reg || 'this vehicle')} from the spec”</b> and the matching questions are answered from it. Anything it can't find stays “not recorded”.</div>
         <div style="margin:8px 0">${d.specs.length ? d.specs.map((f, i) => `<div class="small" style="padding:3px 0">📄 <a href="#" data-open="${i}">${esc(f.name)}</a> · <a href="#" data-rm="${i}">Remove</a></div>`).join('') : '<div class="small muted">No spec added yet.</div>'}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini" id="sp_add">+ Add spec file(s)</button><span id="sp_msg" class="small muted">${txt ? 'Spec text saved (' + txt.length.toLocaleString() + ' characters).' : ''}</span></div>
+        <div id="sp_drop" style="border:2px dashed #9db0d3;border-radius:8px;padding:14px;text-align:center;background:#fff;margin-bottom:8px"><b>Drag and drop the spec here</b> (PDF or pictures)</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini" id="sp_add">or choose files</button><span id="sp_msg" class="small muted">${txt ? 'Spec text saved (' + txt.length.toLocaleString() + ' characters).' : ''}</span></div>
         <details style="margin-top:8px"${txt && !d.specs.length ? ' open' : ''}><summary class="small">Or paste the spec text</summary><textarea id="sp_txt" style="width:100%;min-height:90px;margin-top:6px;padding:6px;font-size:12px" placeholder="Paste the specification here">${esc(txt)}</textarea><button class="mini" id="sp_savetxt" style="margin-top:4px">Save pasted text</button></details>`;
       const msg = (t, bad) => { const m = host.querySelector('#sp_msg'); m.style.color = bad ? '#b3261e' : ''; m.textContent = t; };
       host.querySelectorAll('[data-open]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); const u = await fileUrl(d.specs[+a.dataset.open].path); if (u) window.open(u, '_blank'); });
       host.querySelectorAll('[data-rm]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); if (!confirm('Remove this spec file?')) return; d.specs.splice(+a.dataset.rm, 1); await saveJob(j, d); draw(); });
       host.querySelector('#sp_savetxt').onclick = async () => { d.spec_text = host.querySelector('#sp_txt').value.trim().slice(0, 90000); await saveJob(j, d); draw(); };
-      host.querySelector('#sp_add').onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.multiple = true; f.accept = '.pdf,application/pdf,image/*'; f.onchange = async () => {
-        try { let added = 0, scanned = 0; for (const file of [...f.files]) { msg('Uploading ' + file.name + '…'); const path = 'specs/' + j.id + '/' + Date.now() + '-' + file.name.replace(/[^A-Za-z0-9._-]+/g, '_');
+      const addFiles = async (list) => {
+        try { let added = 0, scanned = 0; for (const file of [...list]) { if (!/pdf|image\//i.test(file.type) && !/\.(pdf|jpe?g|png|webp|heic)$/i.test(file.name)) continue; msg('Uploading ' + file.name + '…'); const path = 'specs/' + j.id + '/' + Date.now() + '-' + file.name.replace(/[^A-Za-z0-9._-]+/g, '_');
             const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + sess().access_token, 'Content-Type': file.type || 'application/octet-stream' }, body: file });
             if (!r.ok) throw new Error('upload failed (' + r.status + ')'); d.specs.push({ path, name: file.name, added: new Date().toISOString() }); added++;
             if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) { msg('Reading ' + file.name + '…'); const t = await pdfText(file).catch(() => ''); if (t.length > 40) d.spec_text = ((d.spec_text || '') + '\n\n=== ' + file.name + ' ===\n' + t).trim().slice(0, 90000); else scanned++; } else scanned++; }
+          if (!added) { msg('Drop a PDF or pictures.', true); return; }
           await saveJob(j, d); draw(); host.querySelector('#sp_msg').textContent = added + ' file(s) added.' + (scanned ? ' ' + scanned + ' had no readable text (pictures / scans) – Claude will read those from the files.' : '');
-        } catch (er) { msg((er && er.message) || 'failed', true); } }; f.click(); };
+        } catch (er) { msg((er && er.message) || 'failed', true); } };
+      host.querySelector('#sp_add').onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.multiple = true; f.accept = '.pdf,application/pdf,image/*'; f.onchange = () => { if (f.files.length) addFiles(f.files); }; f.click(); };
+      const dz = host.querySelector('#sp_drop'); ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.style.background = '#e3ecfb'; })); ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.style.background = '#fff'; }));
+      dz.addEventListener('drop', (e) => { if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
     };
     draw();
   }
