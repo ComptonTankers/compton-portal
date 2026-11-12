@@ -147,7 +147,7 @@
       };
       draw();
     };
-    { const rowEl = box.querySelector('#s_card .row'); if (rowEl) { rowEl.style.display = 'block'; const cols = [...rowEl.children]; const phCol = cols.find((c) => c.querySelector('#s_ph')), dCol = cols.find((c) => c !== phCol); if (phCol && dCol) { rowEl.insertBefore(phCol, dCol); dCol.style.marginTop = '18px'; } } eb.style.display = 'none'; eb.onclick(); }
+    { const rowEl = box.querySelector('#s_card .row'); if (rowEl) { rowEl.style.display = 'block'; const cols = [...rowEl.children]; const phCol = cols.find((c) => c.querySelector('#s_ph')), dCol = cols.find((c) => c !== phCol); if (phCol && dCol) { rowEl.insertBefore(phCol, dCol); dCol.style.marginTop = '18px'; } } eb.style.display = 'none'; eb.onclick(); specPanel(rowEl, j, d); }
     const need = missingSD(rows, s.vehicle_type); const okb = $('s_ok');
     if (okb && need.length) { okb.disabled = true; okb.style.opacity = '.5'; okb.title = 'Complete all the required details first'; box.querySelector('.card').insertAdjacentHTML('afterbegin', `<div style="background:#fff3cd;border:1px solid #f0d58a;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:13px"><b>Please ensure all details are completed</b> before approving for sale.</div>`); }
     const ok = $('s_ok'); if (ok) ok.onclick = async () => { try { await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'reviewed', reviewed_at: new Date().toISOString() }) }); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'for_sale' }) }); await load(); draw(document.getElementById('main')); } catch (e) { alert(e.message); } };
@@ -234,6 +234,40 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
   function putEnhanced(d, idx, path) { const p = d.photos[idx]; d.archive = d.archive || []; d.archive.push({ key: p.key, label: p.label, path: p.path, enhanced: !!p.enhanced, at: new Date().toISOString() }); p.path = path; p.enhanced = true; p.status = 'ok'; }
 
 
+
+  /* ---------- manufacturer spec: upload it (or paste it) so Claude can answer the questions from it ---------- */
+  async function pdfText(file) {
+    if (!window.pdfjsLib) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the PDF reader')); document.head.appendChild(sc); });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; let out = '';
+    for (let i = 1; i <= pdf.numPages; i++) { const pg = await pdf.getPage(i); const tc = await pg.getTextContent(); out += '\n--- page ' + i + ' ---\n' + tc.items.map((x) => x.str).join(' '); }
+    return out.trim();
+  }
+  function specPanel(rowEl, j, d) {
+    d.specs = d.specs || [];
+    rowEl.insertAdjacentHTML('beforebegin', '<div class="card" id="s_spec" style="margin:10px 0;background:#f6f8fc;box-shadow:none"></div>');
+    const host = document.getElementById('s_spec'); const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null');
+    const draw = () => {
+      const txt = d.spec_text || '';
+      host.innerHTML = `<h3 style="margin:0 0 4px;font-size:16px">Manufacturer spec</h3><div class="hint">Add the spec / quote for this vehicle (PDF or pictures), or paste the text. Then tell Claude <b>“fill ${esc((ST.find((x) => x.id == j.stock_id) || {}).reg || 'this vehicle')} from the spec”</b> and the matching questions are answered from it. Anything it can't find stays “not recorded”.</div>
+        <div style="margin:8px 0">${d.specs.length ? d.specs.map((f, i) => `<div class="small" style="padding:3px 0">📄 <a href="#" data-open="${i}">${esc(f.name)}</a> · <a href="#" data-rm="${i}">Remove</a></div>`).join('') : '<div class="small muted">No spec added yet.</div>'}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini" id="sp_add">+ Add spec file(s)</button><span id="sp_msg" class="small muted">${txt ? 'Spec text saved (' + txt.length.toLocaleString() + ' characters).' : ''}</span></div>
+        <details style="margin-top:8px"${txt && !d.specs.length ? ' open' : ''}><summary class="small">Or paste the spec text</summary><textarea id="sp_txt" style="width:100%;min-height:90px;margin-top:6px;padding:6px;font-size:12px" placeholder="Paste the specification here">${esc(txt)}</textarea><button class="mini" id="sp_savetxt" style="margin-top:4px">Save pasted text</button></details>`;
+      const msg = (t, bad) => { const m = host.querySelector('#sp_msg'); m.style.color = bad ? '#b3261e' : ''; m.textContent = t; };
+      host.querySelectorAll('[data-open]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); const u = await fileUrl(d.specs[+a.dataset.open].path); if (u) window.open(u, '_blank'); });
+      host.querySelectorAll('[data-rm]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); if (!confirm('Remove this spec file?')) return; d.specs.splice(+a.dataset.rm, 1); await saveJob(j, d); draw(); });
+      host.querySelector('#sp_savetxt').onclick = async () => { d.spec_text = host.querySelector('#sp_txt').value.trim().slice(0, 90000); await saveJob(j, d); draw(); };
+      host.querySelector('#sp_add').onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.multiple = true; f.accept = '.pdf,application/pdf,image/*'; f.onchange = async () => {
+        try { let added = 0, scanned = 0; for (const file of [...f.files]) { msg('Uploading ' + file.name + '…'); const path = 'specs/' + j.id + '/' + Date.now() + '-' + file.name.replace(/[^A-Za-z0-9._-]+/g, '_');
+            const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/inspections/' + path, { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + sess().access_token, 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+            if (!r.ok) throw new Error('upload failed (' + r.status + ')'); d.specs.push({ path, name: file.name, added: new Date().toISOString() }); added++;
+            if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) { msg('Reading ' + file.name + '…'); const t = await pdfText(file).catch(() => ''); if (t.length > 40) d.spec_text = ((d.spec_text || '') + '\n\n=== ' + file.name + ' ===\n' + t).trim().slice(0, 90000); else scanned++; } else scanned++; }
+          await saveJob(j, d); draw(); host.querySelector('#sp_msg').textContent = added + ' file(s) added.' + (scanned ? ' ' + scanned + ' had no readable text (pictures / scans) – Claude will read those from the files.' : '');
+        } catch (er) { msg((er && er.message) || 'failed', true); } }; f.click(); };
+    };
+    draw();
+  }
+
   /* ---------- pack cut-outs (asset packs only – never published) ---------- */
   const CUTPROMPT = `Cut out this commercial tanker vehicle for use in a brochure.
 Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
@@ -281,7 +315,7 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
   }
 
   /* ---------- sales details: the fields the asset pack (and Truck Locator) need ---------- */
-  const TANKT = ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel', 'rigid_waste', 'rigid_combi'], ADRT = ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel'];
+  const TANKT = ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel', 'rigid_waste', 'rigid_combi'], ADRT = ['artic_petroleum', 'artic_bitumen', 'rigid_fuel'];
   const FUEL = ['artic_petroleum', 'rigid_fuel'], ARTIC = ['artic_petroleum', 'artic_bitumen', 'artic_waste'], RIGIDW = ['rigid_waste', 'rigid_combi'], DRIVEN = ['rigid_fuel', 'rigid_waste', 'rigid_combi', 'tractor_unit'];
   const SD = [
     ['Vehicle', 'Make', 'text', 1], ['Vehicle', 'Model', 'text', 1], ['Vehicle', 'Year of registration', 'num', 1], ['Vehicle', 'Chassis number (VIN)', 'text', 1], ['Vehicle', 'Body type', 'text', 0], ['Vehicle', 'Mileage', 'miles', 0, DRIVEN], ['Vehicle', 'Condition', ['New', 'Used – excellent', 'Used – good', 'Used – fair', 'Used – poor'], 1],
@@ -289,8 +323,8 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
     ['Chassis & driveline', 'Suspension', ['Air', 'Steel / leaf', 'Steel front / air rear', 'Other'], 1], ['Chassis & driveline', 'Axle manufacturer', 'text', 1], ['Chassis & driveline', 'Brake type', 'text', 1], ['Chassis & driveline', 'Landing legs (make / type)', 'text', 0, ARTIC],
     ['Tyres', 'Tyre make(s)', 'text', 1], ['Tyres', 'Tyre size', 'text', 0],
     ['Tank & equipment', 'Number of compartments', 'num', 'tank', TANKT], ['Tank & equipment', 'Compartment sizes (front to rear)', 'sizes', 'tank', TANKT], ['Tank & equipment', 'Total plated capacity', 'litres', 0, TANKT], ['Tank & equipment', 'Tank material', ['Aluminium', 'Stainless steel', 'Mild / carbon steel', 'GRP', 'Other'], 'tank', TANKT], ['Tank & equipment', 'Tank insulation', ['Insulated', 'Not insulated'], 0, ['artic_petroleum', 'artic_bitumen', 'rigid_fuel']], ['Tank & equipment', 'Tank test pressure', 'text', 0, ADRT], ['Tank & equipment', 'ADR class / tank code', 'text', 0, ADRT],
-    ['Tank & equipment', 'Pump make and model', 'text', 0, ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel']], ['Tank & equipment', 'Vac pump make and model', 'text', 0, RIGIDW], ['Tank & equipment', 'Jetting pump make and model', 'text', 0, ['rigid_combi', 'rigid_waste']], ['Tank & equipment', 'API couplers', 'text', 0, FUEL], ['Tank & equipment', 'Vapour recovery', ['Yes', 'No'], 0, FUEL], ['Tank & equipment', 'Control box (make / type)', 'text', 0, ARTIC],
-    ['Dates & certificates', 'MOT expiry date', 'date', 1], ['Dates & certificates', 'ADR expiry date', 'date', 'adr', ADRT], ['Dates & certificates', 'Safe loading pass expiry date', 'date', 'adr', ADRT], ['Dates & certificates', 'VTG plating expiry date', 'date', 0], ['Dates & certificates', 'Tank test due date', 'date', 'tank', TANKT]];
+    ['Tank & equipment', 'Pump make and model', 'text', 0, ['artic_petroleum', 'artic_bitumen', 'artic_waste', 'rigid_fuel']], ['Tank & equipment', 'Vac pump make and model', 'text', 0, RIGIDW], ['Tank & equipment', 'Jetting pump make and model', 'text', 0, ['rigid_combi']], ['Tank & equipment', 'API couplers', 'text', 0, FUEL], ['Tank & equipment', 'Vapour recovery', ['Yes', 'No'], 0, FUEL], ['Tank & equipment', 'Control box (make / type)', 'text', 0, ARTIC],
+    ['Dates & certificates', 'MOT expiry date', 'date', 1], ['Dates & certificates', 'ADR expiry date', 'date', 'adr', ADRT], ['Dates & certificates', 'Safe loading pass expiry date', 'date', 'adr', ADRT], ['Dates & certificates', 'VTG plating expiry date', 'date', 0], ['Dates & certificates', 'Tank test due date', 'date', 'adr', TANKT]];
   const PACKRE = /^(make|model|year|chassis number|condition|mileage|body type|number of compartments|compartment sizes|total plated capacity|tank material|tank insulation|tank test pressure|adr class|axle layout|suspension|axle manufacturer|axle make|brake|tyre make|tyre size|landing legs|pump make|vac pump make|jetting pump make|api coupler|vapour recovery|control box|length|width|height|unladen weight|plated weight|mot expiry|adr expiry|safe loading pass expiry|vtg plating expiry|tank test due)/i;
   const STAR = '<b style="color:#d11a1a" title="Appears in the asset pack">*</b>';
   const applies = (f, type) => !f[4] || f[4].includes(type);

@@ -238,12 +238,16 @@ const FIELDS = {
 
 /* Everyone gets these. */
 const BASE_PHOTOS = ["front_driver","front_pass","rear_pass","rear_driver","side_driver","side_pass","square_rear","square_front","vtg_plate"];
-const BASE_FIELDS = ["make","model","year_reg","chassis_number","body_type","condition","axle_layout","plated_weight","unladen_weight","length","width","height","axle_make","brake_type","landing_legs","mot_date","v5c","keys_count","service_history","service_notes","tacho_cal","tyre_make","tyre_size","tread"];
+const BASE_FIELDS = ["make","model","year_reg","chassis_number","body_type","condition","axle_layout","plated_weight","unladen_weight","length","width","height","axle_make","brake_type","landing_legs","mot_date","vtg_expiry","v5c","keys_count","service_history","service_notes","tacho_cal","tyre_make","tyre_size","tread"];
 
 /* Vehicle types. cat: rigid | tractor | trailer (drives axle options and the diagram). */
 const WASTE_RIGID = {
-  photos:["incab","odometer","pump","vac_pump","jetting_pump","axle_hub","brakes","compartment_sizes","mot_cert"],
-  fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","tank_serial","plated_capacity","tank_material","vac_pump_make_model","jet_pump_make_model","compartments"]
+  photos:["incab","odometer","pump","vac_pump","axle_hub","brakes","compartment_sizes","mot_cert","tank_test_cert"],
+  fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","tank_test_date","tank_serial","plated_capacity","tank_material","vac_pump_make_model","compartments"]
+};
+const WASTE_COMBI = {
+  photos:["incab","odometer","pump","vac_pump","jetting_pump","axle_hub","brakes","compartment_sizes","mot_cert","tank_test_cert"],
+  fields:[...WASTE_RIGID.fields,"jet_pump_make_model"]
 };
 const TYPES = {
   artic_petroleum:{label:"Artic – petroleum tanker",cat:"trailer",body:"Petroleum tanker trailer",
@@ -251,10 +255,10 @@ const TYPES = {
     fields:["adr_expiry","slp_expiry","vtg_expiry","tank_test_date","suspension","tank_serial","plated_capacity","tank_material","tank_insulation","test_pressure","adr_tank_code","api_couplers","vapour_recovery","control_box_notes","pump_make_model","additional_equipment_notes","compartments"]},
   artic_bitumen:{label:"Artic – bitumen tanker",cat:"trailer",body:"Bitumen tanker trailer",
     photos:["pump","axle_hub","brakes","outlet","ladder","heating","control_box","mot_cert","adr_cert","slp_cert","tank_test_cert"],
-    fields:["adr_expiry","slp_expiry","vtg_expiry","tank_test_date","suspension","tank_serial","plated_capacity","tank_material","tank_insulation","test_pressure","adr_tank_code","pump_make_model","compartments"]},
+    fields:["adr_expiry","slp_expiry","vtg_expiry","tank_test_date","suspension","tank_serial","plated_capacity","tank_material","tank_insulation","test_pressure","adr_tank_code","pump_make_model","control_box_notes","compartments"]},
   artic_waste:{label:"Artic – waste tanker",cat:"trailer",body:"Waste tanker trailer",
-    photos:["pump","axle_hub","brakes","outlet","ladder","heating","control_box","mot_cert","adr_cert","slp_cert","tank_test_cert"],
-    fields:["adr_expiry","slp_expiry","vtg_expiry","tank_test_date","suspension","tank_serial","plated_capacity","tank_material","tank_insulation","test_pressure","adr_tank_code","pump_make_model","compartments"]},
+    photos:["pump","axle_hub","brakes","outlet","ladder","control_box","mot_cert","tank_test_cert"],
+    fields:["tank_test_date","suspension","tank_serial","plated_capacity","tank_material","pump_make_model","control_box_notes","compartments"]},
   tractor_unit:{label:"Tractor unit",cat:"tractor",body:"Tractor unit",
     photos:["incab","odometer","fifth_wheel","pump_wetkit","axle_hub","brakes","mot_cert"],
     fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","wet_kit"]},
@@ -262,7 +266,7 @@ const TYPES = {
     photos:["incab","odometer","pump","axle_hub","brakes","apis_compartments","mot_cert","adr_cert","slp_cert","tank_test_cert"],
     fields:["mileage","gearbox","engine_power","emission_class","suspension","dvs_rating","chassis_serial","adr_expiry","slp_expiry","vtg_expiry","tank_test_date","tank_serial","plated_capacity","tank_material","tank_insulation","test_pressure","adr_tank_code","api_couplers","vapour_recovery","pump_make_model","compartments"]},
   rigid_waste:Object.assign({label:"Rigid – waste tanker",cat:"rigid",body:"Rigid vacuum tanker"},WASTE_RIGID),
-  rigid_combi:Object.assign({label:"Rigid – combination tanker (waste)",cat:"rigid",body:"Combination (jet/vac) tanker"},WASTE_RIGID)
+  rigid_combi:Object.assign({label:"Rigid – combination tanker (waste)",cat:"rigid",body:"Combination (jet/vac) tanker"},WASTE_COMBI)
 };
 const AXLES = {"4x2":2,"6x2":3,"6x4":3,"8x2":4,"8x4":4,"Single axle":1,"Tandem (2 axles)":2,"Tri-axle (3 axles)":3};
 const MIN_TREAD = 1; // mm – UK legal minimum for HGV tyres
