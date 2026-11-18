@@ -224,7 +224,10 @@
 Keep the vehicle EXACTLY as it is: do not change its shape, colour, livery, markings, number plates, dents, wear or any detail, and do not crop any part of it.
 Replace ONLY the background and ground with a clean, realistic UK commercial yard: a modern industrial building behind, clean concrete hardstanding, soft overcast daylight, natural sky. Match the lighting and add a natural soft shadow under the vehicle so it sits realistically on the ground.
 Keep the same camera angle and framing. Photorealistic, professional dealer-quality finish. No extra vehicles or people, and no other text.
-WATERMARK: I have attached the Compton Tankers logo as a second image. Place it small (about 15% of the image width) in the bottom-right corner with a modest margin, slightly translucent (about 85% opacity). The logo has white lettering, so put it on a subtle dark navy rounded translucent panel so it stays readable. Do not alter the logo's colours, shape or spelling, and keep it clear of the vehicle.`;
+` + '\n' + WMTXT;
+  const WMTXT = `WATERMARK: I have attached the Compton Tankers logo as a second image. Place it small (about 15% of the image width) in the bottom-right corner with a modest margin, slightly translucent (about 85% opacity). The logo has white lettering, so put it on a subtle dark navy rounded translucent panel so it stays readable. Do not alter the logo's colours, shape or spelling, and keep it clear of the vehicle.`;
+  const PROMPT_LOGO = () => `Add the Compton Tankers logo to this photo as a watermark. Change nothing else: keep the photo exactly as it is, with the same framing, colours and lighting, and do not crop, retouch or redraw anything. Any certificate, plate or label in the photo must stay sharp and fully readable, so place the logo over a plain area and never over writing or numbers.
+` + WMTXT;
   function dl(blob, name) { const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = name; document.body.appendChild(l); l.click(); l.remove(); }
   const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('not a readable picture')); i.src = src; });
   async function uploadPic(file, jobId, wm) {
@@ -248,15 +251,6 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
     const im = await loadImg(URL.createObjectURL(blob)); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0);
     const fs = Math.round(c.width * .022), px = fs * .85, h = fs * 1.9, m = c.width * .018; let cx = m; x.font = '700 ' + fs + 'px Poppins, Arial, sans-serif'; x.textBaseline = 'middle';
     AVL[av].forEach(([t, col]) => { const w = x.measureText(t).width + px * 2; x.fillStyle = col; x.fillRect(cx, m, w, h); x.fillStyle = '#fff'; x.fillText(t, cx + px, m + h / 2 + fs * .05); cx += w + fs * .3; });
-    return new Promise((r) => c.toBlob(r, 'image/jpeg', .92));
-  }
-  /* Compton logo watermark, bottom right: white logo on a translucent navy panel (same look as the ChatGPT prompt) */
-  async function wmPic(blob) {
-    const im = await loadImg(URL.createObjectURL(blob)); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0);
-    const lg = await loadImg('assets/compton-logo-white.png'); const lw = c.width * .15, lh = lw * lg.height / lg.width, pad = lw * .08, m = c.width * .02;
-    const pw = lw + pad * 2, ph = lh + pad * 2, px = c.width - pw - m, py = c.height - ph - m, rr = ph * .18;
-    x.save(); x.globalAlpha = .85; x.fillStyle = '#0F2A52'; x.beginPath(); x.moveTo(px + rr, py); x.arcTo(px + pw, py, px + pw, py + ph, rr); x.arcTo(px + pw, py + ph, px, py + ph, rr); x.arcTo(px, py + ph, px, py, rr); x.arcTo(px, py, px + pw, py, rr); x.closePath(); x.fill();
-    x.globalAlpha = .9; x.drawImage(lg, px + pad, py + pad, lw, lh); x.restore();
     return new Promise((r) => c.toBlob(r, 'image/jpeg', .92));
   }
   async function loadZip() { if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the zip tool')); document.head.appendChild(sc); }); return window.JSZip; }
@@ -395,12 +389,19 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
   async function salesPhotos(box, reg, j, d, refresh) {
     box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
     d.photos = d.photos || [];
-    const slots = d.photos.map((p, i) => ({ p, i })).filter((o) => o.p.path && WALKK.includes(o.p.key));
+    /* every picture in the report: walkaround shots first (new background + logo), then the rest (logo only) */
+    const withPath = d.photos.map((p, i) => ({ p, i })).filter((o) => o.p.path);
+    const slots = [...withPath.filter((o) => WALKK.includes(o.p.key)).sort((a, b) => WALKK.indexOf(a.p.key) - WALKK.indexOf(b.p.key)).map((o) => ({ ...o, walk: true })), ...withPath.filter((o) => !WALKK.includes(o.p.key)).map((o) => ({ ...o, walk: false }))];
+    const nW = slots.filter((o) => o.walk).length, nL = slots.length - nW;
+    const fname = (n) => (reg + '-' + (n + 1) + '-' + (slots[n].p.label || slots[n].p.key)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg';
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_sales"><h3 style="margin-top:0">Sales photos (ChatGPT)</h3>
       <div class="hint">Enhanced pictures <b>replace</b> the originals in this report. The originals are moved to an archive (shown under the photos) and can be restored or downloaded any time.</div>
-      <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download the ${slots.length} original photos</button> <span class="small muted">(files are numbered 1–${slots.length} – keep the number in the name)</span></div>
-      <div style="margin:10px 0"><b>2.</b> In ChatGPT attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), then paste this prompt: <button class="mini" id="ss_cp">Copy prompt</button> <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
+      <div style="margin:10px 0"><b>1.</b> <button class="mini" id="ss_dl">Download all ${slots.length} photos (zip)</button> <span class="small muted">(numbered 1–${slots.length} – keep the number in the name. The zip has two folders: <b>1-background-and-logo</b> (${nW}) and <b>2-logo-only</b> (${nL}).)</span></div>
+      <div style="margin:10px 0"><b>2.</b> In ChatGPT attach a photo <b>and the logo</b> (<a href="assets/compton-logo-white.png" download="compton-logo.png">download logo</a>), then paste the prompt for its folder. <a class="mini" style="text-decoration:none" target="_blank" rel="noopener" href="https://chatgpt.com/">Open ChatGPT</a>
+        <div style="margin-top:8px"><b>Prompt A – background and logo</b> (walkaround photos, 1–${nW}) <button class="mini" id="ss_cp">Copy prompt A</button>
         <textarea readonly id="ss_pr" rows="5" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT(reg))}</textarea></div>
+        ${nL ? `<div style="margin-top:8px"><b>Prompt B – logo only</b> (certificates, plates and detail shots, ${nW + 1}–${slots.length}) <button class="mini" id="ss_cp2">Copy prompt B</button>
+        <textarea readonly id="ss_pr2" rows="4" style="width:100%;margin-top:6px;font-size:12px">${esc(PROMPT_LOGO())}</textarea></div>` : ''}</div>
       <div style="margin:10px 0"><b>3.</b> Add the finished pictures. Either put a picture in each slot below, or add them all at once (a zip works) and they are matched by the number in the file name, otherwise in order. <label class="small"><input type="checkbox" id="ss_wm"> add logo here too (leave off if ChatGPT added it)</label></div>
       <div id="ss_slots" class="phg"></div>
       <div style="margin:10px 0"><input type="file" id="ss_up" accept="image/*,.zip,application/zip" multiple> <span id="ss_msg" class="small muted"></span></div>
@@ -409,10 +410,15 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
     const wm = () => q('#ss_wm').checked, fail = (er) => { msg.innerHTML = '<span style="color:#b3261e">' + esc((er && er.message) || 'failed') + '</span>'; };
     const doneRefresh = async () => { await saveJob(j, d); await refresh(); };
     q('#ss_cp').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT(reg)); q('#ss_cp').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr').select(); } };
-    q('#ss_dl').onclick = async () => { for (let n = 0; n < slots.length; n++) { const u = await fileUrl(slots[n].p.path); if (u) dl(await (await fetch(u)).blob(), (reg + '-' + (n + 1) + '-' + (slots[n].p.label || slots[n].p.key)).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
+    if (q('#ss_cp2')) q('#ss_cp2').onclick = async () => { try { await navigator.clipboard.writeText(PROMPT_LOGO()); q('#ss_cp2').textContent = 'Copied ✓'; } catch (e) { q('#ss_pr2').select(); } };
+    q('#ss_dl').onclick = async () => { let Z = null; try { Z = new (await loadZip())(); } catch (e) { }
+      try { for (let n = 0; n < slots.length; n++) { msg.textContent = `Preparing ${n + 1} of ${slots.length}…`; const u = await fileUrl(slots[n].p.path); if (!u) continue; const b = await (await fetch(u)).blob();
+          if (Z) Z.file((slots[n].walk ? '1-background-and-logo/' : '2-logo-only/') + fname(n), b); else { dl(b, fname(n)); await new Promise((r) => setTimeout(r, 500)); } }
+        if (Z) { msg.textContent = 'Zipping…'; dl(await Z.generateAsync({ type: 'blob' }), (reg + '-sales-photos').replace(/[^A-Za-z0-9-]+/g, '_') + '.zip'); }
+        msg.textContent = `Downloaded ${slots.length} photos ✓`; } catch (er) { fail(er); } };
     const sl = q('#ss_slots');
     for (let n = 0; n < slots.length; n++) { const o = slots[n]; const u = await fileUrl(o.p.path);
-      sl.insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption><b>${n + 1}. ${esc(o.p.label || o.p.key)}</b> ${o.p.enhanced ? '<span class="pill g">enhanced</span>' : '<span class="pill a">original</span>'}<br><a href="#" data-slot="${o.i}">${o.p.enhanced ? 'Replace again' : 'Put enhanced picture here'}</a></figcaption></figure>`); }
+      sl.insertAdjacentHTML('beforeend', `<figure>${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption><b>${n + 1}. ${esc(o.p.label || o.p.key)}</b> <span class="small muted">${o.walk ? 'prompt A' : 'prompt B'}</span> ${o.p.enhanced ? '<span class="pill g">enhanced</span>' : '<span class="pill a">original</span>'}<br><a href="#" data-slot="${o.i}">${o.p.enhanced ? 'Replace again' : 'Put enhanced picture here'}</a></figcaption></figure>`); }
     sl.querySelectorAll('[data-slot]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*'; f.onchange = async () => { if (!f.files[0]) return; try { msg.textContent = 'Uploading…'; const path = await uploadPic(f.files[0], j.id, wm()); putEnhanced(d, +a.dataset.slot, path); await doneRefresh(); } catch (er) { fail(er); } }; f.click(); });
     q('#ss_up').onchange = async (e) => {
       let files = [...e.target.files]; if (!files.length) return;
@@ -447,36 +453,34 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
   async function advertPack(box, s, j, d) {
     box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
     const defKeys = new Set((d.defects || []).filter((x) => x.path).map((x) => x.path));
-    const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, name: p.label || p.key, enh: !!p.enhanced, def: false, w: WALKK.indexOf(p.key) })), ...(d.cutouts || []).filter((c) => c.path).sort((a, b) => a.n - b.n).map((c) => ({ path: c.path, name: 'Cut-out ' + c.n, enh: false, cut: true, def: false, w: 60 + c.n })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, name: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), enh: false, def: true, w: 99 }))];
-    const ad = Object.assign({ order: [], off: [], desc: '', web: false, wm: true }, s.advert || {}); const known = new Set(ad.order);
-    const rank = (a) => (a.enh ? 0 : a.cut ? 1 : 2);
-    if (!ad.order.length) all.sort((a, b) => (rank(a) - rank(b)) || ((a.w < 0 ? 50 : a.w) - (b.w < 0 ? 50 : b.w)));
+    const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, name: p.label || p.key, enh: !!p.enhanced, def: false, w: WALKK.indexOf(p.key) })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, name: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), enh: false, def: true, w: 99 }))];
+    const ad = Object.assign({ order: [], off: [], desc: '', web: false }, s.advert || {}); const known = new Set(ad.order);
+    if (!ad.order.length) all.sort((a, b) => (b.enh - a.enh) || ((a.w < 0 ? 50 : a.w) - (b.w < 0 ? 50 : b.w)));
     all.forEach((it) => { if (!known.has(it.path)) { ad.order.push(it.path); if (it.def) ad.off.push(it.path); } });
     ad.order = ad.order.filter((p) => all.some((x) => x.path === p));
     const by = (p) => all.find((x) => x.path === p) || {};
-    const rows = (d.rows || []).filter((r) => r[2] !== '' && r[2] != null);
+    /* advert text uses only real answers: no internal job details, blanks, "Not available", skipped readings or video notes */
+    const HIDE = /^(registration \/ id|inspector|inspection date|location|walkaround video|inspector comments|reg match)$|tread/i;
+    const rows = (d.rows || []).filter((r) => r[0] !== 'Job' && r[0] !== 'Walkaround video' && !HIDE.test(String(r[1])) && r[2] != null && okVal(String(r[2]).trim()) && !/^(available on request|not recorded)/i.test(String(r[2]).trim()));
     const autoDesc = () => { let g = '', t = `${TLAB[s.vehicle_type] || 'Vehicle'} – ${s.reg}\n`; if (s.asking_price) t += `Asking price: £${Number(s.asking_price).toLocaleString('en-GB')} + VAT\n`; rows.forEach(([gr, l, v]) => { if (gr !== g) { t += `\n${gr}\n`; g = gr; } t += `${l}: ${v}\n`; }); if (d.office_notes) t += `\n${d.office_notes}\n`; t += '\nAvailable for inspection at our Leighton Buzzard yard. Part-exchange and finance enquiries welcome.'; return t.trim(); };
     if (!ad.desc) ad.desc = autoDesc();
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_adv"><h3 style="margin-top:0">Advert pack – ${esc(s.reg)}</h3>
       <div class="hint">Uses every picture in the report – enhanced ones first, then the rest (ADR certificate, plates, detail shots). Reorder with ◀ ▶ and exclude anything you do not want public. The first picture is the lead. Defect photos start excluded.</div>
       <div style="margin:8px 0"><b>Available for</b> <select id="ad_av"><option value="sale">For sale</option><option value="hire">For hire</option><option value="both">For sale and hire</option></select> <span class="small muted">Shows as a small label on the first picture when you download or publish.</span></div>
-      <div style="margin:8px 0"><label><input type="checkbox" id="ad_wm" ${ad.wm !== false ? 'checked' : ''}> <b>Add the Compton logo</b> to every picture when you download or publish</label> <span class="small muted">Pictures marked ✨ already have it from Sales photos, so they are left as they are. Stored pictures are never changed.</span></div>
       <div id="ad_ph" class="phg" style="margin:10px 0"></div>
       <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download all photos (zip)</button><button class="mini pri2" id="ad_pub">Publish photos (public links)</button><button class="mini" id="ad_unp">Unpublish</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div><div id="ad_pb" class="small" style="margin-top:8px"></div></div>`);
     const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' }); q('#ad_av').value = avOf(ad);
-    const wmOn = () => (q('#ad_wm') ? q('#ad_wm').checked : ad.wm !== false);
-    /* the finished advert picture: logo on anything without one, sale/hire label on the lead */
-    const finish = async (path, lead) => { const u = await fileUrl(path); if (!u) throw new Error('a picture could not be read'); let b = await (await fetch(u)).blob(); if (wmOn() && !by(path).enh) b = await wmPic(b); if (lead) b = await badgePic(b, avOf(ad)); return b; };
+    /* the finished advert picture: as stored, with the sale/hire label on the lead */
+    const finish = async (path, lead) => { const u = await fileUrl(path); if (!u) throw new Error('a picture could not be read'); let b = await (await fetch(u)).blob(); if (lead) b = await badgePic(b, avOf(ad)); return b; };
     async function draw() { const g = q('#ad_ph'); g.innerHTML = ''; let n = 0;
       for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p), it = by(p); if (on) n++; const u = await fileUrl(p);
-        g.insertAdjacentHTML('beforeend', `<figure style="position:relative;${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}${on && n === 1 ? chips(avOf(ad)) : ''}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''}${on && wmOn() && !it.enh ? ' <span class="pill g">+logo</span>' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
+        g.insertAdjacentHTML('beforeend', `<figure style="position:relative;${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}${on && n === 1 ? chips(avOf(ad)) : ''}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
       g.querySelectorAll('[data-l]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.l; if (i > 0) { [ad.order[i - 1], ad.order[i]] = [ad.order[i], ad.order[i - 1]]; draw(); } });
       g.querySelectorAll('[data-r]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.r; if (i < ad.order.length - 1) { [ad.order[i + 1], ad.order[i]] = [ad.order[i], ad.order[i + 1]]; draw(); } });
       g.querySelectorAll('[data-t]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const p = ad.order[+a.dataset.t]; ad.off = ad.off.includes(p) ? ad.off.filter((x) => x !== p) : ad.off.concat(p); draw(); }); }
-    const save = async () => { ad.desc = q('#ad_tx').value; ad.web = q('#ad_web').checked; ad.wm = wmOn(); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ advert: ad }) }); s.advert = ad; };
+    const save = async () => { ad.desc = q('#ad_tx').value; ad.web = q('#ad_web').checked; await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ advert: ad }) }); s.advert = ad; };
     q('#ad_av').onchange = async () => { ad.avail = q('#ad_av').value; draw(); try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
-    q('#ad_wm').onchange = async () => { draw(); try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
     q('#ad_sv').onclick = async () => { try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
     q('#ad_re').onclick = () => { if (confirm('Replace the text with a fresh one built from the inspection?')) q('#ad_tx').value = autoDesc(); };
     q('#ad_cp').onclick = async () => { try { await navigator.clipboard.writeText(q('#ad_tx').value); q('#ad_cp').textContent = 'Copied ✓'; } catch (e) { q('#ad_tx').select(); } };
@@ -500,10 +504,10 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
       const next = [];
       try {
         for (let i = 0; i < L.length; i++) {
-          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const want = i === 0 ? avOf(ad) : '', logo = wmOn() && !by(L[i]).enh; const ex = old.find((o) => o.src === L[i] && (o.badge || '') === want && !!o.logo === logo); if (ex) { next.push(ex); continue; }
+          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const want = i === 0 ? avOf(ad) : ''; const ex = old.find((o) => o.src === L[i] && (o.badge || '') === want); if (ex) { next.push(ex); continue; }
           const blob = await finish(L[i], i === 0); const path = folder + '/' + Math.random().toString(36).slice(2, 12) + '.jpg';
           const r = await fetch(SB.url + '/storage/v1/object/adverts/' + path, Object.assign(sh('POST', { 'Content-Type': 'image/jpeg' }), { body: blob })); if (!r.ok) throw new Error('upload failed (' + r.status + ')');
-          next.push({ src: L[i], path, url: pubUrl(path), badge: want, logo });
+          next.push({ src: L[i], path, url: pubUrl(path), badge: want });
         }
         for (const o of old) if (!next.some((n) => n.path === o.path)) await fetch(SB.url + '/storage/v1/object/adverts/' + o.path, sh('DELETE'));
         ad.pub = { folder, items: next, at: new Date().toISOString() }; await save(); q('#ad_m').textContent = 'Published ✓'; showPub();
