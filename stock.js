@@ -50,6 +50,7 @@
       <div><label>Vehicle type</label><select id="s_type">${TYPES.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div><label>Stock ref (optional)</label><input id="s_ref"></div><div><label>Where is it?</label><input id="s_loc" placeholder="Yard / site"></div>
       <div><label>Cost £</label><input id="s_cost" type="number" step="0.01"></div><div><label>Asking price £</label><input id="s_ask" type="number" step="0.01"></div>
+      <div><label>Available for</label><select id="s_av"><option value="sale">For sale</option><option value="hire">For hire</option><option value="both">For sale and hire</option></select></div>
       <div><label>Notes for the person in the yard</label><input id="s_notes"></div><button id="s_add" type="button">Add &amp; create link</button></div><div class="err" id="s_err"></div><div id="s_out"></div></div>` +
       `<div class="card"><h3>Stock</h3><div class="hint">Change status from the dropdown. Cost and asking price save when you leave the box. “Moved to hire fleet” takes it out of sales stock.</div>
       ${ST.length ? `<div class="box2"><table><thead><tr><th>Vehicle</th><th>Type</th><th>Status</th><th class="n">Cost £</th><th class="n">Asking £</th><th>Inspection</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No vehicles yet. Add the first one above.</div>'}</div><div id="s_view"></div>`;
@@ -64,7 +65,7 @@
       const reg = $('s_reg').value.trim().toUpperCase(); if (!reg) { err('Enter the registration or trailer ID.'); return; }
       try {
         err('');
-        const [s] = await api('stock', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ reg, vehicle_type: $('s_type').value, stock_ref: $('s_ref').value.trim() || null, location: $('s_loc').value.trim() || null, cost: +$('s_cost').value || null, asking_price: +$('s_ask').value || null, notes: $('s_notes').value.trim() || null }) });
+        const [s] = await api('stock', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ reg, advert: { avail: $('s_av').value }, vehicle_type: $('s_type').value, stock_ref: $('s_ref').value.trim() || null, location: $('s_loc').value.trim() || null, cost: +$('s_cost').value || null, asking_price: +$('s_ask').value || null, notes: $('s_notes').value.trim() || null }) });
         const j = await newJob(s, $('s_notes').value.trim());
         await load(); draw(el); showLink(s, j);
       } catch (e) { err('Could not save: ' + e.message); }
@@ -238,6 +239,16 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
     if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the zip tool')); document.head.appendChild(sc); });
     const out = []; for (const f of files) { if (!/\.zip$/i.test(f.name)) { out.push(f); continue; } const z = await window.JSZip.loadAsync(f); const names = Object.keys(z.files).filter((n) => !z.files[n].dir && /\.(jpe?g|png|webp)$/i.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(); for (const n of names) { const b = await z.files[n].async('blob'); out.push(new File([b], n.split('/').pop(), { type: /png$/i.test(n) ? 'image/png' : /webp$/i.test(n) ? 'image/webp' : 'image/jpeg' })); } }
     return out;
+  }
+  /* "For sale" / "For hire" label on the lead advert picture (added when downloading or publishing, never to the stored originals) */
+  const AVL = { sale: [['FOR SALE', '#E4611D']], hire: [['FOR HIRE', '#164698']], both: [['FOR SALE', '#E4611D'], ['FOR HIRE', '#164698']] };
+  const avOf = (ad) => (ad && AVL[ad.avail] ? ad.avail : 'sale');
+  const chips = (av) => '<span style="position:absolute;left:5px;top:5px;display:flex;gap:3px;z-index:2">' + AVL[av].map(([t, c]) => `<span style="background:${c};color:#fff;font:700 8px Poppins,Arial,sans-serif;padding:2px 5px;letter-spacing:.3px">${t}</span>`).join('') + '</span>';
+  async function badgePic(blob, av) {
+    const im = await loadImg(URL.createObjectURL(blob)); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+    const fs = Math.round(c.width * .022), px = fs * .85, h = fs * 1.9, m = c.width * .018; let cx = m; x.font = '700 ' + fs + 'px Poppins, Arial, sans-serif'; x.textBaseline = 'middle';
+    AVL[av].forEach(([t, col]) => { const w = x.measureText(t).width + px * 2; x.fillStyle = col; x.fillRect(cx, m, w, h); x.fillStyle = '#fff'; x.fillText(t, cx + px, m + h / 2 + fs * .05); cx += w + fs * .3; });
+    return new Promise((r) => c.toBlob(r, 'image/jpeg', .92));
   }
   const saveJob = async (j, d) => { d.edited_at = new Date().toISOString(); await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: d }) }); j.data = d; };
   /* swap an enhanced picture into a report slot; the old picture goes to the archive */
@@ -437,22 +448,24 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
     if (!ad.desc) ad.desc = autoDesc();
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_adv"><h3 style="margin-top:0">Advert pack – ${esc(s.reg)}</h3>
       <div class="hint">Uses every picture in the report – enhanced ones first, then the rest (ADR certificate, plates, detail shots). Reorder with ◀ ▶ and exclude anything you do not want public. The first picture is the lead. Defect photos start excluded.</div>
+      <div style="margin:8px 0"><b>Available for</b> <select id="ad_av"><option value="sale">For sale</option><option value="hire">For hire</option><option value="both">For sale and hire</option></select> <span class="small muted">Shows as a small label on the first picture when you download or publish.</span></div>
       <div id="ad_ph" class="phg" style="margin:10px 0"></div>
       <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini pri2" id="ad_pub">Publish photos (public links)</button><button class="mini" id="ad_unp">Unpublish</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div><div id="ad_pb" class="small" style="margin-top:8px"></div></div>`);
-    const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' });
+    const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' }); q('#ad_av').value = avOf(ad);
     async function draw() { const g = q('#ad_ph'); g.innerHTML = ''; let n = 0;
       for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p), it = by(p); if (on) n++; const u = await fileUrl(p);
-        g.insertAdjacentHTML('beforeend', `<figure style="${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
+        g.insertAdjacentHTML('beforeend', `<figure style="position:relative;${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}${on && n === 1 ? chips(avOf(ad)) : ''}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
       g.querySelectorAll('[data-l]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.l; if (i > 0) { [ad.order[i - 1], ad.order[i]] = [ad.order[i], ad.order[i - 1]]; draw(); } });
       g.querySelectorAll('[data-r]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.r; if (i < ad.order.length - 1) { [ad.order[i + 1], ad.order[i]] = [ad.order[i], ad.order[i + 1]]; draw(); } });
       g.querySelectorAll('[data-t]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const p = ad.order[+a.dataset.t]; ad.off = ad.off.includes(p) ? ad.off.filter((x) => x !== p) : ad.off.concat(p); draw(); }); }
     const save = async () => { ad.desc = q('#ad_tx').value; ad.web = q('#ad_web').checked; await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ advert: ad }) }); s.advert = ad; };
+    q('#ad_av').onchange = async () => { ad.avail = q('#ad_av').value; draw(); try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
     q('#ad_sv').onclick = async () => { try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
     q('#ad_re').onclick = () => { if (confirm('Replace the text with a fresh one built from the inspection?')) q('#ad_tx').value = autoDesc(); };
     q('#ad_cp').onclick = async () => { try { await navigator.clipboard.writeText(q('#ad_tx').value); q('#ad_cp').textContent = 'Copied ✓'; } catch (e) { q('#ad_tx').select(); } };
     q('#ad_dl').onclick = async () => { const L = ad.order.filter((p) => !ad.off.includes(p)); if (!L.length) { q('#ad_m').textContent = 'No photos selected.'; return; } try { await save(); } catch (e) { }
-      for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i]); if (u) dl(await (await fetch(u)).blob(), (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
+      for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i]); if (u) dl(i === 0 ? await badgePic(await (await fetch(u)).blob(), avOf(ad)) : await (await fetch(u)).blob(), (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
     /* ---- public picture links for adverts / feeds ---- */
     const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null'), SB = window.SUPABASE_CONFIG;
     const pubUrl = (path) => SB.url + '/storage/v1/object/public/adverts/' + path;
@@ -465,12 +478,12 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
       const next = [];
       try {
         for (let i = 0; i < L.length; i++) {
-          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const ex = old.find((o) => o.src === L[i]); if (ex) { next.push(ex); continue; }
-          const u = await fileUrl(L[i]); if (!u) throw new Error('a picture could not be read'); const blob = await (await fetch(u)).blob(); const path = folder + '/' + Math.random().toString(36).slice(2, 12) + '.jpg';
+          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const want = i === 0 ? avOf(ad) : ''; const ex = old.find((o) => o.src === L[i] && (o.badge || '') === want); if (ex) { next.push(ex); continue; }
+          const u = await fileUrl(L[i]); if (!u) throw new Error('a picture could not be read'); let blob = await (await fetch(u)).blob(); if (want) blob = await badgePic(blob, want); const path = folder + '/' + Math.random().toString(36).slice(2, 12) + '.jpg';
           const r = await fetch(SB.url + '/storage/v1/object/adverts/' + path, Object.assign(sh('POST', { 'Content-Type': 'image/jpeg' }), { body: blob })); if (!r.ok) throw new Error('upload failed (' + r.status + ')');
-          next.push({ src: L[i], path, url: pubUrl(path) });
+          next.push({ src: L[i], path, url: pubUrl(path), badge: want });
         }
-        for (const o of old) if (!next.some((n) => n.src === o.src)) await fetch(SB.url + '/storage/v1/object/adverts/' + o.path, sh('DELETE'));
+        for (const o of old) if (!next.some((n) => n.path === o.path)) await fetch(SB.url + '/storage/v1/object/adverts/' + o.path, sh('DELETE'));
         ad.pub = { folder, items: next, at: new Date().toISOString() }; await save(); q('#ad_m').textContent = 'Published ✓'; showPub();
       } catch (e) { q('#ad_m').innerHTML = '<span style="color:#b3261e">' + esc(e.message) + '</span>'; }
     };
