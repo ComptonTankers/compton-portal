@@ -250,6 +250,16 @@ WATERMARK: I have attached the Compton Tankers logo as a second image. Place it 
     AVL[av].forEach(([t, col]) => { const w = x.measureText(t).width + px * 2; x.fillStyle = col; x.fillRect(cx, m, w, h); x.fillStyle = '#fff'; x.fillText(t, cx + px, m + h / 2 + fs * .05); cx += w + fs * .3; });
     return new Promise((r) => c.toBlob(r, 'image/jpeg', .92));
   }
+  /* Compton logo watermark, bottom right: white logo on a translucent navy panel (same look as the ChatGPT prompt) */
+  async function wmPic(blob) {
+    const im = await loadImg(URL.createObjectURL(blob)); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+    const lg = await loadImg('assets/compton-logo-white.png'); const lw = c.width * .15, lh = lw * lg.height / lg.width, pad = lw * .08, m = c.width * .02;
+    const pw = lw + pad * 2, ph = lh + pad * 2, px = c.width - pw - m, py = c.height - ph - m, rr = ph * .18;
+    x.save(); x.globalAlpha = .85; x.fillStyle = '#0F2A52'; x.beginPath(); x.moveTo(px + rr, py); x.arcTo(px + pw, py, px + pw, py + ph, rr); x.arcTo(px + pw, py + ph, px, py + ph, rr); x.arcTo(px, py + ph, px, py, rr); x.arcTo(px, py, px + pw, py, rr); x.closePath(); x.fill();
+    x.globalAlpha = .9; x.drawImage(lg, px + pad, py + pad, lw, lh); x.restore();
+    return new Promise((r) => c.toBlob(r, 'image/jpeg', .92));
+  }
+  async function loadZip() { if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('could not load the zip tool')); document.head.appendChild(sc); }); return window.JSZip; }
   const saveJob = async (j, d) => { d.edited_at = new Date().toISOString(); await api('jobs?id=eq.' + j.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: d }) }); j.data = d; };
   /* swap an enhanced picture into a report slot; the old picture goes to the archive */
   function putEnhanced(d, idx, path) { const p = d.photos[idx]; d.archive = d.archive || []; d.archive.push({ key: p.key, label: p.label, path: p.path, enhanced: !!p.enhanced, at: new Date().toISOString() }); p.path = path; p.enhanced = true; p.status = 'ok'; }
@@ -437,9 +447,10 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
   async function advertPack(box, s, j, d) {
     box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
     const defKeys = new Set((d.defects || []).filter((x) => x.path).map((x) => x.path));
-    const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, name: p.label || p.key, enh: !!p.enhanced, def: false, w: WALKK.indexOf(p.key) })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, name: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), enh: false, def: true, w: 99 }))];
-    const ad = Object.assign({ order: [], off: [], desc: '', web: false }, s.advert || {}); const known = new Set(ad.order);
-    if (!ad.order.length) all.sort((a, b) => (b.enh - a.enh) || ((a.w < 0 ? 50 : a.w) - (b.w < 0 ? 50 : b.w)));
+    const all = [...(d.photos || []).filter((p) => p.path).map((p) => ({ path: p.path, name: p.label || p.key, enh: !!p.enhanced, def: false, w: WALKK.indexOf(p.key) })), ...(d.cutouts || []).filter((c) => c.path).sort((a, b) => a.n - b.n).map((c) => ({ path: c.path, name: 'Cut-out ' + c.n, enh: false, cut: true, def: false, w: 60 + c.n })), ...(d.defects || []).filter((p) => p.path).map((p, i) => ({ path: p.path, name: 'Defect ' + (i + 1) + (p.note ? ' – ' + p.note : ''), enh: false, def: true, w: 99 }))];
+    const ad = Object.assign({ order: [], off: [], desc: '', web: false, wm: true }, s.advert || {}); const known = new Set(ad.order);
+    const rank = (a) => (a.enh ? 0 : a.cut ? 1 : 2);
+    if (!ad.order.length) all.sort((a, b) => (rank(a) - rank(b)) || ((a.w < 0 ? 50 : a.w) - (b.w < 0 ? 50 : b.w)));
     all.forEach((it) => { if (!known.has(it.path)) { ad.order.push(it.path); if (it.def) ad.off.push(it.path); } });
     ad.order = ad.order.filter((p) => all.some((x) => x.path === p));
     const by = (p) => all.find((x) => x.path === p) || {};
@@ -449,23 +460,34 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
     box.insertAdjacentHTML('beforeend', `<div class="card" id="s_adv"><h3 style="margin-top:0">Advert pack – ${esc(s.reg)}</h3>
       <div class="hint">Uses every picture in the report – enhanced ones first, then the rest (ADR certificate, plates, detail shots). Reorder with ◀ ▶ and exclude anything you do not want public. The first picture is the lead. Defect photos start excluded.</div>
       <div style="margin:8px 0"><b>Available for</b> <select id="ad_av"><option value="sale">For sale</option><option value="hire">For hire</option><option value="both">For sale and hire</option></select> <span class="small muted">Shows as a small label on the first picture when you download or publish.</span></div>
+      <div style="margin:8px 0"><label><input type="checkbox" id="ad_wm" ${ad.wm !== false ? 'checked' : ''}> <b>Add the Compton logo</b> to every picture when you download or publish</label> <span class="small muted">Pictures marked ✨ already have it from Sales photos, so they are left as they are. Stored pictures are never changed.</span></div>
       <div id="ad_ph" class="phg" style="margin:10px 0"></div>
       <div><b>Advert text</b> <button class="mini" id="ad_re">Rebuild from inspection</button> <button class="mini" id="ad_cp">Copy text</button><textarea id="ad_tx" style="width:100%;min-height:190px;padding:6px;font-size:13px;margin-top:6px">${esc(ad.desc)}</textarea></div>
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download photos in order</button><button class="mini pri2" id="ad_pub">Publish photos (public links)</button><button class="mini" id="ad_unp">Unpublish</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div><div id="ad_pb" class="small" style="margin-top:8px"></div></div>`);
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="mini pri2" id="ad_dl">Download all photos (zip)</button><button class="mini pri2" id="ad_pub">Publish photos (public links)</button><button class="mini" id="ad_unp">Unpublish</button><button class="mini" id="ad_sv">Save</button><label class="small"><input type="checkbox" id="ad_web" ${ad.web ? 'checked' : ''}> Show on our website when it is connected</label><span id="ad_m" class="small muted"></span></div><div id="ad_pb" class="small" style="margin-top:8px"></div></div>`);
     const q = (i) => box.querySelector(i); q('#s_adv').scrollIntoView({ behavior: 'smooth' }); q('#ad_av').value = avOf(ad);
+    const wmOn = () => (q('#ad_wm') ? q('#ad_wm').checked : ad.wm !== false);
+    /* the finished advert picture: logo on anything without one, sale/hire label on the lead */
+    const finish = async (path, lead) => { const u = await fileUrl(path); if (!u) throw new Error('a picture could not be read'); let b = await (await fetch(u)).blob(); if (wmOn() && !by(path).enh) b = await wmPic(b); if (lead) b = await badgePic(b, avOf(ad)); return b; };
     async function draw() { const g = q('#ad_ph'); g.innerHTML = ''; let n = 0;
       for (let i = 0; i < ad.order.length; i++) { const p = ad.order[i], on = !ad.off.includes(p), it = by(p); if (on) n++; const u = await fileUrl(p);
-        g.insertAdjacentHTML('beforeend', `<figure style="position:relative;${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}${on && n === 1 ? chips(avOf(ad)) : ''}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
+        g.insertAdjacentHTML('beforeend', `<figure style="position:relative;${on ? '' : 'opacity:.4'}">${u ? `<img src="${u}" alt="">` : '<div class="phs">n/a</div>'}${on && n === 1 ? chips(avOf(ad)) : ''}<figcaption>${on ? '<b>#' + n + (n === 1 ? ' lead' : '') + '</b>' : 'excluded'} ${it.enh ? '✨' : ''}${on && wmOn() && !it.enh ? ' <span class="pill g">+logo</span>' : ''} <a href="#" data-l="${i}">◀</a> <a href="#" data-r="${i}">▶</a> <a href="#" data-t="${i}">${on ? 'Exclude' : 'Include'}</a><br><span class="small muted">${esc(it.name || '')}</span></figcaption></figure>`); }
       g.querySelectorAll('[data-l]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.l; if (i > 0) { [ad.order[i - 1], ad.order[i]] = [ad.order[i], ad.order[i - 1]]; draw(); } });
       g.querySelectorAll('[data-r]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const i = +a.dataset.r; if (i < ad.order.length - 1) { [ad.order[i + 1], ad.order[i]] = [ad.order[i], ad.order[i + 1]]; draw(); } });
       g.querySelectorAll('[data-t]').forEach((a) => a.onclick = (e) => { e.preventDefault(); const p = ad.order[+a.dataset.t]; ad.off = ad.off.includes(p) ? ad.off.filter((x) => x !== p) : ad.off.concat(p); draw(); }); }
-    const save = async () => { ad.desc = q('#ad_tx').value; ad.web = q('#ad_web').checked; await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ advert: ad }) }); s.advert = ad; };
+    const save = async () => { ad.desc = q('#ad_tx').value; ad.web = q('#ad_web').checked; ad.wm = wmOn(); await api('stock?id=eq.' + s.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ advert: ad }) }); s.advert = ad; };
     q('#ad_av').onchange = async () => { ad.avail = q('#ad_av').value; draw(); try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
+    q('#ad_wm').onchange = async () => { draw(); try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
     q('#ad_sv').onclick = async () => { try { await save(); q('#ad_m').textContent = 'Saved ✓'; } catch (e) { q('#ad_m').textContent = 'Could not save: ' + e.message; } };
     q('#ad_re').onclick = () => { if (confirm('Replace the text with a fresh one built from the inspection?')) q('#ad_tx').value = autoDesc(); };
     q('#ad_cp').onclick = async () => { try { await navigator.clipboard.writeText(q('#ad_tx').value); q('#ad_cp').textContent = 'Copied ✓'; } catch (e) { q('#ad_tx').select(); } };
     q('#ad_dl').onclick = async () => { const L = ad.order.filter((p) => !ad.off.includes(p)); if (!L.length) { q('#ad_m').textContent = 'No photos selected.'; return; } try { await save(); } catch (e) { }
-      for (let i = 0; i < L.length; i++) { const u = await fileUrl(L[i]); if (u) dl(i === 0 ? await badgePic(await (await fetch(u)).blob(), avOf(ad)) : await (await fetch(u)).blob(), (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg'); await new Promise((r) => setTimeout(r, 500)); } };
+      const nm = (i) => (s.reg + '-advert-' + String(i + 1).padStart(2, '0')).replace(/[^A-Za-z0-9-]+/g, '_') + '.jpg';
+      let Z = null; try { Z = new (await loadZip())(); } catch (e) { }
+      try {
+        for (let i = 0; i < L.length; i++) { q('#ad_m').textContent = `Preparing ${i + 1} of ${L.length}…`; const b = await finish(L[i], i === 0); if (Z) Z.file(nm(i), b); else { dl(b, nm(i)); await new Promise((r) => setTimeout(r, 500)); } }
+        if (Z) { q('#ad_m').textContent = 'Zipping…'; dl(await Z.generateAsync({ type: 'blob' }), (s.reg + '-advert-photos').replace(/[^A-Za-z0-9-]+/g, '_') + '.zip'); }
+        q('#ad_m').textContent = `Downloaded ${L.length} photos ✓`;
+      } catch (e) { q('#ad_m').innerHTML = '<span style="color:#b3261e">' + esc(e.message || 'download failed') + '</span>'; } };
     /* ---- public picture links for adverts / feeds ---- */
     const sess = () => JSON.parse(localStorage.getItem('compton-dash-session') || 'null'), SB = window.SUPABASE_CONFIG;
     const pubUrl = (path) => SB.url + '/storage/v1/object/public/adverts/' + path;
@@ -478,10 +500,10 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
       const next = [];
       try {
         for (let i = 0; i < L.length; i++) {
-          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const want = i === 0 ? avOf(ad) : ''; const ex = old.find((o) => o.src === L[i] && (o.badge || '') === want); if (ex) { next.push(ex); continue; }
-          const u = await fileUrl(L[i]); if (!u) throw new Error('a picture could not be read'); let blob = await (await fetch(u)).blob(); if (want) blob = await badgePic(blob, want); const path = folder + '/' + Math.random().toString(36).slice(2, 12) + '.jpg';
+          q('#ad_m').textContent = `Publishing ${i + 1} of ${L.length}…`; const want = i === 0 ? avOf(ad) : '', logo = wmOn() && !by(L[i]).enh; const ex = old.find((o) => o.src === L[i] && (o.badge || '') === want && !!o.logo === logo); if (ex) { next.push(ex); continue; }
+          const blob = await finish(L[i], i === 0); const path = folder + '/' + Math.random().toString(36).slice(2, 12) + '.jpg';
           const r = await fetch(SB.url + '/storage/v1/object/adverts/' + path, Object.assign(sh('POST', { 'Content-Type': 'image/jpeg' }), { body: blob })); if (!r.ok) throw new Error('upload failed (' + r.status + ')');
-          next.push({ src: L[i], path, url: pubUrl(path), badge: want });
+          next.push({ src: L[i], path, url: pubUrl(path), badge: want, logo });
         }
         for (const o of old) if (!next.some((n) => n.path === o.path)) await fetch(SB.url + '/storage/v1/object/adverts/' + o.path, sh('DELETE'));
         ad.pub = { folder, items: next, at: new Date().toISOString() }; await save(); q('#ad_m').textContent = 'Published ✓'; showPub();
