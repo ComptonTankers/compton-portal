@@ -51,6 +51,7 @@
       <div><label>Vehicle type</label><select id="s_type">${TYPES.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div><label>Stock ref (optional)</label><input id="s_ref"></div><div><label>Where is it?</label><input id="s_loc" placeholder="Yard / site"></div>
       <div><label>Cost £</label><input id="s_cost" type="number" step="0.01"></div><div><label>Asking price £</label><input id="s_ask" type="number" step="0.01"></div>
+      <div><label>New or used</label><select id="s_cond"><option value="Used">Used</option><option value="New">New</option><option value="">Let the inspector choose</option></select></div>
       <div><label>Available for</label><select id="s_av"><option value="sale">For sale</option><option value="hire">For hire</option><option value="both">For sale and hire</option></select></div>
       <div><label>Notes for the person in the yard</label><input id="s_notes"></div><button id="s_add" type="button">Add &amp; create link</button></div><div class="err" id="s_err"></div><div id="s_out"></div></div>` +
       `<div class="card"><h3>Stock</h3><div class="hint">Change status from the dropdown. Cost and asking price save when you leave the box. “Moved to hire fleet” takes it out of sales stock.</div>
@@ -66,7 +67,7 @@
       const reg = $('s_reg').value.trim().toUpperCase(); if (!reg) { err('Enter the registration or trailer ID.'); return; }
       try {
         err('');
-        const [s] = await api('stock', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ reg, advert: { avail: $('s_av').value }, vehicle_type: $('s_type').value, stock_ref: $('s_ref').value.trim() || null, location: $('s_loc').value.trim() || null, cost: +$('s_cost').value || null, asking_price: +$('s_ask').value || null, notes: $('s_notes').value.trim() || null }) });
+        const [s] = await api('stock', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ reg, advert: { avail: $('s_av').value, cond: $('s_cond').value || null }, vehicle_type: $('s_type').value, stock_ref: $('s_ref').value.trim() || null, location: $('s_loc').value.trim() || null, cost: +$('s_cost').value || null, asking_price: +$('s_ask').value || null, notes: $('s_notes').value.trim() || null }) });
         const j = await newJob(s, $('s_notes').value.trim());
         await load(); draw(el); showLink(s, j);
       } catch (e) { err('Could not save: ' + e.message); }
@@ -97,7 +98,7 @@
 
   async function newJob(s, notes) {
     const id = crypto.randomUUID();
-    const [j] = await api('jobs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ id, ref: 'J' + Date.now().toString(36).toUpperCase(), vehicle_type: s.vehicle_type, reg: s.reg, stock_ref: s.stock_ref, location: s.location, notes: notes || null, stock_id: s.id, status: 'assigned' }) });
+    const [j] = await api('jobs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ id, ref: 'J' + Date.now().toString(36).toUpperCase(), vehicle_type: s.vehicle_type, reg: s.reg, stock_ref: s.stock_ref, location: s.location, notes: notes || null, stock_id: s.id, status: 'assigned', data: (s.advert && s.advert.cond) ? { preset: { condition: s.advert.cond } } : null }) });
     return j;
   }
   function showLink(s, j) {

@@ -396,7 +396,7 @@ async function cloudUpload(key){
   const path=`${CLOUD.id}/${key}_${Date.now().toString(36)}.jpg`;
   try{ await putFile(path,dataToBlob(d),"image/jpeg"); S.up[key]=path; save(); return true; }catch(e){ return false; }
 }
-function cloudDirty(){ if(!CLOUD) return; clearTimeout(syncT); syncT=setTimeout(async()=>{ try{ await rpc("pub_save_job",{p_job:CLOUD.id,p_data:{state:S,up:S.up||{}},p_submit:false}); }catch(e){} },2500); }
+function cloudDirty(){ if(!CLOUD) return; clearTimeout(syncT); syncT=setTimeout(async()=>{ try{ await rpc("pub_save_job",{p_job:CLOUD.id,p_data:{state:S,up:S.up||{},preset:JOB&&JOB.preset||null},p_submit:false}); }catch(e){} },2500); }
 async function openCloud(id){
   chrome(false); setHeader("Vehicle inspection"); $("app").innerHTML=`<div class="card"><div class="spin"></div><p class="muted small" style="text-align:center">Opening your job…</p></div>`;
   try{
@@ -405,7 +405,7 @@ async function openCloud(id){
     if(!TYPES[j.vehicle_type]) throw new Error("type");
     if(j.status==="submitted"||j.status==="reviewed"){ $("app").innerHTML=`<div class="card" style="text-align:center"><div class="big">✓</div><h1>Already sent</h1><p>The inspection for <b>${esc(j.reg)}</b> has been sent to the office. Thank you.</p></div>${footerHTML()}`; return; }
     CLOUD={id:j.id};
-    await startJob({v:1,id:j.id,type:j.vehicle_type,reg:j.reg,stock:j.stock_ref||"",inspector:j.inspector||"",where:j.location||"",notes:j.notes||"",created:today()});
+    await startJob({v:1,id:j.id,type:j.vehicle_type,reg:j.reg,stock:j.stock_ref||"",inspector:j.inspector||"",where:j.location||"",notes:j.notes||"",created:today(),preset:(j.data&&j.data.preset)||null});
   }catch(e){ renderBadLink(); }
 }
 /* =====================================================================
@@ -505,6 +505,7 @@ async function startJob(j){
   if(j&&j.type&&!(TYPES[j.type]&&TYPES[j.type].full)) applyTpl(await loadTpl(j.type));
   if(!j||!TYPES[j.type]) return renderBadLink();
   JOB=j; S=(await DB.get("state|"+j.id))||{step:0,answers:{body_type:TYPES[j.type].body,inspector:j.inspector||""},photos:{},defects:[],started:new Date().toISOString()};
+  const pc=j.preset&&j.preset.condition; if(pc==="New") S.answers.condition="New"; else if(pc==="Used"&&S.answers.condition==="New") S.answers.condition="";
   buildSteps(); setHeader(`<b>${esc(j.reg)}</b><br>${esc(TYPES[j.type].label)}`);
   render();
 }
@@ -575,7 +576,8 @@ function rIntro(){
     <div class="field"><label>Does the registration / ID on the vehicle match <b>${esc(JOB.reg)}</b>?</label>
       <div class="seg"><button class="btn ${a.reg_match==="Yes"?"on":""}" onclick="setA('reg_match','Yes');render()">Yes</button><button class="btn ${a.reg_match==="No"?"on":""}" onclick="setA('reg_match','No');render()">No</button></div></div>
     ${a.reg_match==="No"?`<div class="field"><label>What does the vehicle show?</label><input type="text" value="${esc(a.actual_reg||"")}" oninput="setA('actual_reg',this.value.toUpperCase())" style="text-transform:uppercase"><div class="hint">Carry on – the office will check it.</div></div>`:""}
-    ${TYPES[JOB.type].condFirst?`<div class="field"><label>Condition of the vehicle</label><div class="hint">Some condition photos and checks are skipped for new vehicles.</div><select onchange="setA('condition',this.value)"><option value="">Select…</option>${(FIELDS.condition.options||[]).map(o=>`<option ${o===a.condition?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`:""}
+    ${TYPES[JOB.type].condFirst&&JOB.preset&&JOB.preset.condition==="New"?`<table class="t"><tr><th>Condition</th><td><b>New</b> <span class="small muted">(set by the office)</span></td></tr></table>`:""}
+    ${TYPES[JOB.type].condFirst&&!(JOB.preset&&JOB.preset.condition==="New")?`<div class="field"><label>Condition of the vehicle</label><div class="hint">${JOB.preset&&JOB.preset.condition==="Used"?"The office has marked this as used – choose how good it is.":"Some condition photos and checks are skipped for new vehicles."}</div><select onchange="setA('condition',this.value)"><option value="">Select…</option>${(FIELDS.condition.options||[]).filter(o=>!(JOB.preset&&JOB.preset.condition==="Used"&&o==="New")).map(o=>`<option ${o===a.condition?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`:""}
     <div class="tip">Before you start: good daylight is best, wipe the camera lens, and hold the phone <b>landscape</b> for the walkaround shots.</div>
     <div id="steperr"></div></div>`;
 }
