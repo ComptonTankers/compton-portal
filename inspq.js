@@ -28,7 +28,13 @@
     async function load() {
       dirty = false; const body = el.querySelector('#iq_body'); body.innerHTML = '<div class="empty">Loading…</div>';
       const r = await api('inspection_templates?select=*&vehicle_type=eq.' + typeSel);
-      if (!r.length) { body.innerHTML = '<div class="card"><div class="hint">This vehicle type has no question set yet. The inspection app is using its built-in questions for it.</div></div>'; el.querySelector('#iq_meta').textContent = ''; return; }
+      if (!r.length) { el.querySelector('#iq_meta').textContent = '';
+        body.innerHTML = '<div class="card"><div class="hint">This vehicle type is still using the inspection app\'s original questions. Press the button to copy them here so you can change them – nothing changes for the inspector until you edit and save.</div><button class="mini pri2" id="iq_setup" style="margin-top:8px">Set up this vehicle type for editing</button> <span id="iq_sm" class="small"></span></div>';
+        body.querySelector('#iq_setup').onclick = async () => { const sm = body.querySelector('#iq_sm'); try { sm.textContent = 'Setting up…';
+            const all = await (await fetch('assets/inspection-builtin.json', { cache: 'no-store' })).json(); const t = all.find((x) => x.vehicle_type === typeSel); if (!t) throw new Error('no original questions found for this type');
+            const s = await X.session(); await api('inspection_templates', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ vehicle_type: t.vehicle_type, label: t.label, cat: t.cat, body: t.body, def: t.def, updated_by: (s && s.user && s.user.email) || null }) });
+            const o = typeEl.querySelector('option[value="' + typeSel + '"]'); if (o) o.textContent = TYPES[typeSel]; await load(); } catch (e) { sm.innerHTML = '<span style="color:#b3261e">' + esc(e.message) + '</span>'; } };
+        return; }
       cur = r[0]; cur.def.photos = cur.def.photos || []; cur.def.fields = cur.def.fields || []; cur.def.groups = cur.def.groups || []; cur.def.photoSections = cur.def.photoSections || [];
       el.querySelector('#iq_meta').textContent = `Version ${cur.version} · saved ${new Date(cur.updated_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${cur.updated_by ? ' by ' + cur.updated_by : ''}`;
       draw();
