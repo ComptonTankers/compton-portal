@@ -35,17 +35,18 @@
             const s = await X.session(); await api('inspection_templates', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ vehicle_type: t.vehicle_type, label: t.label, cat: t.cat, body: t.body, def: t.def, updated_by: (s && s.user && s.user.email) || null }) });
             const o = typeEl.querySelector('option[value="' + typeSel + '"]'); if (o) o.textContent = TYPES[typeSel]; await load(); } catch (e) { sm.innerHTML = '<span style="color:#b3261e">' + esc(e.message) + '</span>'; } };
         return; }
-      cur = r[0]; cur.def.photos = cur.def.photos || []; cur.def.fields = cur.def.fields || []; cur.def.groups = cur.def.groups || []; cur.def.photoSections = cur.def.photoSections || [];
+      cur = r[0]; cur.def.photos = cur.def.photos || []; cur.def.fields = cur.def.fields || []; cur.def.groups = cur.def.groups || []; cur.def.photoSections = cur.def.photoSections || []; cur.def.officeGroups = cur.def.officeGroups || [];
       el.querySelector('#iq_meta').textContent = `Version ${cur.version} · saved ${new Date(cur.updated_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${cur.updated_by ? ' by ' + cur.updated_by : ''}`;
       draw();
     }
     function draw() {
       const d = cur.def, body = el.querySelector('#iq_body');
-      const nP = d.photos.reduce((n, p) => n + (p.count || 1), 0), nQ = d.fields.filter((f) => !f.special).length;
+      const offQ = (f) => f.office || d.officeGroups.includes(f.group);
+      const nP = d.photos.reduce((n, p) => n + (p.count || 1), 0), nQ = d.fields.filter((f) => !f.special && !offQ(f)).length, nO = d.fields.filter((f) => !f.special && offQ(f)).length;
       body.innerHTML = `
       <div class="card" style="position:sticky;top:0;z-index:3;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="mini pri2" id="iq_save">Save changes</button><button class="mini" id="iq_undo">Discard changes</button><button class="mini" id="iq_try">Try it as the inspector</button><button class="mini" id="iq_hist">Earlier versions</button>
-        <span class="small muted"><b>${nP}</b> photos + video · <b>${nQ}</b> questions</span><span id="iq_msg" class="small" style="margin-left:auto">${dirty ? '<span style="color:#b3261e">Unsaved changes</span>' : ''}</span></div>
+        <span class="small muted"><b>${nP}</b> photos + video · <b>${nQ}</b> questions for the inspector · <b>${nO}</b> for the office</span><span id="iq_msg" class="small" style="margin-left:auto">${dirty ? '<span style="color:#b3261e">Unsaved changes</span>' : ''}</span></div>
       <div id="iq_histbox"></div>
       <div class="card"><h3 style="margin-top:0">Photos</h3><div class="hint">Shown to the inspector in this order, section by section. The walkaround video comes after the "Walkaround photos" section.</div>
         ${d.photoSections.map((sec, si) => `<div style="margin-top:14px;border-top:2px solid #e3e7ee;padding-top:8px"><div style="display:flex;gap:6px;align-items:center"><b style="font-size:15px">${esc(sec)}</b>
@@ -62,18 +63,21 @@
           </tbody></table><button class="mini" data-ps="${si}" data-a="add" style="margin-top:6px">+ Add photo to ${esc(sec)}</button></div>`).join('')}
         <button class="mini" id="iq_addsec" style="margin-top:12px">+ Add photo section</button></div>
 
-      <div class="card"><h3 style="margin-top:0">Questions</h3><div class="hint">Each section is one or two screens on the phone. Tick <b>Optional</b> if the inspector can leave it blank (otherwise they must answer or tick "Not available"). Tick <b>For sale</b> if it must be answered before the vehicle can be approved for sale.</div>
+      <div class="card"><h3 style="margin-top:0">Questions</h3><div class="hint">Each section is one or two screens on the phone. Tick <b>Optional</b> if the inspector can leave it blank (otherwise they must answer or tick "Not available"). Tick <b>For sale</b> if it must be answered before the vehicle can be approved for sale. Questions <b>answered by the office</b> don't appear on the inspector's phone – they show on the vehicle's report in Stock &amp; inspections for the office to fill in with Edit report.</div>
         ${d.groups.map((g, gi) => `<div style="margin-top:14px;border-top:2px solid #e3e7ee;padding-top:8px"><div style="display:flex;gap:6px;align-items:center"><b style="font-size:15px">${esc(g)}</b>
-          <button class="mini" data-gs="${gi}" data-a="up">▲</button><button class="mini" data-gs="${gi}" data-a="dn">▼</button><button class="mini" data-gs="${gi}" data-a="ren">Rename</button><button class="mini" data-gs="${gi}" data-a="del">Delete section</button></div>
-          <table class="pv-tbl" style="margin-top:6px;width:100%"><thead><tr><th style="width:26%">Question</th><th style="width:15%">Answer type</th><th>Choices / unit / help text</th><th style="width:62px">Optional</th><th style="width:62px">For sale</th><th style="width:150px"></th></tr></thead><tbody>
-          ${d.fields.map((f, i) => [f, i]).filter(([f]) => f.group === g).map(([f, i]) => f.special ? `<tr style="background:#f6f8fc"><td><b>${esc(SPECIALS[f.special] || f.special)}</b></td><td colspan="2" class="small muted">${f.special === 'tread' ? `<label><input type="checkbox" data-q="${i}" data-k="mode" ${f.mode === 'axle' ? 'checked' : ''}> One reading per axle (lowest), instead of each side</label>` : 'Number of compartments and the size of each (litres)'}</td><td></td><td>${f.special === 'compartments' ? `<input type="checkbox" data-q="${i}" data-k="sale" ${f.sale ? 'checked' : ''}>` : ''}</td>
+          <button class="mini" data-gs="${gi}" data-a="up">▲</button><button class="mini" data-gs="${gi}" data-a="dn">▼</button><button class="mini" data-gs="${gi}" data-a="ren">Rename</button><button class="mini" data-gs="${gi}" data-a="del">Delete section</button>
+          <label class="small" style="margin-left:10px">Whole section answered by <select data-gs="${gi}" data-a="who" style="padding:4px;${d.officeGroups.includes(g) ? 'background:#fbf0d9' : ''}"><option value="">Inspector</option><option value="1" ${d.officeGroups.includes(g) ? 'selected' : ''}>Office – hidden from the inspection link</option></select></label></div>
+          ${d.officeGroups.includes(g) ? '<div class="hint" style="background:#fbf0d9;padding:6px 8px;border-radius:6px;margin-top:6px">This section is <b>not on the inspection link</b>. The office fills it in on the vehicle\'s report in Stock &amp; inspections (Edit report).</div>' : ''}
+          <table class="pv-tbl" style="margin-top:6px;width:100%;${d.officeGroups.includes(g) ? 'opacity:.85' : ''}"><thead><tr><th style="width:26%">Question</th><th style="width:15%">Answer type</th><th>Choices / unit / help text</th><th style="width:105px">Answered by</th><th style="width:62px">Optional</th><th style="width:62px">For sale</th><th style="width:150px"></th></tr></thead><tbody>
+          ${d.fields.map((f, i) => [f, i]).filter(([f]) => f.group === g).map(([f, i]) => f.special ? `<tr style="background:#f6f8fc"><td><b>${esc(SPECIALS[f.special] || f.special)}</b></td><td colspan="2" class="small muted">${f.special === 'tread' ? `<label><input type="checkbox" data-q="${i}" data-k="mode" ${f.mode === 'axle' ? 'checked' : ''}> One reading per axle (lowest), instead of each side</label>` : 'Number of compartments and the size of each (litres)'}</td><td class="small muted">Inspector</td><td></td><td>${f.special === 'compartments' ? `<input type="checkbox" data-q="${i}" data-k="sale" ${f.sale ? 'checked' : ''}>` : ''}</td>
             <td style="white-space:nowrap"><button class="mini" data-qi="${i}" data-a="up">▲</button><button class="mini" data-qi="${i}" data-a="dn">▼</button>${grpSel(i, g)}<button class="mini" data-qi="${i}" data-a="del">✕</button></td></tr>` : `<tr>
             <td><input data-q="${i}" data-k="label" value="${esc(f.label)}" style="width:100%;padding:5px"></td>
             <td><select data-q="${i}" data-k="type" style="width:100%;padding:5px">${ATYPES.map(([k, v]) => `<option value="${k}" ${k === f.type ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
             <td>${f.type === 'select' ? `<input data-q="${i}" data-k="options" value="${esc((f.options || []).join(', '))}" placeholder="Choices, separated by commas" style="width:100%;padding:5px">` : ''}
               ${f.type === 'number' ? `<input data-q="${i}" data-k="unitx" value="${esc(f.units ? f.units.join(', ') : (f.unit || ''))}" placeholder="Unit, e.g. kg – or a choice: litres, gallons" style="width:100%;padding:5px">` : ''}
               <input data-q="${i}" data-k="hint" value="${esc(f.hint || f.ph || '')}" placeholder="Help text / example (optional)" style="width:100%;padding:5px;margin-top:3px;font-size:12px"></td>
-            <td style="text-align:center"><input type="checkbox" data-q="${i}" data-k="optional" ${f.optional ? 'checked' : ''}></td>
+            <td>${d.officeGroups.includes(g) ? '<span class="small muted">Office (section)</span>' : `<select data-q="${i}" data-k="office" style="width:100%;padding:5px;${f.office ? 'background:#fbf0d9' : ''}"><option value="">Inspector</option><option value="1" ${f.office ? 'selected' : ''}>Office</option></select>`}</td>
+            <td style="text-align:center">${offQ(f) ? '' : `<input type="checkbox" data-q="${i}" data-k="optional" ${f.optional ? 'checked' : ''}>`}</td>
             <td style="text-align:center"><input type="checkbox" data-q="${i}" data-k="sale" ${f.sale ? 'checked' : ''}></td>
             <td style="white-space:nowrap"><button class="mini" data-qi="${i}" data-a="up">▲</button><button class="mini" data-qi="${i}" data-a="dn">▼</button>${grpSel(i, g)}<button class="mini" data-qi="${i}" data-a="del" title="Remove">✕</button></td></tr>`).join('')}
           </tbody></table><button class="mini" data-gs="${gi}" data-a="add" style="margin-top:6px">+ Add question to ${esc(g)}</button>
@@ -97,12 +101,13 @@
       body.querySelectorAll('[data-ps]').forEach((b) => b.onclick = () => { const si = +b.dataset.ps, a = b.dataset.a, sec = d.photoSections[si];
         if (a === 'up' || a === 'dn') mv(d.photoSections, si, a === 'up' ? -1 : 1);
         if (a === 'ren') { const n = (prompt('New name for this photo section', sec) || '').trim(); if (!n || d.photoSections.includes(n)) return; d.photoSections[si] = n; d.photos.forEach((p) => { if (p.section === sec) p.section = n; }); }
-        if (a === 'del') { if (d.photos.some((p) => p.section === sec)) { alert('Move or remove the photos in this section first.'); return; } d.photoSections.splice(si, 1); }
+        if (a === 'del') { const n = d.photos.filter((p) => p.section === sec).reduce((t, p) => t + (p.count || 1), 0); if (!confirm('Delete the section “' + sec + '”' + (n ? ' and its ' + n + ' photo' + (n > 1 ? 's' : '') : '') + '?')) return; d.photos = d.photos.filter((p) => p.section !== sec); d.photoSections.splice(si, 1); }
         if (a === 'add') { const l = (prompt('Name of the new photo', '') || '').trim(); if (!l) return; d.photos.push({ id: slug(l), label: l, section: sec, tip: '' }); }
         touch(); draw(); });
       q('#iq_addsec').onclick = () => { const n = (prompt('Name of the new photo section', '') || '').trim(); if (!n || d.photoSections.includes(n)) return; d.photoSections.push(n); touch(); draw(); };
       body.querySelectorAll('[data-q]').forEach((inp) => inp.onchange = () => { const f = d.fields[+inp.dataset.q], k = inp.dataset.k;
         if (k === 'optional' || k === 'sale') { if (inp.checked) f[k] = k === 'optional' ? 1 : true; else delete f[k]; touch(); return; }
+        if (k === 'office') { if (inp.value) f.office = true; else delete f.office; touch(); draw(); return; }
         if (k === 'mode') { if (inp.checked) f.mode = 'axle'; else delete f.mode; touch(); return; }
         if (k === 'type') { f.type = inp.value; if (f.type !== 'select') delete f.options; if (f.type !== 'number') { delete f.unit; delete f.units; } touch(); draw(); return; }
         if (k === 'options') { f.options = inp.value.split(',').map((x) => x.trim()).filter(Boolean); touch(); return; }
@@ -115,10 +120,11 @@
         if (a === 'grp') { f.group = b.value; d.fields.splice(i, 1); d.fields.push(f); }
         if (a === 'del') { if (!confirm('Remove “' + (f.label || SPECIALS[f.special]) + '”?')) return; d.fields.splice(i, 1); }
         touch(); draw(); }
-      body.querySelectorAll('[data-gs]').forEach((b) => b.onclick = () => { const gi = +b.dataset.gs, a = b.dataset.a, g = d.groups[gi];
+      body.querySelectorAll('select[data-gs]').forEach((b) => b.onchange = () => { const g = d.groups[+b.dataset.gs]; d.officeGroups = d.officeGroups.filter((x) => x !== g); if (b.value) d.officeGroups.push(g); touch(); draw(); });
+      body.querySelectorAll('button[data-gs]').forEach((b) => b.onclick = () => { const gi = +b.dataset.gs, a = b.dataset.a, g = d.groups[gi];
         if (a === 'up' || a === 'dn') mv(d.groups, gi, a === 'up' ? -1 : 1);
-        if (a === 'ren') { const n = (prompt('New name for this question section', g) || '').trim(); if (!n || d.groups.includes(n)) return; d.groups[gi] = n; d.fields.forEach((f) => { if (f.group === g) f.group = n; }); }
-        if (a === 'del') { if (d.fields.some((f) => f.group === g)) { alert('Move or remove the questions in this section first.'); return; } d.groups.splice(gi, 1); }
+        if (a === 'ren') { const n = (prompt('New name for this question section', g) || '').trim(); if (!n || d.groups.includes(n)) return; d.groups[gi] = n; d.officeGroups = d.officeGroups.map((x) => (x === g ? n : x)); d.fields.forEach((f) => { if (f.group === g) f.group = n; }); }
+        if (a === 'del') { const n = d.fields.filter((f) => f.group === g).length; if (!confirm('Delete the section “' + g + '”' + (n ? ' and its ' + n + ' question' + (n > 1 ? 's' : '') : '') + '?')) return; d.fields = d.fields.filter((f) => f.group !== g); d.officeGroups = d.officeGroups.filter((x) => x !== g); d.groups.splice(gi, 1); }
         if (a === 'add') { const l = (prompt('The new question, as the inspector will see it', '') || '').trim(); if (!l) return; d.fields.push({ id: slug(l), label: l, group: g, type: 'text' }); }
         if (a === 'sp') { const sp = b.dataset.sp; d.fields.push(sp === 'tread' ? { id: 'tread', label: 'Tyre tread depths', group: g, special: 'tread', mode: 'axle' } : { id: 'compartments', label: 'Compartments and sizes', group: g, special: 'compartments' }); }
         touch(); draw(); });
@@ -129,7 +135,7 @@
       q('#iq_save').onclick = async () => { const m = q('#iq_msg');
         const bad = d.fields.filter((f) => !f.special && (!String(f.label || '').trim() || (f.type === 'select' && !(f.options || []).length)));
         if (bad.length) { m.innerHTML = '<span style="color:#b3261e">Every question needs wording, and every drop-down needs at least one choice: ' + esc(bad.map((f) => f.label || '(blank)').join(', ')) + '</span>'; return; }
-        d.groups = d.groups.filter((g) => d.fields.some((f) => f.group === g)); d.photoSections = d.photoSections.filter((s) => d.photos.some((p) => p.section === s));
+        d.groups = d.groups.filter((g) => d.fields.some((f) => f.group === g)); d.officeGroups = d.officeGroups.filter((g) => d.groups.includes(g)); d.photoSections = d.photoSections.filter((s) => d.photos.some((p) => p.section === s));
         try { m.textContent = 'Saving…'; const s = await X.session(); const who = (s && s.user && (s.user.user_metadata?.name || s.user.email)) || null;
           await api('inspection_templates?vehicle_type=eq.' + cur.vehicle_type, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ def: d, updated_by: who }) });
           await load(); el.querySelector('#iq_msg').innerHTML = '<span style="color:#1b7f4b">Saved ✓ – new inspection links use this now</span>';

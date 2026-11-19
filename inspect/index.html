@@ -372,9 +372,10 @@ const RATING=["1 – poor","2 – below average","3 – average","4 – good","5
 function applyTpl(t){
   if(!t||!t.def) return; const d=t.def;
   (d.photos||[]).forEach(p=>{ PHOTOS[p.id]=Object.assign({},p); });
-  (d.fields||[]).forEach(f=>{ const g=Object.assign({},f); if(g.type==="yesno"){ g.type="select"; g.options=["Yes","No"]; } else if(g.type==="rating"){ g.type="select"; g.options=RATING; } if(g.units&&!g.units.length) delete g.units; FIELDS[g.id]=g; });
+  const og=d.officeGroups||[], fl=(d.fields||[]).filter(f=>!f.office&&!og.includes(f.group));
+  fl.forEach(f=>{ const g=Object.assign({},f); if(g.type==="yesno"){ g.type="select"; g.options=["Yes","No"]; } else if(g.type==="rating"){ g.type="select"; g.options=RATING; } if(g.units&&!g.units.length) delete g.units; FIELDS[g.id]=g; });
   TYPES[t.vehicle_type]={label:t.label,cat:t.cat||"rigid",body:t.body||"",full:true,version:t.version,
-    photos:(d.photos||[]).map(p=>p.id),fields:(d.fields||[]).map(f=>f.id),groups:d.groups||[],photoSections:d.photoSections||[]};
+    photos:(d.photos||[]).map(p=>p.id),fields:fl.map(f=>f.id),groups:d.groups||[],photoSections:d.photoSections||[]};
 }
 async function rpc(fn,body){
   const r=await fetch(CLOUD_CFG.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:CLOUD_CFG.key,"Content-Type":"application/json"},body:JSON.stringify(body)});
