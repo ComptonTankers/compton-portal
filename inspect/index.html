@@ -362,6 +362,20 @@ function guideSVG(key){
    ===================================================================== */
 const CLOUD_CFG={url:"https://swqpnumuqtsgwpqowxid.supabase.co",key:"sb_publishable_n25KLWM-u9E0t6whfWMgew_uYWquUJT"};
 let CLOUD=null, syncT=null;
+/* ---------- question sets edited in the portal (Inspection questions page). Falls back to the built-in sets above. ---------- */
+async function loadTpl(type){
+  try{ const r=await fetch(CLOUD_CFG.url+"/rest/v1/inspection_templates?select=*&vehicle_type=eq."+encodeURIComponent(type),{headers:{apikey:CLOUD_CFG.key}});
+    if(r.ok){ const a=await r.json(); if(a[0]){ await DB.set("tpl|"+type,a[0]); return a[0]; } } }catch(e){}
+  try{ return await DB.get("tpl|"+type); }catch(e){ return null; }
+}
+const RATING=["1 – poor","2 – below average","3 – average","4 – good","5 – excellent"];
+function applyTpl(t){
+  if(!t||!t.def) return; const d=t.def;
+  (d.photos||[]).forEach(p=>{ PHOTOS[p.id]=Object.assign({},p); });
+  (d.fields||[]).forEach(f=>{ const g=Object.assign({},f); if(g.type==="yesno"){ g.type="select"; g.options=["Yes","No"]; } else if(g.type==="rating"){ g.type="select"; g.options=RATING; } if(g.units&&!g.units.length) delete g.units; FIELDS[g.id]=g; });
+  TYPES[t.vehicle_type]={label:t.label,cat:t.cat||"rigid",body:t.body||"",full:true,version:t.version,
+    photos:(d.photos||[]).map(p=>p.id),fields:(d.fields||[]).map(f=>f.id),groups:d.groups||[],photoSections:d.photoSections||[]};
+}
 async function rpc(fn,body){
   const r=await fetch(CLOUD_CFG.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:CLOUD_CFG.key,"Content-Type":"application/json"},body:JSON.stringify(body)});
   const j=await r.json().catch(()=>({}));
@@ -385,6 +399,7 @@ async function openCloud(id){
   chrome(false); setHeader("Vehicle inspection"); $("app").innerHTML=`<div class="card"><div class="spin"></div><p class="muted small" style="text-align:center">Opening your job…</p></div>`;
   try{
     const j=await rpc("pub_get_job",{p_job:id});
+    applyTpl(await loadTpl(j.vehicle_type));
     if(!TYPES[j.vehicle_type]) throw new Error("type");
     if(j.status==="submitted"||j.status==="reviewed"){ $("app").innerHTML=`<div class="card" style="text-align:center"><div class="big">✓</div><h1>Already sent</h1><p>The inspection for <b>${esc(j.reg)}</b> has been sent to the office. Thank you.</p></div>${footerHTML()}`; return; }
     CLOUD={id:j.id};
@@ -437,7 +452,7 @@ async function renderAdmin(){
     ${recent.length?`<div class="card"><h3 style="margin-top:0">Recent jobs on this device</h3><ul class="list">${recent.slice(0,15).map(j=>`<li><div class="grow"><b>${esc(j.reg)}</b> · ${esc(TYPES[j.type]?.label||j.type)}<div class="small muted">${esc(j.stock||"")} ${esc(j.inspector||"")} · ${fmtDate(j.created)}</div></div><button class="btn link" onclick="showLink('${j.id}')">Link</button></li>`).join("")}</ul></div>`:""}
     <div class="btns"><a class="btn" href="#refs" onclick="setTimeout(route)">Manage reference photos</a></div>${footerHTML()}`;
 }
-function countFor(type){ const t=TYPES[type]; const p=[...BASE_PHOTOS,...t.photos].reduce((n,k)=>n+(PHOTOS[k].count||1),0); const f=new Set([...BASE_FIELDS,...t.fields]).size; return `${p} photos and ${f} question sets for this type.`; }
+function countFor(type){ const t=TYPES[type]; const p=(t.full?t.photos:[...BASE_PHOTOS,...t.photos]).reduce((n,k)=>n+(PHOTOS[k].count||1),0); const f=(t.full?t.fields:[...new Set([...BASE_FIELDS,...t.fields])]).length; return `${p} photos and ${f} question sets for this type.`; }
 function jobLink(j){ return location.href.split("#")[0]+"#j="+b64e(j); }
 async function createJob(){
   if(!draft.type||!(draft.reg||"").trim()){ $("a_err").innerHTML=`<div class="err">Choose a vehicle type and enter the registration / ID.</div>`; return; }
@@ -485,6 +500,7 @@ async function refPack(){ const files=Object.entries(REFS).map(([k,d])=>({name:B
    INSPECTOR FLOW
    ===================================================================== */
 async function startJob(j){
+  if(j&&j.type&&!(TYPES[j.type]&&TYPES[j.type].full)) applyTpl(await loadTpl(j.type));
   if(!j||!TYPES[j.type]) return renderBadLink();
   JOB=j; S=(await DB.get("state|"+j.id))||{step:0,answers:{body_type:TYPES[j.type].body,inspector:j.inspector||""},photos:{},defects:[],started:new Date().toISOString()};
   buildSteps(); setHeader(`<b>${esc(j.reg)}</b><br>${esc(TYPES[j.type].label)}`);
@@ -492,18 +508,22 @@ async function startJob(j){
 }
 function buildSteps(){
   const t=TYPES[JOB.type]; STEPS=[{kind:"intro",section:"Start"}];
-  const plist=[...new Set([...BASE_PHOTOS,...t.photos])];
-  const order=["Walkaround photos","Documents & certificates","Detail photos"];
+  const plist=t.full?t.photos:[...new Set([...BASE_PHOTOS,...t.photos])];
+  const order=t.full&&t.photoSections.length?t.photoSections:["Walkaround photos","Documents & certificates","Detail photos"];
+  const vidAfter=order.includes("Walkaround photos")?"Walkaround photos":order[0];
   for(const sec of order){ for(const id of plist.filter(p=>PHOTOS[p].section===sec)){ const d=PHOTOS[id], n=d.count||1; for(let i=1;i<=n;i++) STEPS.push({kind:"photo",slot:id,key:n>1?`${id}_${i}`:id,i,n,section:sec}); }
-    if(sec==="Walkaround photos") STEPS.push({kind:"video",section:"Walkaround video"}); }
+    if(sec===vidAfter) STEPS.push({kind:"video",section:"Walkaround video"}); }
   const fset=fieldSet();
-  for(const g of GROUPS){ const ids=Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g); for(let i=0;i<ids.length;i+=6) STEPS.push({kind:"fields",ids:ids.slice(i,i+6),section:g}); }
+  if(t.full){ for(const g of t.groups){ const ids=t.fields.filter(k=>FIELDS[k].group===g), plain=ids.filter(k=>!FIELDS[k].special);
+      const pages=Math.ceil(plain.length/8), per=Math.ceil(plain.length/(pages||1)); for(let i=0;i<plain.length;i+=per) STEPS.push({kind:"fields",ids:plain.slice(i,i+per),section:g});
+      ids.filter(k=>FIELDS[k].special).forEach(k=>STEPS.push({kind:FIELDS[k].special,section:g})); } }
+  else { for(const g of GROUPS){ const ids=Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g); for(let i=0;i<ids.length;i+=6) STEPS.push({kind:"fields",ids:ids.slice(i,i+6),section:g}); }
   if(fset.has("compartments")) STEPS.push({kind:"compartments",section:"Tank & equipment"});
-  if(fset.has("tread")) STEPS.push({kind:"tread",section:"Tyres"});
+  if(fset.has("tread")) STEPS.push({kind:"tread",section:"Tyres"}); }
   STEPS.push({kind:"defects",section:"Damage & defects"});
   STEPS.push({kind:"review",section:"Check & send"});
 }
-function fieldSet(){ const t=TYPES[JOB.type]; return new Set([...BASE_FIELDS,...t.fields].filter(k=>!FIELDS[k].cats||FIELDS[k].cats.includes(t.cat))); }
+function fieldSet(){ const t=TYPES[JOB.type]; if(t.full) return new Set(t.fields); return new Set([...BASE_FIELDS,...t.fields].filter(k=>!FIELDS[k].cats||FIELDS[k].cats.includes(t.cat))); }
 function save(){ clearTimeout(saveT); saveT=setTimeout(()=>DB.set("state|"+JOB.id,S),250); cloudDirty(); }
 function setA(id,v){ S.answers[id]=v; save(); }
 function toggleNA(id,on){ S.answers[id]=on?"N/A":""; save(); render(); }
@@ -674,15 +694,20 @@ function setComp(i,v){ const s=S.answers.comp_sizes||[]; s[i]=v; S.answers.comp_
 
 /* ---------- step: tread ---------- */
 function axleCount(){ return AXLES[S.answers.axle_layout]||parseInt(S.answers.tread_axles)||0; }
+const treadAxleMode=()=>!!(FIELDS.tread&&FIELDS.tread.mode==="axle");
 function rTread(){
   const n=axleCount(), t=S.answers.tread||{};
+  if(treadAxleMode()){ const pick=!AXLES[S.answers.axle_layout]?`<div class="field"><label>How many axles?</label><select onchange="setA('tread_axles',this.value);render()"><option value="">Select…</option>${[1,2,3,4,5].map(i=>`<option ${n===i?"selected":""}>${i}</option>`).join("")}</select></div>`:"";
+    return `<div class="card"><h2>Tyre tread depths</h2><p class="muted">For each axle, enter the <b>lowest</b> tread depth you find on that axle, in mm. Note anything odd in damage &amp; defects.</p>${pick}
+    ${n?`<table class="t"><tr><th>Axle</th><th>Lowest tread (mm)</th></tr>${Array.from({length:n},(_,i)=>{ const k=i+1, r=t[k]||{}; return `<tr><td>${k}${k===1?" (front)":""}</td><td><input type="number" inputmode="decimal" step="0.1" value="${esc(r.min||"")}" oninput="setTread(${k},'min',this.value)"></td></tr>`; }).join("")}</table>`:""}
+    <div id="treadwarn"></div><div id="steperr"></div></div>`; }
   const pick=!AXLES[S.answers.axle_layout]?`<div class="field"><label>How many axles?</label><div class="hint">Axle layout wasn't set earlier.</div><select onchange="setA('tread_axles',this.value);render()"><option value="">Select…</option>${[1,2,3,4,5].map(i=>`<option ${n===i?"selected":""}>${i}</option>`).join("")}</select></div>`:"";
   return `<div class="card"><h2>Tyre tread depths</h2><p class="muted">Measure each tyre in mm. On twin wheels, measure the outer tyre and note anything odd on the inner in damage &amp; defects.</p>${pick}
     ${n?`<table class="t"><tr><th>Axle</th><th>Passenger side (mm)</th><th>Driver side (mm)</th></tr>${Array.from({length:n},(_,i)=>{ const k=i+1, r=t[k]||{}; return `<tr><td>${k}${k===1?" (front)":""}</td><td><input type="number" inputmode="decimal" step="0.1" value="${esc(r.ns||"")}" oninput="setTread(${k},'ns',this.value)"></td><td><input type="number" inputmode="decimal" step="0.1" value="${esc(r.os||"")}" oninput="setTread(${k},'os',this.value)"></td></tr>`; }).join("")}</table>`:""}
     <div id="treadwarn"></div><div id="steperr"></div></div>`;
 }
 function setTread(ax,side,v){ const t=S.answers.tread||{}; t[ax]=t[ax]||{}; t[ax][side]=v; S.answers.tread=t; save();
-  const low=Object.values(t).some(r=>["ns","os"].some(s=>r[s]!==""&&r[s]!=null&&parseFloat(r[s])<MIN_TREAD)); const w=$("treadwarn"); if(w) w.innerHTML=low?`<div class="err">One or more tyres are below ${MIN_TREAD} mm – please double-check and note it in defects.</div>`:""; }
+  const low=Object.values(t).some(r=>["ns","os","min"].some(s=>r[s]!==""&&r[s]!=null&&parseFloat(r[s])<MIN_TREAD)); const w=$("treadwarn"); if(w) w.innerHTML=low?`<div class="err">One or more tyres are below ${MIN_TREAD} mm – please double-check and note it in defects.</div>`:""; }
 
 /* ---------- step: defects ---------- */
 function rDefects(){
@@ -707,7 +732,7 @@ function validate(st){
   if(st.kind==="photo"){ const p=S.photos[st.key]; if(!p||(p.status!=="ok"&&p.status!=="skipped")) return "Take the photo and confirm it, or say why you can't."; }
   if(st.kind==="fields"){ const miss=st.ids.filter(id=>!FIELDS[id].optional&&!filled(a[id])).map(id=>FIELDS[id].label); if(miss.length) return "Please complete: "+miss.join(", ")+". If you can't check something, tick “Not available”."; }
   if(st.kind==="compartments"){ const n=parseInt(a.comp_count)||0; if(!n) return "Select the number of compartments."; if((a.comp_sizes||[]).slice(0,n).filter(filled).length<n) return "Enter a size for every compartment (put 0 if unknown and add a comment)."; }
-  if(st.kind==="tread"){ const n=axleCount(); if(!n) return "Select the number of axles."; const t=a.tread||{}; for(let k=1;k<=n;k++){ if(!filled(t[k]?.ns)||!filled(t[k]?.os)) return "Enter a tread depth for every tyre."; } }
+  if(st.kind==="tread"){ const n=axleCount(); if(!n) return "Select the number of axles."; const t=a.tread||{}; for(let k=1;k<=n;k++){ if(treadAxleMode()?!filled(t[k]?.min):(!filled(t[k]?.ns)||!filled(t[k]?.os))) return treadAxleMode()?"Enter the lowest tread depth for every axle.":"Enter a tread depth for every tyre."; } }
   if(st.kind==="review"){ const m=missing(); if(m.length) return "Some steps aren't finished – see the list above."; }
   return "";
 }
@@ -737,9 +762,10 @@ function specRows(){
   rows.push(["Job","Registration / ID",JOB.reg]); if(a.reg_match==="No") rows.push(["Job","Vehicle actually shows",a.actual_reg||""]);
   rows.push(["Job","Vehicle type",t.label]); if(JOB.stock) rows.push(["Job","Stock ref",JOB.stock]); if(JOB.where) rows.push(["Job","Location",JOB.where]);
   rows.push(["Job","Inspector",a.inspector||""]); rows.push(["Job","Inspection date",fmtDate(today())]);
-  for(const g of GROUPS) for(const id of Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g)) rows.push([g,FIELDS[id].label,fmtVal(id)]);
+  if(t.full){ for(const g of t.groups) for(const id of t.fields.filter(k=>FIELDS[k].group===g&&!FIELDS[k].special)) rows.push([g,FIELDS[id].label,fmtVal(id)]); }
+  else for(const g of GROUPS) for(const id of Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g)) rows.push([g,FIELDS[id].label,fmtVal(id)]);
   if(fset.has("compartments")){ const n=parseInt(a.comp_count)||0, s=(a.comp_sizes||[]).slice(0,n); rows.push(["Tank & equipment","Number of compartments",n?String(n):""]); if(n&&!(S.skips&&S.skips.compartments)) rows.push(["Tank & equipment","Compartment sizes (front to rear)",s.map(x=>Number(x).toLocaleString("en-GB")+" L").join(" / ")+` = ${s.reduce((x,y)=>x+(parseFloat(y)||0),0).toLocaleString("en-GB")} L`]); }
-  if(fset.has("tread")){ const n=axleCount(), tr=a.tread||{}; for(let k=1;k<=n;k++) rows.push(["Tyres",`Axle ${k} tread (passenger / driver)`,S.skips&&S.skips.tread?"Skipped":`${tr[k]?.ns??""} mm / ${tr[k]?.os??""} mm`]); }
+  if(fset.has("tread")){ const n=axleCount(), tr=a.tread||{}; const tg=t.full?(FIELDS.tread.group||"Tyres"):"Tyres"; for(let k=1;k<=n;k++) rows.push(treadAxleMode()?[tg,`Axle ${k} lowest tread`,S.skips&&S.skips.tread?"Skipped":`${tr[k]?.min??""} mm`]:[tg,`Axle ${k} tread (passenger / driver)`,S.skips&&S.skips.tread?"Skipped":`${tr[k]?.ns??""} mm / ${tr[k]?.os??""} mm`]); }
   rows.push(["Walkaround video","Walkaround video",S.video?.status==="ok"?"Included in pack (videos folder)":S.video?.status==="skipped"?"Not recorded: "+S.video.reason:"Not recorded"]);
   if(filled(a.comments)) rows.push(["Comments","Inspector comments",a.comments]);
   return rows;

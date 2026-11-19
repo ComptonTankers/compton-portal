@@ -19,6 +19,7 @@
   }
 
   async function page(el) {
+    await loadTpls();
     el.innerHTML = X.head('Sales stock', 'Loading…');
     await load(); draw(el);
   }
@@ -113,6 +114,7 @@
     if (!r.ok) return null; return URL.createObjectURL(await r.blob());
   }
   async function view(stockId) {
+    await loadTpls();
     const s = ST.find((x) => x.id == stockId), j = JOBS[stockId]; const box = $('s_view'); if (!j || !box) return;
     const d = j.data || {}; const rows = d.rows || [];
     let sec = '';
@@ -294,7 +296,7 @@ Keep the same camera angle and framing. Photorealistic, professional dealer-qual
 
       host.querySelector('#sp_fill').onclick = async () => {
         const stk = ST.find((x) => x.id == j.stock_id) || {}; const type = stk.vehicle_type || j.vehicle_type; const rev = host.querySelector('#sp_rev');
-        const R0 = augment(d.rows || [], type); const flds = SD.filter((f) => applies(f, type) && f[2] !== 'sizes').map((f) => ({ label: f[1], options: Array.isArray(f[2]) ? f[2] : null, unit: typeof f[2] === 'string' && /^(kg|mm|litres|miles)$/.test(f[2]) ? f[2] : null, current: rowVal(R0, f[1]) })).map((f) => Object.assign(f, { current: okVal(f.current) ? f.current : '' }));
+        const R0 = augment(d.rows || [], type); const flds = sdFor(type).filter((f) => f[2] !== 'sizes').map((f) => ({ label: f[1], options: Array.isArray(f[2]) ? f[2] : null, unit: typeof f[2] === 'string' && /^(kg|mm|litres|miles)$/.test(f[2]) ? f[2] : null, current: rowVal(R0, f[1]) })).map((f) => Object.assign(f, { current: okVal(f.current) ? f.current : '' }));
         rev.innerHTML = '<div class="small muted" style="margin:8px 0">Reading the spec… this takes up to a minute.</div>';
         try {
           const r = await fetch(window.SUPABASE_CONFIG.url + '/functions/v1/spec-fill', { method: 'POST', headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + sess().access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ job_id: j.id, fields: flds }) });
@@ -378,13 +380,22 @@ Keep the same camera angle. Leave a small even white margin around the whole veh
   const PACKRE = /^(compartment use|tank construction|tipping|rear door|vacuum pump airflow|jetting pressure|main hose reel|secondary hose reel|loading boom|outlet valve|pto|make|model|year|chassis number|condition|mileage|body type|number of compartments|compartment sizes|total plated capacity|tank material|tank insulation|tank test pressure|adr class|axle layout|suspension|axle manufacturer|axle make|brake|tyre make|tyre size|landing legs|pump make|vac pump make|jetting pump make|api coupler|vapour recovery|control box|length|width|height|unladen weight|plated weight|mot expiry|adr expiry|safe loading pass expiry|vtg plating expiry|tank test due)/i;
   const STAR = '<b style="color:#d11a1a" title="Appears in the asset pack">*</b>';
   const applies = (f, type) => !f[4] || f[4].includes(type);
+  /* question sets edited on the Inspection questions page replace the built-in list for that vehicle type */
+  let TPLS = null;
+  async function loadTpls() { try { const r = await api('inspection_templates?select=vehicle_type,label,def'); TPLS = Object.fromEntries((r || []).map((t) => [t.vehicle_type, t])); } catch (e) { TPLS = TPLS || {}; } return TPLS; }
+  const RATING = ['1 – poor', '2 – below average', '3 – average', '4 – good', '5 – excellent'];
+  const tplSD = (def) => { const out = []; (def.fields || []).forEach((f) => { const req = f.sale ? 1 : 0;
+      if (f.special === 'compartments') { out.push([f.group, 'Number of compartments', 'num', req], [f.group, 'Compartment sizes (front to rear)', 'sizes', req]); return; } if (f.special) return;
+      const spec = f.type === 'yesno' ? ['Yes', 'No'] : f.type === 'rating' ? RATING : f.type === 'select' ? (f.options || []) : f.type === 'date' ? 'date' : f.type === 'number' ? (/^(kg|mm|litres|miles)$/.test(f.unit || '') ? f.unit : 'num') : 'text';
+      out.push([f.group, f.label, spec, req]); }); return out; };
+  const sdFor = (type) => (TPLS && TPLS[type] ? tplSD(TPLS[type].def) : SD.filter((f) => applies(f, type)));
   const isReq = (f, type) => applies(f, type) && ( f[3] === 1 || (f[3] === 'tank' && TANKT.includes(type)) || (f[3] === 'adr' && ADRT.includes(type)));
   const rowVal = (rows, label) => { const r = rows.find((x) => String(x[1]).toLowerCase() === label.toLowerCase()); return r ? String(r[2] == null ? '' : r[2]).trim() : ''; };
   const okVal = (v) => !/^(|not available|skipped|n\/a|none)$/i.test(v);
   /* the one list: every question that applies to this vehicle type, answered or not */
-  const augment = (rows, type) => { const R = rows.map((r) => r.slice()); SD.filter((f) => applies(f, type)).forEach((f) => { if (R.some((x) => String(x[1]).toLowerCase() === f[1].toLowerCase())) return; let at = -1; R.forEach((x, i) => { if (x[0] === f[0]) at = i; }); const row = [f[0], f[1], '']; if (at >= 0) R.splice(at + 1, 0, row); else R.push(row); }); return R; };
+  const augment = (rows, type) => { const R = rows.map((r) => r.slice()); sdFor(type).forEach((f) => { if (R.some((x) => String(x[1]).toLowerCase() === f[1].toLowerCase())) return; let at = -1; R.forEach((x, i) => { if (x[0] === f[0]) at = i; }); const row = [f[0], f[1], '']; if (at >= 0) R.splice(at + 1, 0, row); else R.push(row); }); return R; };
   const isDateLbl = (l) => /expiry date|due date/i.test(l);
-  const missingSD = (rows, type) => SD.filter((f) => isReq(f, type) && !okVal(rowVal(rows, f[1]))).map((f) => f[1]);
+  const missingSD = (rows, type) => sdFor(type).filter((f) => isReq(f, type) && !okVal(rowVal(rows, f[1]))).map((f) => f[1]);
 
   async function salesPhotos(box, reg, j, d, refresh) {
     box.querySelector('#s_sales')?.remove(); box.querySelector('#s_adv')?.remove();
