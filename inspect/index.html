@@ -375,7 +375,8 @@ function applyTpl(t){
   const og=d.officeGroups||[], fl=(d.fields||[]).filter(f=>!f.office&&!og.includes(f.group));
   fl.forEach(f=>{ const g=Object.assign({},f); if(g.type==="yesno"){ g.type="select"; g.options=["Yes","No"]; } else if(g.type==="rating"){ g.type="select"; g.options=RATING; } if(g.units&&!g.units.length) delete g.units; FIELDS[g.id]=g; });
   TYPES[t.vehicle_type]={label:t.label,cat:t.cat||"rigid",body:t.body||"",full:true,version:t.version,
-    photos:(d.photos||[]).map(p=>p.id),fields:fl.map(f=>f.id),groups:d.groups||[],photoSections:d.photoSections||[]};
+    photos:(d.photos||[]).map(p=>p.id),fields:fl.map(f=>f.id),
+    condFirst:fl.some(f=>f.id==="condition")&&((d.photos||[]).some(p=>p.notNew)||fl.some(f=>f.notNew)),groups:d.groups||[],photoSections:d.photoSections||[]};
 }
 async function rpc(fn,body){
   const r=await fetch(CLOUD_CFG.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:CLOUD_CFG.key,"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -512,10 +513,10 @@ function buildSteps(){
   const plist=t.full?t.photos:[...new Set([...BASE_PHOTOS,...t.photos])];
   const order=t.full&&t.photoSections.length?t.photoSections:["Walkaround photos","Documents & certificates","Detail photos"];
   const vidAfter=order.includes("Walkaround photos")?"Walkaround photos":order[0];
-  for(const sec of order){ for(const id of plist.filter(p=>PHOTOS[p].section===sec)){ const d=PHOTOS[id], n=d.count||1; for(let i=1;i<=n;i++) STEPS.push({kind:"photo",slot:id,key:n>1?`${id}_${i}`:id,i,n,section:sec}); }
+  for(const sec of order){ for(const id of plist.filter(p=>PHOTOS[p].section===sec&&showItem(PHOTOS[p]))){ const d=PHOTOS[id], n=d.count||1; for(let i=1;i<=n;i++) STEPS.push({kind:"photo",slot:id,key:n>1?`${id}_${i}`:id,i,n,section:sec}); }
     if(sec===vidAfter) STEPS.push({kind:"video",section:"Walkaround video"}); }
   const fset=fieldSet();
-  if(t.full){ for(const g of t.groups){ const ids=t.fields.filter(k=>FIELDS[k].group===g), plain=ids.filter(k=>!FIELDS[k].special);
+  if(t.full){ for(const g of t.groups){ const ids=t.fields.filter(k=>FIELDS[k].group===g&&showItem(FIELDS[k])&&!(t.condFirst&&k==="condition")), plain=ids.filter(k=>!FIELDS[k].special);
       const pages=Math.ceil(plain.length/8), per=Math.ceil(plain.length/(pages||1)); for(let i=0;i<plain.length;i+=per) STEPS.push({kind:"fields",ids:plain.slice(i,i+per),section:g});
       ids.filter(k=>FIELDS[k].special).forEach(k=>STEPS.push({kind:FIELDS[k].special,section:g})); } }
   else { for(const g of GROUPS){ const ids=Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g); for(let i=0;i<ids.length;i+=6) STEPS.push({kind:"fields",ids:ids.slice(i,i+6),section:g}); }
@@ -524,9 +525,12 @@ function buildSteps(){
   STEPS.push({kind:"defects",section:"Damage & defects"});
   STEPS.push({kind:"review",section:"Check & send"});
 }
+/* items marked "only if not new" are skipped once the inspector picks New on the start screen */
+const isNewVeh=()=>S&&S.answers&&S.answers.condition==="New";
+const showItem=(def)=>!(def&&def.notNew&&isNewVeh());
 function fieldSet(){ const t=TYPES[JOB.type]; if(t.full) return new Set(t.fields); return new Set([...BASE_FIELDS,...t.fields].filter(k=>!FIELDS[k].cats||FIELDS[k].cats.includes(t.cat))); }
 function save(){ clearTimeout(saveT); saveT=setTimeout(()=>DB.set("state|"+JOB.id,S),250); cloudDirty(); }
-function setA(id,v){ S.answers[id]=v; save(); }
+function setA(id,v){ S.answers[id]=v; save(); if(id==="condition"&&JOB&&TYPES[JOB.type].condFirst){ buildSteps(); } }
 function toggleNA(id,on){ S.answers[id]=on?"N/A":""; save(); render(); }
 function toggleEXP(id,on){ S.answers[id]=on?"Expired":""; save(); render(); }
 
@@ -571,6 +575,7 @@ function rIntro(){
     <div class="field"><label>Does the registration / ID on the vehicle match <b>${esc(JOB.reg)}</b>?</label>
       <div class="seg"><button class="btn ${a.reg_match==="Yes"?"on":""}" onclick="setA('reg_match','Yes');render()">Yes</button><button class="btn ${a.reg_match==="No"?"on":""}" onclick="setA('reg_match','No');render()">No</button></div></div>
     ${a.reg_match==="No"?`<div class="field"><label>What does the vehicle show?</label><input type="text" value="${esc(a.actual_reg||"")}" oninput="setA('actual_reg',this.value.toUpperCase())" style="text-transform:uppercase"><div class="hint">Carry on – the office will check it.</div></div>`:""}
+    ${TYPES[JOB.type].condFirst?`<div class="field"><label>Condition of the vehicle</label><div class="hint">Some condition photos and checks are skipped for new vehicles.</div><select onchange="setA('condition',this.value)"><option value="">Select…</option>${(FIELDS.condition.options||[]).map(o=>`<option ${o===a.condition?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`:""}
     <div class="tip">Before you start: good daylight is best, wipe the camera lens, and hold the phone <b>landscape</b> for the walkaround shots.</div>
     <div id="steperr"></div></div>`;
 }
@@ -728,7 +733,7 @@ async function delDefect(i){ const d=S.defects[i]; await DB.del(`photo|${JOB.id}
 function filled(v){ return v!=null&&String(v).trim()!==""; }
 function validate(st){
   const a=S.answers; if(S.skips&&S.skips[st.kind]&&(st.kind==="compartments"||st.kind==="tread")) return "";
-  if(st.kind==="intro"){ if(!filled(a.inspector)) return "Please enter your name."; if(!a.reg_match) return "Please confirm the registration / ID."; if(a.reg_match==="No"&&!filled(a.actual_reg)) return "Please enter what the vehicle shows."; }
+  if(st.kind==="intro"){ if(!filled(a.inspector)) return "Please enter your name."; if(!a.reg_match) return "Please confirm the registration / ID."; if(a.reg_match==="No"&&!filled(a.actual_reg)) return "Please enter what the vehicle shows."; if(TYPES[JOB.type].condFirst&&!filled(a.condition)) return "Please choose the condition of the vehicle."; }
   if(st.kind==="video"&&!S.video) return "Record the walkaround video, or say why you can't.";
   if(st.kind==="photo"){ const p=S.photos[st.key]; if(!p||(p.status!=="ok"&&p.status!=="skipped")) return "Take the photo and confirm it, or say why you can't."; }
   if(st.kind==="fields"){ const miss=st.ids.filter(id=>!FIELDS[id].optional&&!filled(a[id])).map(id=>FIELDS[id].label); if(miss.length) return "Please complete: "+miss.join(", ")+". If you can't check something, tick “Not available”."; }
@@ -763,7 +768,7 @@ function specRows(){
   rows.push(["Job","Registration / ID",JOB.reg]); if(a.reg_match==="No") rows.push(["Job","Vehicle actually shows",a.actual_reg||""]);
   rows.push(["Job","Vehicle type",t.label]); if(JOB.stock) rows.push(["Job","Stock ref",JOB.stock]); if(JOB.where) rows.push(["Job","Location",JOB.where]);
   rows.push(["Job","Inspector",a.inspector||""]); rows.push(["Job","Inspection date",fmtDate(today())]);
-  if(t.full){ for(const g of t.groups) for(const id of t.fields.filter(k=>FIELDS[k].group===g&&!FIELDS[k].special)) rows.push([g,FIELDS[id].label,fmtVal(id)]); }
+  if(t.full){ for(const g of t.groups) for(const id of t.fields.filter(k=>FIELDS[k].group===g&&!FIELDS[k].special&&showItem(FIELDS[k]))) rows.push([g,FIELDS[id].label,fmtVal(id)]); }
   else for(const g of GROUPS) for(const id of Object.keys(FIELDS).filter(k=>fset.has(k)&&FIELDS[k].group===g)) rows.push([g,FIELDS[id].label,fmtVal(id)]);
   if(fset.has("compartments")){ const n=parseInt(a.comp_count)||0, s=(a.comp_sizes||[]).slice(0,n); rows.push(["Tank & equipment","Number of compartments",n?String(n):""]); if(n&&!(S.skips&&S.skips.compartments)) rows.push(["Tank & equipment","Compartment sizes (front to rear)",s.map(x=>Number(x).toLocaleString("en-GB")+" L").join(" / ")+` = ${s.reduce((x,y)=>x+(parseFloat(y)||0),0).toLocaleString("en-GB")} L`]); }
   if(fset.has("tread")){ const n=axleCount(), tr=a.tread||{}; const tg=t.full?(FIELDS.tread.group||"Tyres"):"Tyres"; for(let k=1;k<=n;k++) rows.push(treadAxleMode()?[tg,`Axle ${k} lowest tread`,S.skips&&S.skips.tread?"Skipped":`${tr[k]?.min??""} mm`]:[tg,`Axle ${k} tread (passenger / driver)`,S.skips&&S.skips.tread?"Skipped":`${tr[k]?.ns??""} mm / ${tr[k]?.os??""} mm`]); }
