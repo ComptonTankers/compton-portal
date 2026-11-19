@@ -141,7 +141,8 @@
         if (bad.length) { m.innerHTML = '<span style="color:#b3261e">Every question needs wording, and every drop-down needs at least one choice: ' + esc(bad.map((f) => f.label || '(blank)').join(', ')) + '</span>'; return; }
         d.groups = d.groups.filter((g) => d.fields.some((f) => f.group === g)); d.officeGroups = d.officeGroups.filter((g) => d.groups.includes(g)); d.photoSections = d.photoSections.filter((s) => d.photos.some((p) => p.section === s));
         try { m.textContent = 'Saving…'; const s = await X.session(); const who = (s && s.user && (s.user.user_metadata?.name || s.user.email)) || null;
-          await api('inspection_templates?vehicle_type=eq.' + cur.vehicle_type, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ def: d, updated_by: who }) });
+          const done = await api('inspection_templates?vehicle_type=eq.' + cur.vehicle_type + '&version=eq.' + cur.version, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ def: d, updated_by: who }) });
+          if (!done || !done.length) { m.innerHTML = '<span style="color:#b3261e">Not saved – someone else changed this question set after you opened it. Press <b>Discard changes</b> to load the latest version, then make your change again.</span>'; return; }
           await load(); el.querySelector('#iq_msg').innerHTML = '<span style="color:#1b7f4b">Saved ✓ – new inspection links use this now</span>';
         } catch (e) { m.innerHTML = '<span style="color:#b3261e">Could not save: ' + esc(e.message) + '</span>'; } };
       q('#iq_hist').onclick = async () => { const box = q('#iq_histbox'); if (box.innerHTML) { box.innerHTML = ''; return; }
