@@ -21,6 +21,7 @@
     BAYS.forEach((b) => ['x', 'y', 'w', 'l', 'rot'].forEach((k) => (b[k] = +b[k])));
     const s = SITES.find((x) => x.id === SITE); PLAN = JSON.parse(JSON.stringify((s && s.plan) || {}));
     PLAN.width_m = PLAN.width_m || 140; PLAN.height_m = PLAN.height_m || 90; PLAN.features = PLAN.features || []; PLAN.boundary = PLAN.boundary || [];
+    PLAN.features = PLAN.features.map((f) => (f.pts ? f : f.type === 'gate' ? { type: 'gate', label: f.label, pts: [[f.x - 3, f.y], [f.x + 3, f.y]] } : { type: f.type, label: f.label, pts: [[f.x, f.y], [f.x + f.w, f.y], [f.x + f.w, f.y + f.h], [f.x, f.y + f.h]] }));
     DEL = []; DIRTY = false; SEL.clear();
   }
   const agOf = (b) => (b.agreement_id ? AG.find((a) => a.id === b.agreement_id) : null);
@@ -112,8 +113,9 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pe_w" type="number" step="0.1" value="${ROWOPT.w}"></div><div><label>Length (m)</label><input id="pe_l" type="number" step="0.1" value="${ROWOPT.l}"></div></div>
         <label>Number prefix (row)</label><input id="pe_px" value="${esc(ROWOPT.prefix || nextPrefix())}" placeholder="A">
         <label><input type="checkbox" id="pe_flip" ${ROWOPT.flip ? 'checked' : ''} style="width:auto"> Flip side</label>` : ''}
-      ${['building', 'nogo', 'road', 'area'].includes(TOOL) ? '<div class="pm-tip">Drag on the map to draw the rectangle. Click it later (Select tool) to label, resize or delete.</div>' : ''}
-      ${TOOL === 'gate' ? '<div class="pm-tip">Click on the map where the gate is.</div>' : ''}
+      ${['building', 'nogo', 'road', 'area'].includes(TOOL) ? `<div class="pm-tip"><b>Rectangle at any angle:</b> click one corner, click the next corner along a wall (this sets the angle), then move out to the depth and click again.<br><b>Any shape:</b> tick below, click each corner, double-click to finish.<br>Wall lengths show as you draw. Afterwards use Select to move, turn or reshape it.</div>
+        <label><input type="checkbox" id="pe_free" ${ROWOPT.free ? 'checked' : ''} style="width:auto"> Any shape (click corners)</label>` : ''}
+      ${TOOL === 'gate' ? '<div class="pm-tip">Click one gate post, then the other. The gate width shows as you draw.</div>' : ''}
       ${TOOL === 'boundary' ? '<div class="pm-tip">Click each corner of the site in turn. Double-click to finish. This replaces the old boundary. (To adjust the existing one, use Select and drag the numbered corners instead.)</div>' : ''}
       ${TOOL === 'scale' ? '<div class="pm-tip">Click one end of something you know the length of, then the other end. You\'ll see what the map measures it as, and can type the real distance to rescale the whole plan (image, boundary and everything on it).</div>' : ''}
       ${TOOL === 'select' && PLAN.boundary.length ? '<div class="small muted" style="margin-top:8px">Boundary: drag the numbered orange corners to move them. Double-click a corner to remove it; double-click the boundary line to add a corner there.</div>' : ''}
@@ -125,6 +127,7 @@
     if ($('pe_kind')) { $('pe_kind').onchange = (e) => { ROWOPT.kind = e.target.value; [ROWOPT.w, ROWOPT.l] = KINDS[ROWOPT.kind]; side(); };
       $('pe_w').onchange = (e) => (ROWOPT.w = +e.target.value || 4); $('pe_l').onchange = (e) => (ROWOPT.l = +e.target.value || 18.5);
       $('pe_px').onchange = (e) => (ROWOPT.prefix = e.target.value.trim()); $('pe_flip').onchange = (e) => { ROWOPT.flip = e.target.checked; render(); }; }
+    if ($('pe_free')) $('pe_free').onchange = (e) => { ROWOPT.free = e.target.checked; PEND = null; render(); };
     $('pe_sw').onchange = (e) => { PLAN.width_m = +e.target.value || PLAN.width_m; dirty(); };
     $('pe_sh').onchange = (e) => { PLAN.height_m = +e.target.value || PLAN.height_m; dirty(); };
     if ($('pe_op')) $('pe_op').oninput = (e) => { PLAN.bg.opacity = +e.target.value; DIRTY = true; render(); };
@@ -132,9 +135,13 @@
   }
   function selPanel(sel) {
     const f = PEND && PEND.feat;
-    if (f) return `<h4>${esc((FEAT[f.type] || ['', '', 'Gate'])[2])}</h4><label>Label</label><input id="pf_lb" value="${esc(f.label || '')}">
-      ${f.type !== 'gate' ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pf_w" type="number" step="0.5" value="${f.w}"></div><div><label>Depth (m)</label><input id="pf_h" type="number" step="0.5" value="${f.h}"></div></div>` : ''}
-      <div style="margin-top:8px;display:flex;gap:6px"><button id="pf_del">Delete</button><button id="pf_cl">Done</button></div>`;
+    if (f) { const P = f.pts, gate = f.type === 'gate';
+      return `<h4>${esc(gate ? 'Gate' : (FEAT[f.type] || FEAT.area)[2])}</h4><label>Label</label><input id="pf_lb" value="${esc(f.label || '')}">
+      <label>Type</label><select id="pf_ty">${(gate ? [['gate', 'Gate']] : Object.entries(FEAT).map(([k, v]) => [k, v[2]])).map(([k, t]) => `<option value="${k}" ${k === f.type ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <div class="small" style="margin-top:8px">${gate ? 'Width <b>' + dist(P[0], P[1]).toFixed(1) + ' m</b>' : 'Sides: ' + P.map((p, i) => dist(p, P[(i + 1) % P.length]).toFixed(1)).join(' × ') + ' m<br>Area <b>' + Math.round(area(P)) + ' m²</b>'}</div>
+      <label>Turn</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[-90, -5, -1, 1, 5, 90].map((d) => `<button class="mini" data-rot="${d}">${d > 0 ? '+' : ''}${d}°</button>`).join('')}</div>
+      <div class="small muted" style="margin-top:6px">Drag the shape to move it, drag its square corners to reshape it.${gate ? '' : ' Double-click a corner to remove it, double-click an edge to add one.'}</div>
+      <div style="margin-top:8px;display:flex;gap:6px"><button id="pf_del">Delete</button><button id="pf_cl">Done</button></div>`; }
     if (!sel.length) return '<div class="small muted" style="margin-top:10px">Click a bay to edit it, Shift-click or drag a box to pick several. Drag to move.</div>';
     const one = sel.length === 1 ? sel[0] : null;
     return `<h4>${one ? 'Bay ' + esc(one.code) : sel.length + ' bays selected'}</h4>
@@ -144,8 +151,9 @@
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button id="ps_ok" class="pri2">Apply</button><button id="ps_dup">Copy</button><button id="ps_del">Delete</button></div>`;
   }
   function wireSelPanel(sel) {
-    if ($('pf_lb')) { const f = PEND.feat; $('pf_lb').oninput = (e) => { f.label = e.target.value; dirty(false); render(); };
-      if ($('pf_w')) { $('pf_w').onchange = (e) => { f.w = +e.target.value || f.w; dirty(); }; $('pf_h').onchange = (e) => { f.h = +e.target.value || f.h; dirty(); }; }
+    if ($('pf_lb')) { const f = PEND.feat; $('pf_lb').oninput = (e) => { f.label = e.target.value; DIRTY = true; render(); };
+      $('pf_ty').onchange = (e) => { f.type = e.target.value; dirty(); };
+      document.querySelectorAll('[data-rot]').forEach((b) => (b.onclick = () => { f.pts = rotPts(f.pts, +b.dataset.rot); dirty(); }));
       $('pf_del').onclick = () => { PLAN.features = PLAN.features.filter((x) => x !== f); PEND = null; dirty(); }; $('pf_cl').onclick = () => { PEND = null; side(); render(); }; return; }
     if (!$('ps_ok')) return;
     $('ps_ok').onclick = () => {
@@ -167,6 +175,14 @@
   const uniqueCode = (c) => { let n = c + "'"; while (BAYS.some((b) => b.code === n)) n += "'"; return n; };
   function delSel() { const sel = BAYS.filter((b) => SEL.has(b)); if (sel.some((b) => b.agreement_id) && !confirm('Some of these bays are let. Delete them anyway?')) return; sel.forEach((b) => b.id && DEL.push(b.id)); BAYS = BAYS.filter((b) => !SEL.has(b)); SEL.clear(); dirty(); }
   function dirty(redraw = true) { const was = DIRTY; DIRTY = true; if (!was) draw(); else { if (redraw) side(); render(); } }
+  const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const cent = (P) => [P.reduce((t, p) => t + p[0], 0) / P.length, P.reduce((t, p) => t + p[1], 0) / P.length];
+  const area = (P) => Math.abs(P.reduce((t, p, i) => { const q = P[(i + 1) % P.length]; return t + p[0] * q[1] - q[0] * p[1]; }, 0) / 2);
+  const rotPts = (P, deg, c) => { c = c || cent(P); const a = deg * Math.PI / 180; return P.map(([x, y]) => [Math.round((c[0] + (x - c[0]) * Math.cos(a) - (y - c[1]) * Math.sin(a)) * 100) / 100, Math.round((c[1] + (x - c[0]) * Math.sin(a) + (y - c[1]) * Math.cos(a)) * 100) / 100]); };
+  // length labels along each edge of a shape
+  const edgeLabels = (P, closed, fs) => P.slice(0, closed ? P.length : P.length - 1).map((p, i) => { const q = P[(i + 1) % P.length], d = dist(p, q); if (d < 0.5) return '';
+    let ang = Math.atan2(q[1] - p[1], q[0] - p[0]) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
+    return `<text transform="translate(${(p[0] + q[0]) / 2},${(p[1] + q[1]) / 2}) rotate(${ang})" y="${-fs * 0.5}" font-size="${fs}" text-anchor="middle" fill="#0B2A66" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="${fs / 4}" pointer-events="none">${d.toFixed(1)} m</text>`; }).join('');
   const msg = (t) => { const m = $('pm_msg'); if (m) m.textContent = t; };
 
   // ---------- drawing ----------
@@ -185,13 +201,20 @@
     if (MODE === 'edit' && PLAN.boundary.length > 1) {
       const B = PLAN.boundary, hs = Math.max(0.8, VB.w / 110);
       B.forEach((p, i) => { const q = B[(i + 1) % B.length]; s += `<line data-seg="${i}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.6}" style="cursor:copy"/>`; });
-      s += '<g id="pm_bh"></g>';
+      s += edgeLabels(PLAN.boundary, true, Math.max(0.9, VB.w / 75));
     }
+    const fsE = Math.max(0.9, VB.w / 75);
     PLAN.features.forEach((f, i) => {
-      if (f.type === 'gate') { s += `<g data-feat="${i}" style="cursor:${MODE === 'edit' ? 'move' : 'default'}"><circle cx="${f.x}" cy="${f.y}" r="1.6" fill="#E4611D" stroke="#fff" stroke-width="0.3"/><text x="${f.x}" y="${f.y - 2.3}" font-size="2" text-anchor="middle" fill="#B4470F" font-weight="700">${esc(f.label || 'Gate')}</text></g>`; return; }
-      const [fill, st] = FEAT[f.type] || FEAT.area; const on = PEND && PEND.feat === f;
-      s += `<g data-feat="${i}" style="cursor:${MODE === 'edit' ? 'move' : 'default'}"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" fill="${f.type === 'nogo' ? 'url(#pmhatch)' : fill}" stroke="${on ? '#E4611D' : st}" stroke-width="${on ? 0.6 : 0.3}" ${f.type === 'nogo' ? '' : ''}/>${f.type === 'nogo' ? `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" fill="${fill}" opacity="0.35" pointer-events="none"/>` : ''}
-        ${f.label ? `<text x="${f.x + f.w / 2}" y="${f.y + f.h / 2}" font-size="${Math.max(1.5, Math.min(4, f.w / 8))}" text-anchor="middle" dominant-baseline="middle" fill="#334155" font-weight="600" pointer-events="none">${esc(f.label)}</text>` : ''}</g>`;
+      const P = f.pts, on = PEND && PEND.feat === f, cur = MODE === 'edit' ? 'move' : 'default';
+      if (f.type === 'gate') { const c = cent(P);
+        s += `<g data-feat="${i}" style="cursor:${cur}"><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="transparent" stroke-width="3"/><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="#E4611D" stroke-width="${on ? 1.3 : 0.9}" stroke-linecap="round"/>
+          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#B4470F"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.4}" font-size="${fsE}" text-anchor="middle" fill="#B4470F" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="${fsE / 4}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
+      } else { const [fill, st] = FEAT[f.type] || FEAT.area, c = cent(P), pts = P.map((p) => p.join(',')).join(' ');
+        s += `<g data-feat="${i}" style="cursor:${cur}"><polygon points="${pts}" fill="${f.type === 'nogo' ? 'url(#pmhatch)' : fill}" fill-opacity="${f.type === 'nogo' ? 1 : 0.8}" stroke="${on ? '#E4611D' : st}" stroke-width="${on ? 0.6 : 0.3}"/>${f.type === 'nogo' ? `<polygon points="${pts}" fill="${fill}" opacity="0.35" pointer-events="none"/>` : ''}
+          ${f.label ? `<text x="${c[0]}" y="${c[1]}" font-size="${fsE * 1.1}" text-anchor="middle" dominant-baseline="middle" fill="#1E293B" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="${fsE / 4}" pointer-events="none">${esc(f.label)}</text>` : ''}</g>`; }
+      if (on && MODE === 'edit') { const hs = Math.max(0.6, VB.w / 160);
+        s += edgeLabels(P, f.type !== 'gate', fsE) + P.map((p, k) => `<rect data-fv="${k}" x="${p[0] - hs}" y="${p[1] - hs}" width="${hs * 2}" height="${hs * 2}" fill="#fff" stroke="#E4611D" stroke-width="${hs / 3}" style="cursor:crosshair"/>`).join('')
+          + (f.type !== 'gate' ? P.map((p, k) => { const q = P[(k + 1) % P.length]; return `<line data-fseg="${k}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.5}" style="cursor:copy"/>`; }).join('') : ''); }
     });
     BAYS.forEach((b, i) => {
       const k = stateOf(b), [fill, st] = ST[k], a = agOf(b), on = SEL.has(b), dim = q && !hit(b);
@@ -203,6 +226,7 @@
         ${name ? `<text y="${fs * 0.75}" font-size="${fs * 0.62}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" pointer-events="none">${esc(name.length > 18 ? name.slice(0, 17) + '…' : name)}</text>` : ''}</g></g>`;
     });
     if (PEND && PEND.row) s += rowPreview();
+    if (PEND && PEND.shape) { const S = PEND.shape, P = shapePts(S); if (P.length) { s += (S.kind === 'gate' || P.length < 3 ? `<polyline points="${P.map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.6"/>` : `<polygon points="${P.map((p) => p.join(',')).join(' ')}" fill="rgba(228,97,29,.15)" stroke="#E4611D" stroke-width="0.4"/>`) + edgeLabels(P, S.kind !== 'gate' && P.length > 2 && !S.free, fsE) + P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.5" fill="#E4611D"/>`).join(''); } }
     if (PEND && PEND.rect) { const r = PEND.rect; s += `<rect x="${Math.min(r.x0, r.x1)}" y="${Math.min(r.y0, r.y1)}" width="${Math.abs(r.x1 - r.x0)}" height="${Math.abs(r.y1 - r.y0)}" fill="rgba(228,97,29,.12)" stroke="#E4611D" stroke-width="0.3" stroke-dasharray="1 0.6" pointer-events="none"/>`; }
     if (PEND && PEND.poly) s += `<polyline points="${PEND.poly.concat(PEND.hover ? [PEND.hover] : []).map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.4" pointer-events="none"/>`;
     if (MODE === 'edit' && PLAN.boundary.length > 1) { const hs = Math.max(0.8, VB.w / 110);
@@ -231,7 +255,7 @@
   function pt(e) { const svg = $('pm_svg'), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const m = p.matrixTransform(svg.getScreenCTM().inverse()); return [m.x, m.y]; }
   function zoom(f, c) { c = c || [VB.x + VB.w / 2, VB.y + VB.h / 2]; VB = { x: c[0] - (c[0] - VB.x) * f, y: c[1] - (c[1] - VB.y) * f, w: VB.w * f, h: VB.h * f }; render(); }
   function wireSvg() {
-    const svg = $('pm_svg'); let drag = null;
+    const svg = $('pm_svg'); let drag = null, LASTD = null;
     svg.onwheel = (e) => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.15 : 0.87, pt(e)); };
     svg.ondragover = (e) => { if (MODE === 'view') e.preventDefault(); };
     svg.ondrop = (e) => { e.preventDefault(); const g = document.elementFromPoint(e.clientX, e.clientY); const bi = g && g.closest('[data-bay]'); if (!bi) { msg('Drop the customer onto a bay.'); return; }
@@ -240,6 +264,10 @@
       patchBays(list, { agreement_id: ag, state: 'open' }); };
     svg.onpointerdown = (e) => {
       const p = pt(e), bg = e.target.closest('[data-bay]'), fg = e.target.closest('[data-feat]');
+      const ga = (k) => { const n = e.target.closest('[data-' + k + ']'); return n ? n.getAttribute('data-' + k) : null; }, hit = { bv: ga('bv'), seg: ga('seg'), fv: ga('fv'), fseg: ga('fseg') }, now = Date.now();
+      if (MODE === 'edit' && LASTD && now - LASTD.t < 450 && Math.hypot(e.clientX - LASTD.x, e.clientY - LASTD.y) < 8) { const h = LASTD.h; LASTD = null; if (dbl(h, p)) return; }
+      LASTD = { t: now, x: e.clientX, y: e.clientY, h: hit };
+      if (MODE === 'edit' && hit.fseg != null && PEND && PEND.feat) { drag = { kind: 'feat', p, f: PEND.feat, pts: PEND.feat.pts.map((q) => q.slice()) }; svg.setPointerCapture(e.pointerId); return; }
       const bv = e.target.closest('[data-bv]');
       if (MODE === 'edit' && bv && (TOOL === 'select' || TOOL === 'boundary') && !(PEND && PEND.poly)) { drag = { kind: 'bv', i: +bv.dataset.bv }; svg.setPointerCapture(e.pointerId); return; }
       if (MODE === 'edit' && TOOL === 'scale') { const q = [p[0], p[1]];
@@ -248,15 +276,22 @@
         setTimeout(() => { const ans = prompt('The map measures this as ' + cur.toFixed(1) + ' m.\nType the real distance in metres to rescale the plan, or leave blank to just measure.', ''); const real = parseFloat(ans);
           if (real > 0 && cur > 0.1) rescale(real / cur, M.p0); PEND = null; render(); }, 30); return; }
       if (MODE === 'edit' && TOOL === 'row') { if (!PEND || !PEND.row) PEND = { row: { p0: [r1(p[0]), r1(p[1])] } }; else { addRow(PEND.row.p0, [r1(p[0]), r1(p[1])]); PEND = null; } render(); return; }
-      if (MODE === 'edit' && FEAT[TOOL]) { PEND = { rect: { x0: r1(p[0]), y0: r1(p[1]), x1: r1(p[0]), y1: r1(p[1]) } }; svg.setPointerCapture(e.pointerId); return; }
-      if (MODE === 'edit' && TOOL === 'gate') { PLAN.features.push({ type: 'gate', x: r1(p[0]), y: r1(p[1]), label: 'Gate' }); PEND = { feat: PLAN.features[PLAN.features.length - 1] }; TOOL = 'select'; dirty(); return; }
+      if (MODE === 'edit' && (FEAT[TOOL] || TOOL === 'gate')) { const q = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
+        if (!PEND || !PEND.shape) { PEND = { shape: { kind: TOOL, free: TOOL !== 'gate' && !!ROWOPT.free, pts: [q] } }; render(); return; }
+        const S = PEND.shape; if (S.kind === 'gate') { if (dist(S.pts[0], q) > 0.3) finishShape([S.pts[0], q]); return; }
+        if (S.free) { S.pts.push(q); render(); return; }
+        if (S.pts.length === 1) { if (dist(S.pts[0], q) > 0.3) S.pts.push(q); render(); return; }
+        S.hover = q; const P = shapePts(S); if (dist(P[1], P[2]) > 0.3) finishShape(P); return; }
+
       if (MODE === 'edit' && TOOL === 'boundary') { PEND = PEND && PEND.poly ? PEND : { poly: [] }; PEND.poly.push([r1(p[0]), r1(p[1])]); render(); return; }
       if (bg) { const b = BAYS[+bg.dataset.bay];
         if (e.shiftKey) { SEL.has(b) ? SEL.delete(b) : SEL.add(b); } else if (!SEL.has(b)) { SEL.clear(); SEL.add(b); }
         PEND = null; side(); render();
         if (MODE === 'edit') { drag = { kind: 'bays', p, start: BAYS.filter((x) => SEL.has(x)).map((x) => [x, x.x, x.y]) }; svg.setPointerCapture(e.pointerId); }
         return; }
-      if (MODE === 'edit' && fg) { const f = PLAN.features[+fg.dataset.feat]; SEL.clear(); PEND = { feat: f }; side(); render(); drag = { kind: 'feat', p, f, x: f.x, y: f.y }; svg.setPointerCapture(e.pointerId); return; }
+      const fv = e.target.closest('[data-fv]');
+      if (MODE === 'edit' && fv && PEND && PEND.feat) { drag = { kind: 'fv', f: PEND.feat, k: +fv.dataset.fv }; svg.setPointerCapture(e.pointerId); return; }
+      if (MODE === 'edit' && fg) { const f = PLAN.features[+fg.dataset.feat]; SEL.clear(); PEND = { feat: f }; side(); render(); drag = { kind: 'feat', p, f, pts: f.pts.map((q) => q.slice()) }; svg.setPointerCapture(e.pointerId); return; }
       if (MODE === 'edit' && e.shiftKey) { PEND = { box: 1, rect: { x0: p[0], y0: p[1], x1: p[0], y1: p[1] } }; svg.setPointerCapture(e.pointerId); return; }
       if (!e.shiftKey && (SEL.size || PEND)) { SEL.clear(); PEND = null; side(); render(); }
       drag = { kind: 'pan', cx: e.clientX, cy: e.clientY, vb: Object.assign({}, VB) }; svg.setPointerCapture(e.pointerId);
@@ -264,34 +299,42 @@
     svg.onpointermove = (e) => {
       const p = pt(e);
       if (PEND && PEND.row && !drag) { PEND.row.p1 = [r1(p[0]), r1(p[1])]; render(); return; }
+      if (PEND && PEND.shape) { PEND.shape.hover = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; render(); return; }
       if (PEND && PEND.meas && !PEND.meas.p1) { PEND.meas.hover = [p[0], p[1]]; render(); return; }
       if (PEND && PEND.poly) { PEND.hover = [r1(p[0]), r1(p[1])]; render(); return; }
       if (PEND && PEND.rect) { PEND.rect.x1 = PEND.box ? p[0] : r1(p[0]); PEND.rect.y1 = PEND.box ? p[1] : r1(p[1]); render(); return; }
       if (!drag) return;
+      if (drag.kind === 'fv') { drag.f.pts[drag.k] = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; drag.moved = 1; render(); return; }
       if (drag.kind === 'bv') { PLAN.boundary[drag.i] = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; drag.moved = 1; render(); return; }
       if (drag.kind === 'pan') { const r = svg.getBoundingClientRect(), k = VB.w / r.width; VB.x = drag.vb.x - (e.clientX - drag.cx) * k; VB.y = drag.vb.y - (e.clientY - drag.cy) * k; render(); return; }
       const dx = r1(p[0] - drag.p[0]), dy = r1(p[1] - drag.p[1]); if (!dx && !dy) return; drag.moved = 1;
       if (drag.kind === 'bays') drag.start.forEach(([b, x, y]) => { b.x = x + dx; b.y = y + dy; b._d = 1; });
-      if (drag.kind === 'feat') { drag.f.x = drag.x + dx; drag.f.y = drag.y + dy; }
+      if (drag.kind === 'feat') drag.f.pts = drag.pts.map((q) => [q[0] + dx, q[1] + dy]);
       render();
     };
     svg.onpointerup = () => {
       if (PEND && PEND.rect) { const r = PEND.rect, x = Math.min(r.x0, r.x1), y = Math.min(r.y0, r.y1), w = Math.abs(r.x1 - r.x0), h = Math.abs(r.y1 - r.y0);
         if (PEND.box) { BAYS.forEach((b) => { if (b.x >= x && b.x <= x + w && b.y >= y && b.y <= y + h) SEL.add(b); }); PEND = null; side(); render(); }
-        else if (w > 1 && h > 1) { const f = { type: TOOL, x, y, w, h, label: TOOL === 'building' ? 'Building' : TOOL === 'road' ? '' : TOOL === 'nogo' ? 'No parking' : 'Area' }; PLAN.features.push(f); PEND = { feat: f }; TOOL = 'select'; dirty(); }
         else { PEND = null; render(); } }
       if (drag && drag.moved && drag.kind !== 'pan') dirty(); drag = null;
     };
-    svg.ondblclick = (e) => {
-      if (MODE === 'edit' && !(PEND && PEND.poly)) { const bv = e.target.closest('[data-bv]'), sg = e.target.closest('[data-seg]');
-        if (bv && PLAN.boundary.length > 3) { PLAN.boundary.splice(+bv.dataset.bv, 1); dirty(); return; }
-        if (sg) { const p = pt(e); PLAN.boundary.splice(+sg.dataset.seg + 1, 0, [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]); dirty(); return; } }
-      if (PEND && PEND.poly && PEND.poly.length > 2) { const pts = PEND.poly.slice(0, -1).length > 2 ? PEND.poly.slice(0, -1) : PEND.poly; PLAN.boundary = pts; PEND = null; TOOL = 'select'; dirty(); } };
+    const dbl = (h, p) => {
+      if (PEND && PEND.shape && PEND.shape.free) { const P = PEND.shape.pts; while (P.length > 1 && dist(P[P.length - 1], P[P.length - 2]) < 0.5) P.pop(); if (P.length > 2) finishShape(P); return true; }
+      if (MODE === 'edit' && PEND && PEND.feat && PEND.feat.type !== 'gate') { const f = PEND.feat, fv = h.fv, fs = h.fseg;
+        if (fv && f.pts.length > 3) { f.pts.splice(+fv, 1); dirty(); return true; }
+        if (fs) { f.pts.splice(+fs + 1, 0, [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]); dirty(); return true; } }
+      if (MODE === 'edit' && !(PEND && PEND.poly)) { const bv = h.bv, sg = h.seg;
+        if (bv && PLAN.boundary.length > 3) { PLAN.boundary.splice(+bv, 1); dirty(); return true; }
+        if (sg) { PLAN.boundary.splice(+sg + 1, 0, [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]); dirty(); return true; } }
+      if (PEND && PEND.poly) { const P = PEND.poly; while (P.length > 1 && dist(P[P.length - 1], P[P.length - 2]) < 0.5) P.pop(); if (P.length > 2) { PLAN.boundary = P; PEND = null; TOOL = 'select'; dirty(); } return true; } };
     document.onkeydown = (e) => {
       if (!$('pm_svg') || MODE !== 'edit' || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
       const sel = BAYS.filter((b) => SEL.has(b));
       if (e.key === 'Escape') { PEND = null; SEL.clear(); side(); render(); return; }
       if (PEND && PEND.feat && (e.key === 'Delete' || e.key === 'Backspace')) { PLAN.features = PLAN.features.filter((x) => x !== PEND.feat); PEND = null; dirty(); return; }
+      if (PEND && PEND.feat) { const f = PEND.feat, t = e.key === 'r' || e.key === 'R' ? 90 : e.key === ']' ? (e.shiftKey ? 1 : 5) : e.key === '[' ? (e.shiftKey ? -1 : -5) : 0;
+        const st = e.shiftKey ? 1 : 0.25, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+        if (t) { f.pts = rotPts(f.pts, t); dirty(); } else if (mv) { e.preventDefault(); f.pts = f.pts.map((q) => [q[0] + mv[0], q[1] + mv[1]]); dirty(false); } return; }
       if (!sel.length) return; const st = e.shiftKey ? 1 : 0.25;
       const mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
       if (mv) { e.preventDefault(); sel.forEach((b) => { b.x += mv[0]; b.y += mv[1]; b._d = 1; }); dirty(false); return; }
@@ -302,12 +345,26 @@
         sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = r1(cx + x * Math.cos(a) - y * Math.sin(a)); b.y = r1(cy + x * Math.sin(a) + y * Math.cos(a)); b.rot = ((b.rot + turn) % 360 + 360) % 360; b._d = 1; }); dirty(false); }
     };
   }
+  // shape being drawn: rectangle at any angle (3 clicks), any polygon, or a gate line (2 clicks)
+  function shapePts(S) {
+    const P = S.pts.slice(), h = S.hover;
+    if (S.kind === 'gate') return h && P.length === 1 ? [P[0], h] : P;
+    if (S.free) return h ? P.concat([h]) : P;
+    if (P.length === 1) return h ? [P[0], h] : P;
+    if (P.length === 2 && h) { const [a, b] = P, L = dist(a, b) || 1, n = [-(b[1] - a[1]) / L, (b[0] - a[0]) / L], d = (h[0] - b[0]) * n[0] + (h[1] - b[1]) * n[1];
+      return [a, b, [b[0] + n[0] * d, b[1] + n[1] * d], [a[0] + n[0] * d, a[1] + n[1] * d]]; }
+    return P;
+  }
+  function finishShape(P) {
+    const S = PEND.shape, f = { type: S.kind, pts: P.map((p) => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]), label: S.kind === 'gate' ? 'Gate' : S.kind === 'building' ? 'Building' : S.kind === 'nogo' ? 'No parking' : S.kind === 'road' ? '' : 'Area' };
+    PLAN.features.push(f); PEND = { feat: f }; TOOL = 'select'; dirty();
+  }
   // scale the whole plan about a point: image, boundary, features and bay positions (bay sizes stay real)
   function rescale(f, c) {
     const S = (p) => [Math.round((c[0] + (p[0] - c[0]) * f) * 100) / 100, Math.round((c[1] + (p[1] - c[1]) * f) * 100) / 100];
     if (PLAN.bg) { const [x, y] = S([PLAN.bg.x || 0, PLAN.bg.y || 0]); PLAN.bg.x = x; PLAN.bg.y = y; PLAN.bg.w = (PLAN.bg.w || PLAN.width_m) * f; PLAN.bg.h = (PLAN.bg.h || PLAN.height_m) * f; PLAN.bg.mpp = PLAN.bg.mpp ? PLAN.bg.mpp * f : null; }
     PLAN.boundary = PLAN.boundary.map(S);
-    PLAN.features.forEach((ft) => { const [x, y] = S([ft.x, ft.y]); ft.x = x; ft.y = y; if (ft.w) { ft.w *= f; ft.h *= f; } });
+    PLAN.features.forEach((ft) => { ft.pts = ft.pts.map(S); });
     BAYS.forEach((b) => { const [x, y] = S([b.x, b.y]); b.x = x; b.y = y; b._d = 1; });
     PLAN.width_m = Math.round(PLAN.width_m * f); PLAN.height_m = Math.round(PLAN.height_m * f); VB = null;
     dirty(); msg('Rescaled ×' + f.toFixed(3) + '. Check another known length with Measure, then Save layout.');
