@@ -6,8 +6,10 @@
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
   const KINDS = { 'HGV': [4, 18.5], 'Artic / trailer': [3.8, 15], 'Rigid': [3.5, 12], 'Van': [3, 7], 'Car': [2.5, 5], 'Container / storage': [3, 12.5], 'Other': [3.5, 10] };
-  const ST = { free: ['#FFFFFF', '#16A34A', 'Free'], let: ['#164698', '#0B2A66', 'Let'], notice: ['#E4611D', '#B4470F', 'On notice / ending'], reserved: ['#C4B5FD', '#7C3AED', 'Reserved'], out: ['#E5E7EB', '#9CA3AF', 'Out of use'] };
-  const FEAT = { building: ['#CBD5E1', '#64748B', 'Building'], nogo: ['#FECACA', '#DC2626', 'No parking'], road: ['#F1F5F9', '#CBD5E1', 'Roadway'], area: ['#FEF3C7', '#D97706', 'Area'] };
+  const ST = { free: ['rgba(74,222,128,.16)', '#FFFFFF', 'Free'], let: ['#2F6BD8', '#FFFFFF', 'Let'], notice: ['#E4611D', '#FFD3BC', 'On notice / ending'], reserved: ['#6D4BC2', '#C4B5FD', 'Reserved'], out: ['#334155', '#64748B', 'Out of use'] };
+  const FEAT = { building: ['#164698', '#FFFFFF', 'Building'], nogo: ['rgba(248,113,113,.25)', '#F87171', 'No parking'], road: ['rgba(255,255,255,.07)', '#5B7FC4', 'Roadway'], area: ['rgba(250,204,21,.10)', '#FACC15', 'Area'] };
+  const BG = '#0B2A66', DIM = '#FFB27A', HI = '#FACC15';   // drawing colours: navy sheet, orange dimensions, yellow selection
+  let SAT = false;
   const today = () => new Date().toISOString().slice(0, 10);
   const in60 = () => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10); };
   const r1 = (v) => Math.round(v * 4) / 4;
@@ -49,6 +51,7 @@
     el.innerHTML = X.head('Parking map', 'Drag a customer onto a bay to let it. Click a bay for details. Shift-click to pick several bays, then drop a customer on any of them.') +
       `<div class="pm-top"><label>Site <select id="pm_site">${SITES.map((s) => `<option value="${s.id}" ${s.id === SITE ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
        <div class="pm-seg">${['view', 'edit'].map((m) => `<button data-mode="${m}" class="${MODE === m ? 'on' : ''}">${m === 'view' ? 'Manage bays' : 'Edit layout'}</button>`).join('')}</div>
+       ${PLAN.bg && PLAN.bg.url ? `<label class="small" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="pm_sat" ${SAT ? 'checked' : ''}> Satellite photo</label>` : ''}
        <input id="pm_hl" placeholder="Find customer or bay…" value="${esc(HL)}" style="width:200px">
        <span class="pm-stat">${BAYS.length} bays · <b style="color:#16A34A">${cnt('free')} free</b> · ${cnt('let')} let · ${cnt('notice')} on notice · ${cnt('reserved')} reserved · ${cnt('out')} out of use${freeVal ? ' · free bays worth ' + gbp(freeVal) + '/week at list rate' : ''}</span>
        ${DIRTY ? '<button class="pri2" id="pm_save">Save layout</button><button id="pm_undo">Discard changes</button>' : ''}<span id="pm_msg" class="small muted"></span></div>
@@ -61,10 +64,10 @@
        .pm-seg{display:inline-flex;border:1px solid #CBD5E1;border-radius:8px;overflow:hidden}.pm-seg button{border:0;background:#fff;padding:7px 12px;cursor:pointer;font:inherit}.pm-seg button.on{background:#164698;color:#fff}
        .pm-wrap{display:grid;grid-template-columns:300px 1fr;gap:12px;height:calc(100vh - 230px);min-height:520px}
        .pm-side{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:12px;overflow:auto;font-size:13px}
-       .pm-mapbox{position:relative;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden}
+       .pm-mapbox{position:relative;background:#0B2A66;border:1px solid #0B2A66;border-radius:10px;overflow:hidden}
        .pm-svg{width:100%;height:100%;display:block;touch-action:none;user-select:none}
-       .pm-zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:4px}.pm-zoom button{width:32px;height:32px;border:1px solid #CBD5E1;background:#fff;border-radius:6px;font-size:16px;cursor:pointer}
-       .pm-legend{position:absolute;left:10px;bottom:8px;background:rgba(255,255,255,.92);padding:5px 10px;border-radius:6px;font-size:11.5px;display:flex;gap:12px;flex-wrap:wrap}.pm-legend i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:2px;margin-right:4px;vertical-align:-2px}
+       .pm-zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:4px}.pm-zoom button{width:32px;height:32px;border:1px solid #24519E;background:#163C86;color:#fff;border-radius:6px;font-size:16px;cursor:pointer}
+       .pm-legend{position:absolute;left:10px;bottom:8px;color:#fff;background:rgba(11,42,102,.9);border:1px solid #24519E;padding:5px 10px;border-radius:6px;font-size:11.5px;display:flex;gap:12px;flex-wrap:wrap}.pm-legend i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:2px;margin-right:4px;vertical-align:-2px}
        .pm-cust{border:1px solid #E2E8F0;border-radius:8px;padding:8px 10px;margin:6px 0;cursor:grab;background:#fff}.pm-cust:hover{border-color:#164698;background:#F4F7FC}.pm-cust b{display:block}
        .pm-cust .bar{height:5px;background:#E2E8F0;border-radius:3px;margin-top:5px;overflow:hidden}.pm-cust .bar i{display:block;height:100%;background:#164698}
        .pm-side h4{margin:12px 0 6px;font-size:13px;color:#0B2A66}.pm-side label{display:block;margin:6px 0 2px;font-size:12px;color:#64748B}.pm-side input,.pm-side select{width:100%;box-sizing:border-box}
@@ -73,6 +76,7 @@
       </style>`;
     $('pm_site').onchange = async (e) => { if (DIRTY && !confirm('Discard unsaved layout changes?')) { e.target.value = SITE; return; } SITE = +e.target.value; await load(); VB = null; draw(); };
     el.querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => { MODE = b.dataset.mode; TOOL = 'select'; PEND = null; SEL.clear(); draw(); }));
+    if ($('pm_sat')) $('pm_sat').onchange = (e) => { SAT = e.target.checked; side(); render(); };
     $('pm_hl').oninput = (e) => { HL = e.target.value; render(); };
     if ($('pm_save')) $('pm_save').onclick = save;
     if ($('pm_undo')) $('pm_undo').onclick = async () => { await load(); draw(); };
@@ -121,7 +125,7 @@
       ${TOOL === 'select' && PLAN.boundary.length ? '<div class="small muted" style="margin-top:8px">Boundary: drag the numbered orange corners to move them. Double-click a corner to remove it; double-click the boundary line to add a corner there.</div>' : ''}
       ${TOOL === 'select' ? selPanel(sel) : ''}
       <h4>Site size</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pe_sw" type="number" value="${PLAN.width_m}"></div><div><label>Depth (m)</label><input id="pe_sh" type="number" value="${PLAN.height_m}"></div></div>
-      ${PLAN.bg ? `<h4>Background image</h4><label>Show <input type="range" id="pe_op" min="0" max="1" step="0.05" value="${PLAN.bg.opacity ?? 0.6}"></label>` : ''}
+      ${PLAN.bg && SAT ? `<h4>Satellite photo</h4><label>Strength <input type="range" id="pe_op" min="0" max="1" step="0.05" value="${PLAN.bg.opacity ?? 0.6}"></label>` : ''}
       <div class="small muted" style="margin-top:12px">Keys: Delete removes · R turns 90° · [ and ] turn 5° · arrow keys nudge 0.25 m (Shift = 1 m). Drag empty map to pan, scroll to zoom.</div>`;
     p.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => { TOOL = b.dataset.tool; PEND = null; if (TOOL !== 'select') SEL.clear(); side(); render(); }));
     if ($('pe_kind')) { $('pe_kind').onchange = (e) => { ROWOPT.kind = e.target.value; [ROWOPT.w, ROWOPT.l] = KINDS[ROWOPT.kind]; side(); };
@@ -182,7 +186,7 @@
   // length labels along each edge of a shape
   const edgeLabels = (P, closed, fs) => P.slice(0, closed ? P.length : P.length - 1).map((p, i) => { const q = P[(i + 1) % P.length], d = dist(p, q); if (d < 0.5) return '';
     let ang = Math.atan2(q[1] - p[1], q[0] - p[0]) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
-    return `<text transform="translate(${(p[0] + q[0]) / 2},${(p[1] + q[1]) / 2}) rotate(${ang})" y="${-fs * 0.5}" font-size="${fs}" text-anchor="middle" fill="#0B2A66" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="${fs / 4}" pointer-events="none">${d.toFixed(1)} m</text>`; }).join('');
+    return `<text transform="translate(${(p[0] + q[0]) / 2},${(p[1] + q[1]) / 2}) rotate(${ang})" y="${-fs * 0.5}" font-size="${fs}" text-anchor="middle" fill="${DIM}" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fs / 3}" pointer-events="none">${d.toFixed(1)} m</text>`; }).join('');
   const msg = (t) => { const m = $('pm_msg'); if (m) m.textContent = t; };
 
   // ---------- drawing ----------
@@ -192,12 +196,15 @@
     if (!VB) { const r = svg.getBoundingClientRect(), asp = r.width / Math.max(1, r.height); let w = W + 10, h = H + 10; if (w / h < asp) w = h * asp; else h = w / asp; VB = { x: W / 2 - w / 2, y: H / 2 - h / 2, w, h }; }
     svg.setAttribute('viewBox', `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
     const q = HL.trim().toLowerCase(), hit = (b) => !q || b.code.toLowerCase() === q || ((agOf(b) || {}).customer || '').toLowerCase().includes(q) || (b.reserved_for || '').toLowerCase().includes(q);
-    let s = `<defs><pattern id="pmgrid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#E2E8F0" stroke-width="0.15"/></pattern>
-      <pattern id="pmhatch" width="1.5" height="1.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.5" stroke="#9CA3AF" stroke-width="0.4"/></pattern></defs>
-      <rect x="-500" y="-500" width="${W + 1000}" height="${H + 1000}" fill="url(#pmgrid)" data-bg="1"/>`;
-    if (PLAN.bg && PLAN.bg.url) s += `<image href="${esc(PLAN.bg.url)}" x="${PLAN.bg.x || 0}" y="${PLAN.bg.y || 0}" width="${PLAN.bg.w || W}" height="${PLAN.bg.h || H}" opacity="${PLAN.bg.opacity ?? 0.6}" preserveAspectRatio="none" pointer-events="none"/>`;
-    s += `<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#CBD5E1" stroke-width="0.2" stroke-dasharray="1 1" pointer-events="none"/>`;
-    if (PLAN.boundary.length > 2) s += `<polygon points="${PLAN.boundary.map((p) => p.join(',')).join(' ')}" fill="rgba(228,97,29,.08)" stroke="#E4611D" stroke-width="0.6" pointer-events="none"/>`;
+    let s = `<defs><pattern id="pmgrid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" fill="none" stroke="#163C86" stroke-width="0.08"/></pattern>
+      <pattern id="pmgrid2" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#24519E" stroke-width="0.18"/></pattern>
+      <pattern id="pmhatch" width="1.5" height="1.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.5" stroke="#64748B" stroke-width="0.35"/></pattern>
+      <pattern id="pmhatchR" width="1.5" height="1.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.5" stroke="#F87171" stroke-width="0.3"/></pattern>
+      <pattern id="pmhatchW" width="1.2" height="1.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.2" stroke="#5B86D6" stroke-width="0.15"/></pattern></defs>
+      <rect x="-500" y="-500" width="${W + 1000}" height="${H + 1000}" fill="${BG}" data-bg="1"/><rect x="-500" y="-500" width="${W + 1000}" height="${H + 1000}" fill="url(#pmgrid)" pointer-events="none"/><rect x="-500" y="-500" width="${W + 1000}" height="${H + 1000}" fill="url(#pmgrid2)" pointer-events="none"/>`;
+    if (SAT && PLAN.bg && PLAN.bg.url) s += `<image href="${esc(PLAN.bg.url)}" x="${PLAN.bg.x || 0}" y="${PLAN.bg.y || 0}" width="${PLAN.bg.w || W}" height="${PLAN.bg.h || H}" opacity="${PLAN.bg.opacity ?? 0.6}" preserveAspectRatio="none" pointer-events="none"/>`;
+    s += `<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#1E4A9A" stroke-width="0.15" stroke-dasharray="1 1" pointer-events="none"/>`;
+    if (PLAN.boundary.length > 2) s += `<polygon points="${PLAN.boundary.map((p) => p.join(',')).join(' ')}" fill="rgba(255,255,255,.035)" stroke="#E4611D" stroke-width="0.7" stroke-linejoin="round" pointer-events="none"/>`;
     if (MODE === 'edit' && PLAN.boundary.length > 1) {
       const B = PLAN.boundary, hs = Math.max(0.8, VB.w / 110);
       B.forEach((p, i) => { const q = B[(i + 1) % B.length]; s += `<line data-seg="${i}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.6}" style="cursor:copy"/>`; });
@@ -208,20 +215,20 @@
       const P = f.pts, on = PEND && PEND.feat === f, cur = MODE === 'edit' ? 'move' : 'default';
       if (f.type === 'gate') { const c = cent(P);
         s += `<g data-feat="${i}" style="cursor:${cur}"><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="transparent" stroke-width="3"/><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="#E4611D" stroke-width="${on ? 1.3 : 0.9}" stroke-linecap="round"/>
-          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#B4470F"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.4}" font-size="${fsE}" text-anchor="middle" fill="#B4470F" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="${fsE / 4}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
+          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#fff"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.4}" font-size="${fsE}" text-anchor="middle" fill="${DIM}" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
       } else { const [fill, st] = FEAT[f.type] || FEAT.area, c = cent(P), pts = P.map((p) => p.join(',')).join(' ');
-        s += `<g data-feat="${i}" style="cursor:${cur}"><polygon points="${pts}" fill="${f.type === 'nogo' ? 'url(#pmhatch)' : fill}" fill-opacity="${f.type === 'nogo' ? 1 : 0.8}" stroke="${on ? '#E4611D' : st}" stroke-width="${on ? 0.6 : 0.3}"/>${f.type === 'nogo' ? `<polygon points="${pts}" fill="${fill}" opacity="0.35" pointer-events="none"/>` : ''}
-          ${f.label ? `<text x="${c[0]}" y="${c[1]}" font-size="${fsE * 1.1}" text-anchor="middle" dominant-baseline="middle" fill="#1E293B" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="${fsE / 4}" pointer-events="none">${esc(f.label)}</text>` : ''}</g>`; }
+        s += `<g data-feat="${i}" style="cursor:${cur}"><polygon points="${pts}" fill="${fill}" stroke="${on ? HI : st}" stroke-width="${on ? 0.5 : 0.25}" stroke-dasharray="${f.type === 'road' ? '1.2 0.8' : ''}"/>${f.type === 'nogo' || f.type === 'building' ? `<polygon points="${pts}" fill="url(#${f.type === 'nogo' ? 'pmhatchR' : 'pmhatchW'})" pointer-events="none"/>` : ''}
+          ${f.label ? `<text x="${c[0]}" y="${c[1]}" font-size="${fsE * 1.1}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" letter-spacing="${fsE / 12}" pointer-events="none">${esc(String(f.label).toUpperCase())}</text>` : ''}</g>`; }
       if (on && MODE === 'edit') { const hs = Math.max(0.6, VB.w / 160);
-        s += edgeLabels(P, f.type !== 'gate', fsE) + P.map((p, k) => `<rect data-fv="${k}" x="${p[0] - hs}" y="${p[1] - hs}" width="${hs * 2}" height="${hs * 2}" fill="#fff" stroke="#E4611D" stroke-width="${hs / 3}" style="cursor:crosshair"/>`).join('')
+        s += edgeLabels(P, f.type !== 'gate', fsE) + P.map((p, k) => `<rect data-fv="${k}" x="${p[0] - hs}" y="${p[1] - hs}" width="${hs * 2}" height="${hs * 2}" fill="${BG}" stroke="${HI}" stroke-width="${hs / 3}" style="cursor:crosshair"/>`).join('')
           + (f.type !== 'gate' ? P.map((p, k) => { const q = P[(k + 1) % P.length]; return `<line data-fseg="${k}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.5}" style="cursor:copy"/>`; }).join('') : ''); }
     });
     BAYS.forEach((b, i) => {
       const k = stateOf(b), [fill, st] = ST[k], a = agOf(b), on = SEL.has(b), dim = q && !hit(b);
       const fs = Math.max(0.8, Math.min(1.6, b.w * 0.36)), name = a ? a.customer : b.state === 'reserved' ? b.reserved_for || 'Reserved' : '';
-      const tc = k === 'let' || k === 'notice' ? '#fff' : '#0B2A66', vert = Math.abs(((b.rot % 180) + 180) % 180 - 90) > 45;   // text runs along the bay's length
+      const tc = '#fff', vert = Math.abs(((b.rot % 180) + 180) % 180 - 90) > 45;   // text runs along the bay's length
       s += `<g data-bay="${i}" transform="translate(${b.x},${b.y}) rotate(${b.rot})" opacity="${dim ? 0.25 : 1}" style="cursor:pointer">
-        <rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="${k === 'out' ? 'url(#pmhatch)' : fill}" stroke="${on ? '#E4611D' : q && hit(b) ? '#E4611D' : st}" stroke-width="${on || (q && hit(b)) ? 0.5 : 0.2}"/>
+        <rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="${fill}" stroke="${on || (q && hit(b)) ? HI : st}" stroke-width="${on || (q && hit(b)) ? 0.5 : 0.18}"/>${k === 'out' ? `<rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="url(#pmhatch)" pointer-events="none"/>` : ''}
         <g transform="rotate(${vert ? -90 : 0})"><text y="${name ? -fs * 0.35 : 0}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" font-weight="700" pointer-events="none">${esc(b.code)}</text>
         ${name ? `<text y="${fs * 0.75}" font-size="${fs * 0.62}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" pointer-events="none">${esc(name.length > 18 ? name.slice(0, 17) + '…' : name)}</text>` : ''}</g></g>`;
     });
@@ -230,12 +237,16 @@
     if (PEND && PEND.rect) { const r = PEND.rect; s += `<rect x="${Math.min(r.x0, r.x1)}" y="${Math.min(r.y0, r.y1)}" width="${Math.abs(r.x1 - r.x0)}" height="${Math.abs(r.y1 - r.y0)}" fill="rgba(228,97,29,.12)" stroke="#E4611D" stroke-width="0.3" stroke-dasharray="1 0.6" pointer-events="none"/>`; }
     if (PEND && PEND.poly) s += `<polyline points="${PEND.poly.concat(PEND.hover ? [PEND.hover] : []).map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.4" pointer-events="none"/>`;
     if (MODE === 'edit' && PLAN.boundary.length > 1) { const hs = Math.max(0.8, VB.w / 110);
-      s += PLAN.boundary.map((p, i) => `<g data-bv="${i}" style="cursor:move"><circle cx="${p[0]}" cy="${p[1]}" r="${hs}" fill="#0B2A66" stroke="#E4611D" stroke-width="${hs / 4}"/><text x="${p[0]}" y="${p[1]}" font-size="${hs * 1.1}" fill="#fff" text-anchor="middle" dominant-baseline="central" font-weight="700" pointer-events="none">${i + 1}</text></g>`).join(''); }
-    if (PEND && PEND.meas) { const M = PEND.meas, b = M.p1 || M.hover; if (b) { const d = Math.hypot(b[0] - M.p0[0], b[1] - M.p0[1]); s += `<line x1="${M.p0[0]}" y1="${M.p0[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#E4611D" stroke-width="${VB.w / 300}" stroke-dasharray="${VB.w / 120} ${VB.w / 200}"/><text x="${(M.p0[0] + b[0]) / 2}" y="${(M.p0[1] + b[1]) / 2 - VB.w / 100}" font-size="${VB.w / 55}" fill="#B4470F" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="${VB.w / 400}">${d.toFixed(1)} m</text>`; }
+      s += PLAN.boundary.map((p, i) => `<g data-bv="${i}" style="cursor:move"><circle cx="${p[0]}" cy="${p[1]}" r="${hs}" fill="#E4611D" stroke="#fff" stroke-width="${hs / 5}"/><text x="${p[0]}" y="${p[1]}" font-size="${hs * 1.1}" fill="#fff" text-anchor="middle" dominant-baseline="central" font-weight="700" pointer-events="none">${i + 1}</text></g>`).join(''); }
+    if (PEND && PEND.meas) { const M = PEND.meas, b = M.p1 || M.hover; if (b) { const d = Math.hypot(b[0] - M.p0[0], b[1] - M.p0[1]); s += `<line x1="${M.p0[0]}" y1="${M.p0[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${DIM}" stroke-width="${VB.w / 300}" stroke-dasharray="${VB.w / 120} ${VB.w / 200}"/><text x="${(M.p0[0] + b[0]) / 2}" y="${(M.p0[1] + b[1]) / 2 - VB.w / 100}" font-size="${VB.w / 55}" fill="${DIM}" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="${BG}" stroke-width="${VB.w / 300}">${d.toFixed(1)} m</text>`; }
       s += `<circle cx="${M.p0[0]}" cy="${M.p0[1]}" r="${VB.w / 250}" fill="#E4611D"/>`; }
     // scale bar
     const sb = VB.w > 120 ? 20 : VB.w > 50 ? 10 : 5, sx = VB.x + VB.w - sb - VB.w * 0.03, sy = VB.y + VB.h - VB.h * 0.04;
-    s += `<g pointer-events="none"><line x1="${sx}" y1="${sy}" x2="${sx + sb}" y2="${sy}" stroke="#0B2A66" stroke-width="${VB.w / 400}"/><text x="${sx + sb / 2}" y="${sy - VB.h * 0.012}" font-size="${VB.w / 70}" text-anchor="middle" fill="#0B2A66">${sb} m</text></g>`;
+    s += `<g pointer-events="none"><line x1="${sx}" y1="${sy}" x2="${sx + sb}" y2="${sy}" stroke="#fff" stroke-width="${VB.w / 400}"/><line x1="${sx}" y1="${sy - VB.h * 0.008}" x2="${sx}" y2="${sy + VB.h * 0.008}" stroke="#fff" stroke-width="${VB.w / 600}"/><line x1="${sx + sb}" y1="${sy - VB.h * 0.008}" x2="${sx + sb}" y2="${sy + VB.h * 0.008}" stroke="#fff" stroke-width="${VB.w / 600}"/><text x="${sx + sb / 2}" y="${sy - VB.h * 0.014}" font-size="${VB.w / 70}" text-anchor="middle" fill="#fff">${sb} m</text></g>`;
+    // north arrow and title block
+    const na = VB.w / 40, nx = VB.x + VB.w * 0.04, ny = VB.y + VB.h * 0.07, site = (SITES.find((x) => x.id === SITE) || {}).name || '';
+    s += `<g pointer-events="none"><path d="M${nx} ${ny - na} L${nx + na * 0.45} ${ny + na * 0.6} L${nx} ${ny + na * 0.25} L${nx - na * 0.45} ${ny + na * 0.6} Z" fill="#fff"/><text x="${nx}" y="${ny - na * 1.25}" font-size="${na * 0.8}" text-anchor="middle" fill="#fff" font-weight="700">N</text>
+      <text x="${nx + na * 1.2}" y="${ny - na * 0.2}" font-size="${VB.w / 60}" fill="#fff" font-weight="700" letter-spacing="${VB.w / 900}">COMPTON TANKERS</text><text x="${nx + na * 1.2}" y="${ny + na * 0.7}" font-size="${VB.w / 85}" fill="${DIM}">${esc(site.toUpperCase())} · PARKING LAYOUT</text></g>`;
     svg.innerHTML = s;
   }
   function rowLayout(p0, p1) {
@@ -248,7 +259,7 @@
     const R = PEND.row; if (!R.p1) return `<circle cx="${R.p0[0]}" cy="${R.p0[1]}" r="0.7" fill="#E4611D"/>`;
     const bs = rowLayout(R.p0, R.p1);
     return `<line x1="${R.p0[0]}" y1="${R.p0[1]}" x2="${R.p1[0]}" y2="${R.p1[1]}" stroke="#E4611D" stroke-width="0.3"/>` + bs.map((b) => `<rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" transform="translate(${b.x},${b.y}) rotate(${b.rot})" fill="rgba(228,97,29,.15)" stroke="#E4611D" stroke-width="0.2"/>`).join('') +
-      `<text x="${R.p1[0]}" y="${R.p1[1] - 1.5}" font-size="2" fill="#B4470F" font-weight="700">${bs.length} bays · ${Math.round(Math.hypot(R.p1[0] - R.p0[0], R.p1[1] - R.p0[1]) * 10) / 10} m</text>`;
+      `<text x="${R.p1[0]}" y="${R.p1[1] - 1.5}" font-size="2" fill="${DIM}" font-weight="700">${bs.length} bays · ${Math.round(Math.hypot(R.p1[0] - R.p0[0], R.p1[1] - R.p0[1]) * 10) / 10} m</text>`;
   }
 
   // ---------- mouse / keys ----------
