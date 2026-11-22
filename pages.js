@@ -40,7 +40,7 @@
 
   /* =========================== NEW PURCHASES =========================== */
   X.routes['p-orders'] = safe(async (el) => {
-    el.innerHTML = loading('New purchases');
+    el.innerHTML = loading('Kit on order');
     let VS = null; try { VS = (await api('cf_settings?select=*&limit=1'))[0]; } catch (e) { VS = null; }
     await X.orders.load(); X.orders.setVS(VS);
     let POT = false;
@@ -59,7 +59,7 @@
         { l: 'Purchase VAT to pay', v: gbp(vatTot), s: 'paid on delivery, comes back in the VAT return', c: 'o' },
         { l: 'Most cash tied up', v: LR.low.cum < 0 ? gbp(-LR.low.cum) : '–', s: LR.low.cum < 0 ? 'in ' + lab(LR.low.m) + ' (orders alone, after VAT and hire)' : 'orders pay for themselves', c: 'o', spark: cumSpark },
         { l: 'Orders paid back in cash by', v: LR.pay ? lab(LR.pay.m) : (LR.low.cum < 0 ? 'beyond 5 years' : '–'), s: 'hire in less HP, deposits and VAT', c: 'g' }];
-      el.innerHTML = X.head('New purchases', 'What is on order, the estimated finance, and what it does to cash, VAT and the forecasts · confirmed orders feed Cash and Management accounts') + `<div class="pv-card" style="padding:8px 14px;margin-bottom:12px"><label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="o_pot" ${POT ? 'checked' : ''} style="width:auto"> Include potential orders in these figures (${pot} potential). They never feed the forecasts until marked <b>Ordered</b>.</label></div>` + tiles(T1);
+      el.innerHTML = X.head('Kit on order', 'What is on order, the estimated finance, and what it does to cash, VAT and the forecasts · confirmed orders feed Cash and Management accounts') + `<div class="pv-card" style="padding:8px 14px;margin-bottom:12px"><label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="o_pot" ${POT ? 'checked' : ''} style="width:auto"> Include potential orders in these figures (${pot} potential). They never feed the forecasts until marked <b>Ordered</b>.</label></div>` + tiles(T1);
       wireTiles(el, T1); $(el, '#o_pot').onchange = (e) => { POT = e.target.checked; draw(); };
       const root = document.createElement('div'); el.appendChild(root);
       tabs(root, [

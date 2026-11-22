@@ -24,6 +24,13 @@ aside a{display:block;color:#dfe8fa;text-decoration:none;padding:9px 12px;border
 aside a:hover{background:rgba(255,255,255,.1)}aside a.on{background:#fff;color:var(--blue);font-weight:600}
 aside .grp{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#9db6e6;padding:12px 12px 4px}
 aside .sub{padding-left:24px;font-size:14px}
+/* collapsible menu */
+aside .navq{width:100%;box-sizing:border-box;margin:6px 0 8px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font:inherit;font-size:13px}aside .navq::placeholder{color:#9db6e6}
+aside .ng{margin:2px 0}aside .nh{width:100%;display:flex;align-items:center;gap:6px;background:none;border:0;color:#9db6e6;font:inherit;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:10px 12px 6px;cursor:pointer;text-align:left;border-radius:8px}
+aside .nh:hover{color:#fff;background:rgba(255,255,255,.06)}aside .nh::before{content:'▸';font-size:10px;transition:transform .15s;display:inline-block;width:10px}aside .ng.open>.nh::before{transform:rotate(90deg)}
+aside .nh .nc{margin-left:auto;font-size:10.5px;background:rgba(255,255,255,.12);border-radius:10px;padding:1px 7px;color:#dfe8fa;letter-spacing:0}
+aside .nb{display:none;padding-left:8px;border-left:1px solid rgba(255,255,255,.12);margin-left:16px}aside .ng.open>.nb{display:block}aside .nb a{font-size:14px;padding:7px 10px}
+aside .ng.old .nh{color:#7d8aa8}aside .ng.hit>.nb{display:block}
 aside .out{margin-top:auto;background:none;border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:8px;cursor:pointer;font:inherit}
 main{margin-left:220px;padding:24px 28px 60px;max-width:1320px}
 .top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
@@ -83,43 +90,57 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <div class="mb"><button id="menu" type="button">Menu</button><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:30px;background:#fff;border-radius:6px;padding:3px 8px"></div>
 <aside id="side"><div class="brand"><a href="#/home" data-r="" style="background:#fff;padding:10px 12px;margin:0;display:block"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:46px;display:block"></a></div>
 <a href="#/home" data-r="home">Overview</a>
+<input id="navq" class="navq" placeholder="Find a page…" autocomplete="off">
+<div class="ng" data-g="fleet"><button type="button" class="nh">Fleet &amp; hire<span class="nc">5</span></button><div class="nb">
+<a href="#/p-register" data-r="p-register">Fleet register</a>
 <a href="#/p-fleet" data-r="p-fleet">Fleet performance</a>
-<a href="#/p-cash" data-r="p-cash">Cash</a>
-<a href="#/p-hp" data-r="p-hp">HP</a>
-<a href="#/p-accounts" data-r="p-accounts">Management accounts</a>
-<a href="#/p-forecast" data-r="p-forecast">Revenue forecast</a>
-<a href="#/p-monthend" data-r="p-monthend">Month end</a>
-<a href="#/p-boardpack" data-r="p-boardpack">Board pack</a>
-<a href="#/p-orders" data-r="p-orders">New purchases</a>
-<a href="#/p-pipeline" data-r="p-pipeline">Pipeline &amp; quotes</a>
+<a href="#/p-stock" data-r="p-stock">Stock &amp; inspections</a>
+<a href="#/p-assets" data-r="p-assets">Asset summary</a>
+<a href="#/p-orders" data-r="p-orders">Kit on order</a>
+</div></div>
+<div class="ng" data-g="sales"><button type="button" class="nh">Sales &amp; customers<span class="nc">5</span></button><div class="nb">
+<a href="#/p-quotes" data-r="p-quotes">Quotes</a>
+<a href="#/p-pipeline" data-r="p-pipeline">Pipeline</a>
 <a href="#/p-crm" data-r="p-crm">Customers</a>
 <a href="#/analyser" data-r="analyser">Deal analyser</a>
+<a href="#/p-sales" data-r="p-sales">Dealership stock</a>
+</div></div>
+<div class="ng" data-g="parking"><button type="button" class="nh">Parking<span class="nc">3</span></button><div class="nb">
+<a href="#/p-parking" data-r="p-parking">Parking customers</a>
+<a href="#/p-parkmap" data-r="p-parkmap">Yard map</a>
+<a href="#/p-parktest" data-r="p-parktest">Layout planner</a>
+</div></div>
+<div class="ng" data-g="finance"><button type="button" class="nh">Finance<span class="nc">7</span></button><div class="nb">
+<a href="#/p-cash" data-r="p-cash">Cash</a>
+<a href="#/p-hp" data-r="p-hp">HP</a>
+<a href="#/hpvc" data-r="hpvc">HP vs contracts</a>
+<a href="#/p-accounts" data-r="p-accounts">Management accounts</a>
+<a href="#/p-forecast" data-r="p-forecast">Revenue forecast</a>
 <a href="#/p-fa" data-r="p-fa">Fixed assets</a>
-<a href="#/p-stock" data-r="p-stock">Stock &amp; inspections</a>
-<a href="#/p-sales" data-r="p-sales">Sales stock &amp; opportunity</a>
-<a href="#/p-parking" data-r="p-parking">Parking</a>
-<a href="#/p-parkmap" data-r="p-parkmap">Parking map</a>
-<a href="#/p-parktest" data-r="p-parktest">Test layouts</a>
-<div class="grp">More</div>
-<a class="sub" href="#/p-assets" data-r="p-assets">Asset summary</a>
-<a class="sub" href="#/hpvc" data-r="hpvc">HP vs Contracts</a>
-<a class="sub" href="#/p-spend" data-r="p-spend">Spend</a>
-<a class="sub" href="#/inspections" data-r="inspections">Photo guides</a>
-<a class="sub" href="#/p-users" data-r="p-users">Users</a>
-<div class="grp" id="clsT" style="color:#8a94a8;cursor:pointer;user-select:none">▸ Classic pages</div><div id="clsB" style="display:none">
-<a class="sub" href="#/classic-home" data-r="classic-home">Old overview</a>
-<a class="sub" href="#/fin" data-r="fin">Finance overview</a>
-<a class="sub" href="#/hp" data-r="hp">HP overview</a>
-<a class="sub" href="#/cashflow" data-r="cashflow">Cash flow</a>
-<a class="sub" href="#/ma" data-r="ma">Management accounts</a>
-<a class="sub" href="#/budget" data-r="budget">Budget</a>
-<a class="sub" href="#/fa" data-r="fa">Fixed assets &amp; depreciation</a>
-<a class="sub" href="#/assets" data-r="assets">Asset summary (old)</a>
-<a class="sub" href="#/spend" data-r="spend">Spend tracker (old)</a>
-<a class="sub" href="#/stock" data-r="stock">Stock &amp; inspections (old)</a>
-<a class="sub" href="#/orders" data-r="orders">New assets on order</a>
-<a class="sub" href="#/fleet" data-r="fleet">Fleet dashboard</a>
-</div>
+<a href="#/p-spend" data-r="p-spend">Spend</a>
+</div></div>
+<div class="ng" data-g="reporting"><button type="button" class="nh">Reporting<span class="nc">1</span></button><div class="nb">
+<a href="#/p-boardpack" data-r="p-boardpack">Board report</a>
+</div></div>
+<div class="ng" data-g="admin"><button type="button" class="nh">Admin<span class="nc">2</span></button><div class="nb">
+<a href="#/p-users" data-r="p-users">Users</a>
+<a href="#/inspections" data-r="inspections">Inspection photo guides</a>
+</div></div>
+<div class="ng old" data-g="old"><button type="button" class="nh">Old pages<span class="nc">13</span></button><div class="nb">
+<a href="#/p-monthend" data-r="p-monthend">Month end (old)</a>
+<a href="#/classic-home" data-r="classic-home">Old overview</a>
+<a href="#/fin" data-r="fin">Finance overview</a>
+<a href="#/hp" data-r="hp">HP overview</a>
+<a href="#/cashflow" data-r="cashflow">Cash flow</a>
+<a href="#/ma" data-r="ma">Management accounts (old)</a>
+<a href="#/budget" data-r="budget">Budget</a>
+<a href="#/fa" data-r="fa">Fixed assets &amp; depreciation</a>
+<a href="#/assets" data-r="assets">Asset summary (old)</a>
+<a href="#/spend" data-r="spend">Spend tracker (old)</a>
+<a href="#/stock" data-r="stock">Stock &amp; inspections (old)</a>
+<a href="#/orders" data-r="orders">New assets on order</a>
+<a href="#/fleet" data-r="fleet">Fleet dashboard</a>
+</div></div>
 <button class="out" id="out" type="button">Sign out</button></aside>
 <main id="main"></main></div>
 <div class="tip" id="tip"></div>
@@ -398,12 +419,22 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="finance.js?v=3"></script>
 <script src="disposals.js?v=3"></script>
 <script src="orders.js?v=18"></script>
-<script src="pipeline.js?v=2"></script>
-<script src="sales.js?v=1"></script>
+<script src="pipeline.js?v=3"></script>
+<script src="sales.js?v=2"></script>
 <script src="crm.js?v=1"></script>
-<script src="parking.js?v=3"></script>
-<script src="parkmap.js?v=15"></script>
+<script src="parking.js?v=4"></script>
+<script src="parkmap.js?v=16"></script>
+<script src="fleetreg.js?v=1"></script>
+<script src="quotes.js?v=1"></script>
 <script src="forecast.js?v=1"></script>
 <script src="monthend.js?v=1"></script>
-<script src="boardpack.js?v=2"></script>
-<script src="ma.js?v=13"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=5"></script><script src="pages.js?v=4"></script><script src="users.js?v=1"></script><script>(function(){var t=document.getElementById("clsT"),b=document.getElementById("clsB");function set(o){b.style.display=o?"block":"none";t.textContent=(o?"▾ ":"▸ ")+"Classic pages"}t.onclick=function(){set(b.style.display==="none")};function chk(){var h=location.hash.replace(/^#\/?/,"");if(b.querySelector("a[data-r=\""+h+"\"]"))set(true)}chk();addEventListener("hashchange",chk)})();</script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
+<script src="boardpack.js?v=3"></script>
+<script src="ma.js?v=13"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=5"></script><script src="users.js?v=1"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
+var KEY='ct.nav.open',side=document.getElementById('side'),open;try{open=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){open=null}if(!Array.isArray(open))open=['sales'];
+function save(){try{localStorage.setItem(KEY,JSON.stringify(open))}catch(e){}}
+function paint(){side.querySelectorAll('.ng').forEach(function(g){g.classList.toggle('open',open.indexOf(g.dataset.g)>=0)})}
+side.querySelectorAll('.nh').forEach(function(h){h.onclick=function(){var g=h.parentNode.dataset.g,i=open.indexOf(g);if(i>=0)open.splice(i,1);else open.push(g);save();paint()}});
+function cur(){var h=location.hash.replace(/^#\/?/,'').split('?')[0]||'home',a=side.querySelector('.nb a[data-r="'+h+'"]');if(a){var g=a.closest('.ng').dataset.g;if(open.indexOf(g)<0){open.push(g);save()}}paint()}
+var q=document.getElementById('navq');q.oninput=function(){var v=q.value.trim().toLowerCase();side.querySelectorAll('.ng').forEach(function(g){var n=0;g.querySelectorAll('.nb a').forEach(function(a){var m=!v||a.textContent.toLowerCase().indexOf(v)>=0||g.querySelector('.nh').textContent.toLowerCase().indexOf(v)>=0;a.style.display=m?'':'none';if(m)n++});g.style.display=v&&!n?'none':'';g.classList.toggle('hit',!!v&&n>0)})};
+q.onkeydown=function(e){if(e.key==='Enter'){var a=[].slice.call(side.querySelectorAll('.nb a')).filter(function(a){return a.style.display!=='none'})[0];if(a){location.hash=a.getAttribute('href');q.value='';q.oninput()}}if(e.key==='Escape'){q.value='';q.oninput()}};
+cur();addEventListener('hashchange',cur)})();</script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>

@@ -27,8 +27,8 @@
   X.salesStock = { load, val, held: () => ST.filter(HELD) };   // used by the board pack
 
   X.routes['p-sales'] = async function (el) {
-    el.innerHTML = X.head('Sales stock & opportunity', 'What each unit is worth to us when sold, and when the cash lands') + '<div class="empty">Loading…</div>';
-    try { await load(); } catch (e) { el.innerHTML = X.head('Sales stock & opportunity', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
+    el.innerHTML = X.head('Dealership stock', 'What each unit is worth to us when sold, and when the cash lands') + '<div class="empty">Loading…</div>';
+    try { await load(); } catch (e) { el.innerHTML = X.head('Dealership stock', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
     draw(el);
   };
 
@@ -51,7 +51,7 @@
     if (S.opp === 'idle') opp = opp.filter((r) => !r.onHire); else if (S.opp === 'low') opp = opp.filter((r) => !r.onHire || (r.fyUtil != null && r.fyUtil < 0.5));
     opp.sort((a, b) => (S.sort === 'cash' ? b.oCash - a.oCash : S.sort === 'profit' ? b.oProfit - a.oProfit : (a.fyUtil ?? 0) - (b.fyUtil ?? 0)));
 
-    el.innerHTML = X.head('Sales stock & opportunity', 'Asking price against book value (profit on sale) and against HP still owed (cash released). Values ex VAT unless marked.') +
+    el.innerHTML = X.head('Dealership stock', 'Asking price against book value (profit on sale) and against HP still owed (cash released). Values ex VAT unless marked.') +
       X.tiles([
         { l: 'Units for sale', v: held.length, s: priced.length + ' with an asking price' },
         { l: 'Asking price total', v: gbp(sum('ask', priced)), s: 'book value ' + gbp(sum('basis', priced)) },

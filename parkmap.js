@@ -56,14 +56,14 @@
   X.parkMap = { stateOf };
 
   X.routes['p-parktest'] = async function (el) {
-    TEST = true; MODE = 'edit'; EL = el; el.innerHTML = X.head('Test layouts', '') + '<div class="empty">Loading…</div>';
-    try { await load(); } catch (e) { el.innerHTML = X.head('Test layouts', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
+    TEST = true; MODE = 'edit'; EL = el; el.innerHTML = X.head('Layout planner', '') + '<div class="empty">Loading…</div>';
+    try { await load(); } catch (e) { el.innerHTML = X.head('Layout planner', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
     VB = null; draw();
   };
   X.routes['p-parkmap'] = async function (el) {
     if (TEST) { TEST = false; MODE = 'view'; SCN = null; }
-    EL = el; el.innerHTML = X.head('Parking map', '') + '<div class="empty">Loading…</div>';
-    try { await load(); } catch (e) { el.innerHTML = X.head('Parking map', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
+    EL = el; el.innerHTML = X.head('Yard map', '') + '<div class="empty">Loading…</div>';
+    try { await load(); } catch (e) { el.innerHTML = X.head('Yard map', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
     VB = null; draw();
   };
   window.addEventListener('beforeunload', (e) => { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
@@ -109,7 +109,7 @@
         <label class="small"><input type="checkbox" id="pt_chk" ${CHK ? 'checked' : ''}> Show turning space</label>
         <label class="small">Aisle: full <input id="pt_af" type="number" step="0.5" value="${AIS.full}" style="width:52px"> m · small <input id="pt_as" type="number" step="0.5" value="${AIS.small}" style="width:52px"> m</label>
         <button class="mini" id="pt_apply" style="margin-left:auto;border-color:#E4611D;color:#B4470F">Use this layout for the live yard…</button></div>`; }
-    el.innerHTML = (TEST ? X.head('Test layouts', 'A sandbox copy of the yard – try anything here; the live parking map is not touched until you choose “Use this layout for the live yard”.') : X.head('Parking map', 'Drag a customer onto a bay to let it. Click a bay for details. Shift-click to pick several bays, then drop a customer on any of them.')) + testBar +
+    el.innerHTML = (TEST ? X.head('Layout planner', 'A sandbox copy of the yard – try anything here; the live parking map is not touched until you choose “Use this layout for the live yard”.') : X.head('Yard map', 'Drag a customer onto a bay to let it. Click a bay for details. Shift-click to pick several bays, then drop a customer on any of them.')) + testBar +
       `<div class="pm-top"><label>Site <select id="pm_site">${SITES.map((s) => `<option value="${s.id}" ${s.id === SITE ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
        <div class="pm-seg">${['view', 'edit'].map((m) => `<button data-mode="${m}" class="${MODE === m ? 'on' : ''}">${m === 'view' ? 'Manage bays' : 'Edit layout'}</button>`).join('')}</div>
        ${PLAN.bg && PLAN.bg.url ? `<label class="small" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="pm_sat" ${SAT ? 'checked' : ''}> Satellite photo</label>` : ''}

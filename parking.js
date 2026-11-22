@@ -38,8 +38,8 @@
   X.parking = { load, monthRevenue, occupancy, weekly, live, data: () => ({ SITES, CAP, AG }) };   // used by the forecast and board pack
 
   X.routes['p-parking'] = async function (el) {
-    el.innerHTML = X.head('Parking', 'Sites, spaces and parking agreements') + '<div class="empty">Loading…</div>';
-    try { await load(); } catch (e) { el.innerHTML = X.head('Parking', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
+    el.innerHTML = X.head('Parking customers', 'Sites, spaces and parking agreements') + '<div class="empty">Loading…</div>';
+    try { await load(); } catch (e) { el.innerHTML = X.head('Parking customers', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
     draw(el);
   };
 
@@ -51,7 +51,7 @@
     const ym = t.slice(0, 7), months = Array.from({ length: 12 }, (_, i) => ymAdd(ym, i - 2));
     const siteName = (id) => (SITES.find((s) => s.id === id) || {}).name || '';
 
-    el.innerHTML = X.head('Parking', 'Charged per space per week. Monthly figures are weekly × 52 ÷ 12, or pro rata by day for part months. <a href="#/p-parkmap">Open the parking map →</a>') +
+    el.innerHTML = X.head('Parking customers', 'Charged per space per week. Monthly figures are weekly × 52 ÷ 12, or pro rata by day for part months. <a href="#/p-parkmap">Open the parking map →</a>') +
       `<div class="form" style="margin-bottom:12px"><label>Site <select id="pk_site"><option value="all">All sites</option>${SITES.map((s) => `<option value="${s.id}" ${String(s.id) === SITE ? 'selected' : ''}>${esc(s.name)}${s.status !== 'Open' ? ' (' + esc(s.status.toLowerCase()) + ')' : ''}</option>`).join('')}</select></label></div>` +
       X.tiles([
         { l: 'Occupancy', v: o.pct == null ? '–' : o.pct.toFixed(0) + '%', s: o.used + ' of ' + o.cap + ' spaces let (open sites)', c: o.pct != null && o.pct < 70 ? 'o' : '' },

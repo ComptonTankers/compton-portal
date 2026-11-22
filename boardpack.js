@@ -38,14 +38,14 @@
   }
 
   X.routes['p-boardpack'] = async function (el) {
-    el.innerHTML = X.head('Board pack', '') + '<div class="empty">Checking the month…</div>';
+    el.innerHTML = X.head('Board report', '') + '<div class="empty">Checking the month…</div>';
     const opts = options(KIND); if (!opts.some(([k]) => k === KEY)) KEY = KIND === 'month' ? LAST : opts[0][0];
     const per = period(KIND, KEY);
     let me = null; try { me = X.monthEnd ? await X.monthEnd.get(per.end) : null; } catch (e) { me = null; }
     const missing = me ? [['pl', 'management accounts'], ['mcs', 'MCS hire reports'], ['cash', 'cash actuals'], ['fac', 'facility balance'], ['hp', 'HP balance'], ['bank', 'bank balance']].filter(([k]) => !me.auto[k]).map(([, t]) => t) : [];
     const what = KIND === 'month' ? '11 slides: cover · month at a glance · profit and loss · cash and funding · fleet and utilisation · revenue forecast · pipeline · customers · sales stock · parking · strategy and decisions.'
       : '7 slides, headline view only: cover · ' + (KIND === 'qtr' ? 'quarter' : 'year') + ' at a glance (against budget and the ' + (KIND === 'qtr' ? 'previous quarter' : 'previous year') + ') · profit and loss · cash and funding · fleet and customers · growth and outlook (pipeline, sales, parking, forecast) · strategy and decisions.';
-    el.innerHTML = X.head('Board pack', 'Builds the board deck from what’s in the portal. You add the commentary. Financial year runs May to April.') +
+    el.innerHTML = X.head('Board report', 'Builds the board deck from what’s in the portal. You add the commentary. Financial year runs May to April.') +
       `<div class="card"><div class="form" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
         <label>Pack <select id="bp_k">${[['month', 'Monthly'], ['qtr', 'Quarterly'], ['year', 'Annual']].map(([k, t]) => `<option value="${k}" ${k === KIND ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         <label>Period <select id="bp_m">${opts.map(([k, t]) => `<option value="${k}" ${k === KEY ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>

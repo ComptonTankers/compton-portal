@@ -29,8 +29,8 @@
   X.pipeline = { load, data: () => P, pm, wpm, prob, OPEN };   // used by the board pack
 
   X.routes['p-pipeline'] = async function (el) {
-    el.innerHTML = X.head('Pipeline & quotes', 'Every hire opportunity from enquiry to won or lost') + '<div class="empty">Loading…</div>';
-    try { await load(); } catch (e) { el.innerHTML = X.head('Pipeline & quotes', '') + `<div class="card"><div class="hint">Could not load the pipeline: ${esc(e.message)}</div></div>`; return; }
+    el.innerHTML = X.head('Pipeline', 'Every hire opportunity from enquiry to won or lost') + '<div class="empty">Loading…</div>';
+    try { await load(); } catch (e) { el.innerHTML = X.head('Pipeline', '') + `<div class="card"><div class="hint">Could not load the pipeline: ${esc(e.message)}</div></div>`; return; }
     draw(el);
   };
 
@@ -47,7 +47,7 @@
     const noStart = open.filter((d) => !d.start_date).length;
     const lostWhy = {}; P.filter((d) => d.stage === 'Lost').forEach((d) => { const k = d.lost_reason || 'No reason given'; lostWhy[k] = (lostWhy[k] || 0) + 1; });
 
-    el.innerHTML = X.head('Pipeline & quotes', 'Every hire opportunity from enquiry to won or lost. Monthly values are at full hire: quantity × weekly rate × 52 ÷ 12.') +
+    el.innerHTML = X.head('Pipeline', 'Every hire opportunity from enquiry to won or lost. Monthly values are at full hire: quantity × weekly rate × 52 ÷ 12.') +
       X.tiles([
         { l: 'Open pipeline', v: gbp(open.reduce((t, d) => t + pm(d), 0)) + '/mo', s: open.length + ' open deal' + (open.length === 1 ? '' : 's') },
         { l: 'Weighted by probability', v: gbp(open.reduce((t, d) => t + wpm(d), 0)) + '/mo', s: 'what we expect to land', c: 'g' },
@@ -77,7 +77,7 @@
     $('pl_f').onchange = (e) => { FILTER = e.target.value; draw(el); };
     $('pl_new').onclick = () => form(el, null);
     el.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => form(el, P.find((d) => d.id == b.dataset.edit)));
-    el.querySelectorAll('[data-quote]').forEach((b) => b.onclick = () => quote(P.find((d) => d.id == b.dataset.quote)));
+    el.querySelectorAll('[data-quote]').forEach((b) => b.onclick = () => { location.hash = '#/p-quotes?deal=' + b.dataset.quote; });   // build / open the quote for this deal
     el.querySelectorAll('[data-won]').forEach((b) => b.onclick = () => wonPanel(el, P.find((d) => d.id == b.dataset.won)));
     el.querySelectorAll('[data-stage]').forEach((s) => s.onchange = async () => {
       const d = P.find((x) => x.id == s.dataset.stage), patch = { stage: s.value, probability: PROB[s.value] };
