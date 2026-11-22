@@ -193,6 +193,7 @@
       return `<h4>${esc(gate ? 'Gate' : (FEAT[f.type] || FEAT.area)[2])}</h4><label>Label</label><input id="pf_lb" value="${esc(f.label || '')}">
       <label>Type</label><select id="pf_ty">${(gate ? [['gate', 'Gate']] : Object.entries(FEAT).map(([k, v]) => [k, v[2]])).map(([k, t]) => `<option value="${k}" ${k === f.type ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <div class="small" style="margin-top:8px">${gate ? 'Width <b>' + dist(P[0], P[1]).toFixed(1) + ' m</b>' : 'Sides: ' + P.map((p, i) => dist(p, P[(i + 1) % P.length]).toFixed(1)).join(' × ') + ' m<br>Area <b>' + Math.round(area(P)) + ' m²</b>'}</div>
+      ${gate ? `<label>Width (m)</label><input id="pf_gw" type="number" step="0.1" value="${dist(P[0], P[1]).toFixed(1)}">` : P.length === 4 ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Side 1 (m)</label><input id="pf_L" type="number" step="0.1" value="${dist(P[0], P[1]).toFixed(1)}"></div><div><label>Side 2 (m)</label><input id="pf_W" type="number" step="0.1" value="${dist(P[1], P[2]).toFixed(1)}"></div></div>` : ''}
       <label>Turn</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[-90, -5, -1, 1, 5, 90].map((d) => `<button class="mini" data-rot="${d}">${d > 0 ? '+' : ''}${d}°</button>`).join('')}</div>
       <div class="small muted" style="margin-top:6px">Drag the shape to move it, drag its square corners to reshape it. Shift-click other shapes to move or turn them together.${gate ? '' : ' Double-click a corner to remove it, double-click an edge to add one.'}</div>
       <div style="margin-top:8px;display:flex;gap:6px"><button id="pf_del">Delete</button><button id="pf_cl">Done</button></div>`; }
@@ -208,16 +209,26 @@
     if ($('pf_lb')) { const f = PEND.feat; $('pf_lb').oninput = (e) => { f.label = e.target.value; DIRTY = true; render(); };
       $('pf_ty').onchange = (e) => { if (e.target.value) { f.type = e.target.value; dirty(); } };
       document.querySelectorAll('[data-rot]').forEach((b) => (b.onclick = () => { turnGroup(+b.dataset.rot); }));
+      const resize = () => { const P = f.pts, c = cent(P), u0 = [P[1][0] - P[0][0], P[1][1] - P[0][1]], lu = Math.hypot(...u0) || 1, u = [u0[0] / lu, u0[1] / lu], v0 = [P[2][0] - P[1][0], P[2][1] - P[1][1]], lv = Math.hypot(...v0) || 1, v = [v0[0] / lv, v0[1] / lv];
+        const L = +$('pf_L').value || lu, W = +$('pf_W').value || lv, R = (k) => Math.round(k * 100) / 100;
+        f.pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [R(c[0] + u[0] * a * L / 2 + v[0] * b * W / 2), R(c[1] + u[1] * a * L / 2 + v[1] * b * W / 2)]); dirty(); };
+      if ($('pf_L')) { $('pf_L').onchange = resize; $('pf_W').onchange = resize; }
+      if ($('pf_gw')) $('pf_gw').onchange = (e) => { const P = f.pts, c = cent(P), d = dist(P[0], P[1]) || 1, k = (+e.target.value || d) / d; f.pts = P.map((p) => [Math.round((c[0] + (p[0] - c[0]) * k) * 100) / 100, Math.round((c[1] + (p[1] - c[1]) * k) * 100) / 100]); dirty(); };
       $('pf_del').onclick = () => { const g = [f].concat(PEND.more || []); PLAN.features = PLAN.features.filter((x) => !g.includes(x)); PEND = null; dirty(); }; $('pf_cl').onclick = () => { PEND = null; side(); render(); }; return; }
     if (!$('ps_ok')) return;
     $('ps_ok').onclick = () => {
       const k = $('ps_kind').value, w = $('ps_w').value, l = $('ps_l').value, r = $('ps_r').value;
-      sel.forEach((b) => { if (k) b.kind = k; if (w !== '') b.w = +w; if (l !== '') b.l = +l; if (r !== '') b.rot = +r; b._d = 1; });
+      if (!tryBays(sel, () => sel.forEach((b) => { if (w !== '') b.w = +w; if (l !== '') b.l = +l; if (r !== '') b.rot = +r; }))) { side(); return; }
+      sel.forEach((b) => { if (k) b.kind = k; b._d = 1; });
       if (sel.length === 1) { const c = $('ps_code').value.trim(); if (c && c !== sel[0].code) { if (BAYS.some((b) => b !== sel[0] && b.code === c)) { msg('Bay ' + c + ' already exists.'); return; } sel[0].code = c; } }
       else { const px = $('ps_px').value.trim(); if (px) renumber(sel, px, +$('ps_n0').value || 1); }
       dirty();
     };
-    $('ps_dup').onclick = () => { const nb = sel.map((b) => Object.assign({}, b, { id: null, agreement_id: null, x: b.x + 2, y: b.y + 2, code: uniqueCode(b.code), _d: 1 })); BAYS.push(...nb); SEL = new Set(nb); dirty(); };
+    $('ps_dup').onclick = () => { // copy beside the selection, flush, in the first space that's clear
+      const a = sel[0].rot * Math.PI / 180, bx = [Math.cos(a), Math.sin(a)], span = sel.length > 1 ? Math.max(...sel.map((b) => (b.x - sel[0].x) * bx[0] + (b.y - sel[0].y) * bx[1])) - Math.min(...sel.map((b) => (b.x - sel[0].x) * bx[0] + (b.y - sel[0].y) * bx[1])) + sel[0].w : sel[0].w;
+      const nb = sel.map((b) => Object.assign({}, b, { id: null, agreement_id: null, state: 'open', code: uniqueCode(b.code), _d: 1 })); BAYS.push(...nb);
+      for (const k of [1, -1, 2, -2, 3, -3]) { nb.forEach((c, i) => { c.x = sel[i].x + bx[0] * span * k; c.y = sel[i].y + bx[1] * span * k; }); if (!clash(nb)) { SEL = new Set(nb); dirty(); return; } }
+      BAYS = BAYS.filter((b) => !nb.includes(b)); msg('No clear space right beside these bays to copy into – drag them first.'); };
     $('ps_del').onclick = delSel;
   }
   function renumber(list, px, n0) {
@@ -377,7 +388,7 @@
       if (drag.kind === 'bv') { PLAN.boundary[drag.i] = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; drag.moved = 1; render(); return; }
       if (drag.kind === 'pan') { const r = svg.getBoundingClientRect(), k = VB.w / r.width; VB.x = drag.vb.x - (e.clientX - drag.cx) * k; VB.y = drag.vb.y - (e.clientY - drag.cy) * k; render(); return; }
       const dx = r1(p[0] - drag.p[0]), dy = r1(p[1] - drag.p[1]); if (!dx && !dy) return; drag.moved = 1;
-      if (drag.kind === 'bays') drag.start.forEach(([b, x, y]) => { b.x = x + dx; b.y = y + dy; b._d = 1; });
+      if (drag.kind === 'bays') { const list = drag.start.map(([b]) => b); tryBays(list, () => drag.start.forEach(([b, x, y]) => { b.x = x + dx; b.y = y + dy; }), true); }
       if (drag.kind === 'feat') drag.grp.forEach(([g, pts]) => (g.pts = pts.map((q) => [q[0] + dx, q[1] + dy])));
       render();
     };
@@ -408,12 +419,12 @@
         if (t) turnGroup(t); else if (mv) { e.preventDefault(); [f].concat(PEND.more || []).forEach((x) => (x.pts = x.pts.map((q) => [q[0] + mv[0], q[1] + mv[1]]))); dirty(false); } return; }
       if (!sel.length) return; const st = e.shiftKey ? 1 : 0.25;
       const mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
-      if (mv) { e.preventDefault(); sel.forEach((b) => { b.x += mv[0]; b.y += mv[1]; b._d = 1; }); dirty(false); return; }
+      if (mv) { e.preventDefault(); if (tryBays(sel, () => sel.forEach((b) => { b.x += mv[0]; b.y += mv[1]; }))) dirty(false); else render(); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); delSel(); return; }
       const turn = e.key === 'r' || e.key === 'R' ? 90 : e.key === ']' ? 5 : e.key === '[' ? -5 : 0;
       if (turn) { // turn the group about its centre
         const cx = sel.reduce((t, b) => t + b.x, 0) / sel.length, cy = sel.reduce((t, b) => t + b.y, 0) / sel.length, a = turn * Math.PI / 180;
-        sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = r1(cx + x * Math.cos(a) - y * Math.sin(a)); b.y = r1(cy + x * Math.sin(a) + y * Math.cos(a)); b.rot = ((b.rot + turn) % 360 + 360) % 360; b._d = 1; }); dirty(false); }
+        if (tryBays(sel, () => sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = r1(cx + x * Math.cos(a) - y * Math.sin(a)); b.y = r1(cy + x * Math.sin(a) + y * Math.cos(a)); b.rot = ((b.rot + turn) % 360 + 360) % 360; }))) dirty(false); else render(); }
     };
   }
   function renumberAll() {
@@ -422,6 +433,32 @@
     const ord = BAYS.slice().sort((p, q) => ang(p) - ang(q)); let nf = 1, ns = 1;
     ord.forEach((b) => { b.code = '~' + (b.id || Math.random()); });
     ord.forEach((b) => { b.code = b.kind === 'Small bay' ? 'S' + ns++ : String(nf++); b._d = 1; }); dirty();
+  }
+  // bays are solid: they may touch but not overlap each other or a building
+  const bayPts = (b) => { const a = b.rot * Math.PI / 180, ax = [-Math.sin(a), Math.cos(a)], bx = [Math.cos(a), Math.sin(a)];
+    return [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(([s, t]) => [b.x + ax[0] * s * b.l / 2 + bx[0] * t * b.w / 2, b.y + ax[1] * s * b.l / 2 + bx[1] * t * b.w / 2]); };
+  function sat(A, B) { const ax = (P) => P.map((p, i) => { const q = P[(i + 1) % P.length], L = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1; return [-(q[1] - p[1]) / L, (q[0] - p[0]) / L]; });
+    for (const n of ax(A).concat(ax(B))) { const pa = A.map((p) => p[0] * n[0] + p[1] * n[1]), pb = B.map((p) => p[0] * n[0] + p[1] * n[1]);
+      if (Math.max(...pa) - 0.05 <= Math.min(...pb) || Math.max(...pb) - 0.05 <= Math.min(...pa)) return false; } return true; }
+  function clash(list) {
+    const others = BAYS.filter((b) => !list.includes(b)).map(bayPts).concat(PLAN.features.filter((f) => f.type === 'building' && f.pts.length > 2).map((f) => f.pts));
+    for (const b of list) { const P = bayPts(b), near = others.filter((o) => Math.hypot(o[0][0] - b.x, o[0][1] - b.y) < 45); if (near.some((o) => sat(P, o))) return b; } return null;
+  }
+  // pull a moved group flush against a neighbouring bay at the same angle when it's within 1.5 m
+  function snap(list) {
+    const lead = list[0]; let best = null;
+    BAYS.forEach((n) => { if (list.includes(n)) return; const dr = Math.abs((((lead.rot - n.rot) % 180) + 180) % 180); if (dr > 1 && dr < 179) return;
+      if (Math.hypot(n.x - lead.x, n.y - lead.y) > 25) return;
+      const a = n.rot * Math.PI / 180, ax = [-Math.sin(a), Math.cos(a)], bx = [Math.cos(a), Math.sin(a)], d = [lead.x - n.x, lead.y - n.y], sv = d[0] * bx[0] + d[1] * bx[1], tv = d[0] * ax[0] + d[1] * ax[1];
+      const cands = [[Math.sign(sv || 1) * (n.w + lead.w) / 2, Math.abs(tv) < 1.5 ? 0 : tv], [Math.abs(sv) < 1.5 ? 0 : sv, Math.sign(tv || 1) * (n.l + lead.l) / 2]];
+      cands.forEach(([s2, t2]) => { const nx = n.x + bx[0] * s2 + ax[0] * t2, ny = n.y + bx[1] * s2 + ax[1] * t2, dd = Math.hypot(nx - lead.x, ny - lead.y); if (dd < 1.5 && (!best || dd < best.d)) best = { d: dd, dx: nx - lead.x, dy: ny - lead.y }; }); });
+    if (best) list.forEach((b) => { b.x = Math.round((b.x + best.dx) * 100) / 100; b.y = Math.round((b.y + best.dy) * 100) / 100; });
+  }
+  // try a change to some bays; undo it if they would overlap anything
+  function tryBays(list, change, quiet) {
+    const was = list.map((b) => [b, b.x, b.y, b.w, b.l, b.rot]); change(); snap(list);
+    if (clash(list)) { was.forEach(([b, x, y, w, l, r]) => Object.assign(b, { x, y, w, l, rot: r })); if (!quiet) msg('Bays can’t overlap each other or a building – they can only sit flush.'); return false; }
+    list.forEach((b) => (b._d = 1)); return true;
   }
   function turnGroup(deg) { const g = [PEND.feat].concat(PEND.more || []), c = cent(g.reduce((a, x) => a.concat(x.pts), [])); g.forEach((x) => (x.pts = rotPts(x.pts, deg, c))); dirty(); }
   // shape being drawn: rectangle at any angle (3 clicks), any polygon, or a gate line (2 clicks)
@@ -450,11 +487,12 @@
   }
   function addRow(p0, p1) {
     const bs = rowLayout(p0, p1); if (!bs.length) return;
-    const px = ($('pe_px') && $('pe_px').value.trim()) || ROWOPT.prefix || nextPrefix();
-    const used = BAYS.filter((b) => b.code.startsWith(px)).map((b) => +(b.code.slice(px.length).match(/^\d+/) || [0])[0]); let n = used.length ? Math.max(...used) + 1 : 1;
-    const nb = bs.map((b) => Object.assign(b, { id: null, site_id: SITE, kind: ROWOPT.kind, code: px + n++, state: 'open', agreement_id: null, _d: 1 }));
-    BAYS.push(...nb); ROWOPT.prefix = ''; SEL = new Set(nb); TOOL = 'select'; dirty();
+    const small = ROWOPT.kind === 'Small bay', nums = BAYS.filter((b) => (small ? /^S\d+$/.test(b.code) : /^\d+$/.test(b.code))).map((b) => +b.code.replace('S', '')); let n = nums.length ? Math.max(...nums) + 1 : 1;
+    const nb = []; let skipped = 0;
+    bs.forEach((b) => { Object.assign(b, { id: null, site_id: SITE, kind: ROWOPT.kind, state: 'open', agreement_id: null, _d: 1 }); if (clash([b].concat(nb).slice(0, 1))) { skipped++; return; } b.code = (small ? 'S' : '') + n++; nb.push(b); BAYS.push(b); });
+    ROWOPT.prefix = ''; SEL = new Set(nb); TOOL = 'select'; dirty(); if (skipped) msg(skipped + ' bay(s) left out of the row because they would overlap existing bays or a building.');
   }
+
 
   // ---------- saving ----------
   async function save() {
