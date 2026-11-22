@@ -43,6 +43,9 @@
     const r = await api('park_scenarios', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ site_id: SITE, name, plan: src.plan, bays: src.bays }) });
     SCN = r[0]; await load();
   }
+  const isSmall = (k) => k === 'Small bay';
+  const fits = (a, b) => !a || isSmall(a.kind) === isSmall(b.kind);   // tenants only go in their own type of bay
+  const typeName = (a) => (isSmall(a.kind) ? 'small' : 'full');
   const agOf = (b) => (b.agreement_id ? AG.find((a) => a.id === b.agreement_id) : null);
   function stateOf(b) {
     if (b.state === 'out') return 'out'; const a = agOf(b);
@@ -164,10 +167,10 @@
       const one = sel.length === 1 ? sel[0] : null, a = one && agOf(one);
       p.innerHTML = (sel.length ? `<h4>${sel.length === 1 ? (one.kind === 'Small bay' ? 'Small bay ' : 'Full bay ') + esc(one.code) : sel.length + ' bays selected'}</h4>
         ${one ? `<div class="small muted">${esc(one.kind)} · ${one.w} × ${one.l} m</div>${a ? `<div style="margin:8px 0"><b>${esc(a.customer)}</b><div class="small">${gbp(a.weekly_rate)}/space/week · ${esc(a.status)}${a.end_date ? ' · ends ' + new Date(a.end_date).toLocaleDateString('en-GB') : ''}</div>${a.contact_name ? `<div class="small">${esc(a.contact_name)} ${esc(a.contact_phone || '')}</div>` : ''}</div>` : '<div style="margin:8px 0;color:#16A34A"><b>Free</b></div>'}` : `<div class="small muted">${sel.map((b) => esc(b.code)).join(', ')}</div>`}
-        <label>Let to</label><select id="pv_ag"><option value="">– free –</option>${AG.filter((x) => x.site_id === SITE && x.status !== 'Ended').map((x) => `<option value="${x.id}" ${one && one.agreement_id === x.id ? 'selected' : ''}>${esc(x.customer)} (${x.spaces} × ${esc(x.kind)})</option>`).join('')}</select>
+        <label>Let to</label><select id="pv_ag"><option value="">– free –</option>${AG.filter((x) => x.site_id === SITE && x.status !== 'Ended' && sel.every((b) => fits(x, b))).map((x) => `<option value="${x.id}" ${one && one.agreement_id === x.id ? 'selected' : ''}>${esc(x.customer)} (${x.spaces} × ${esc(x.kind)})</option>`).join('')}</select>
         <label>Bay status</label><select id="pv_st">${[['open', 'Available'], ['reserved', 'Reserved'], ['out', 'Out of use']].map(([k, t]) => `<option value="${k}" ${one && one.state === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <label>Reserved for / note</label><input id="pv_rf" value="${esc(one ? one.reserved_for || one.notes || '' : '')}" placeholder="e.g. Compton hire fleet, sales stock">
-        <div style="margin-top:10px;display:flex;gap:6px"><button class="pri2" id="pv_ok">Save</button><button id="pv_cl">Close</button></div><hr style="margin:14px 0;border:0;border-top:1px solid #E2E8F0">` : '') +
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><button class="pri2" id="pv_ok">Save</button>${sel.some((b) => b.agreement_id) ? '<button id="pt_rm" style="border-color:#DC2626;color:#B91C1C">Remove tenant</button>' : ''}<button id="pv_cl">Close</button></div><hr style="margin:14px 0;border:0;border-top:1px solid #E2E8F0">` : '') +
         (!TEST && one && a && a.status === 'Enquiry' ? `<div class="pm-tip" style="margin-top:0"><b>${esc(a.customer)}</b> – enquiry holding ${BAYS.filter((b) => b.agreement_id === a.id).length} bay(s).<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="pri2 mini" id="pq_yes">Confirm – make active</button><button class="mini" id="pq_rel">Release the bays</button></div></div>` : '') +
         `<div style="display:flex;justify-content:space-between;align-items:center"><h4>Customers – drag onto a bay</h4>${TEST ? '' : '<button class="mini" id="pq_new">+ New enquiry</button>'}</div><div id="pq_form"></div><div class="small muted">Drag a name onto a bay (Shift-click several bays first to drop onto all of them). Drag a let bay onto another bay to move that customer. Bars show bays placed against spaces agreed.</div>
         ${ags.length ? ags.map((x) => { const n = BAYS.filter((b) => b.agreement_id === x.id).length, full = n >= x.spaces;
@@ -178,6 +181,7 @@
       if ($('pv_ok')) $('pv_ok').onclick = async () => {
         const ag = $('pv_ag').value ? +$('pv_ag').value : null, st = $('pv_st').value, rf = $('pv_rf').value.trim() || null;
         await patchBays(sel, { agreement_id: ag, state: ag ? 'open' : st, reserved_for: rf }); };
+      wireTenant(sel);
       if ($('pv_cl')) $('pv_cl').onclick = () => { SEL.clear(); side(); render(); };
       if ($('pv_cap')) $('pv_cap').onclick = syncCap;
       if ($('pq_new')) $('pq_new').onclick = enquiryForm;
@@ -257,6 +261,8 @@
   }
   async function moveCustomer(from, to) {
     const a = agOf(from), b = agOf(to); if (!a || from === to) return;
+    if (!fits(a, to)) { msg(a.customer + ' only uses ' + typeName(a) + ' bays – bay ' + to.code + ' is a ' + (isSmall(to.kind) ? 'small' : 'full') + ' bay.'); return; }
+    if (b && b !== a && !fits(b, from)) { msg('Can’t swap – ' + b.customer + ' only uses ' + typeName(b) + ' bays.'); return; }
     if (b && b !== a && !confirm('Bay ' + to.code + ' is let to ' + b.customer + '. Swap ' + a.customer + ' and ' + b.customer + '?')) return;
     const ups = [[to, a.id], [from, b && b !== a ? b.id : null]];
     if (DIRTY || TEST) { ups.forEach(([x, id]) => { x.agreement_id = id; x._d = 1; }); DIRTY = true; draw(); msg('Moved – press Save to keep it.'); return; }
@@ -271,7 +277,7 @@
     const need = ags.reduce((t, a) => t + (+a.spaces || 0), 0), placed = ags.reduce((t, a) => t + Math.min(+a.spaces || 0, BAYS.filter((b) => b.agreement_id === a.id).length), 0);
     return `<h4>Tenants to place <span class="small muted">(${placed} of ${need} bays)</span></h4><div class="small muted">Draw bays first, then drag a tenant onto a bay (Shift-click several bays to drop on all of them).</div>
       ${ags.map((x) => { const n = BAYS.filter((b) => b.agreement_id === x.id).length, done = n >= x.spaces;
-        return `<div class="pm-cust" draggable="true" data-ag="${x.id}" style="${done ? 'opacity:.55' : ''}"><b>${esc(x.customer)}</b><span class="small">${n} of ${x.spaces} × ${esc(x.kind)} placed${done ? ' ✓' : ''}</span><div class="bar"><i style="width:${Math.min(100, n / Math.max(1, x.spaces) * 100)}%;background:${done ? '#16A34A' : '#164698'}"></i></div></div>`; }).join('') || '<div class="small muted">No tenants at this site.</div>'}
+        return `<div class="pm-cust" draggable="true" data-ag="${x.id}" style="${done ? 'opacity:.55' : ''}"><b>${esc(x.customer)}</b><span class="small">${n} of ${x.spaces} ${typeName(x)} bays placed${done ? ' ✓' : ''}</span><div class="bar"><i style="width:${Math.min(100, n / Math.max(1, x.spaces) * 100)}%;background:${done ? '#16A34A' : '#164698'}"></i></div></div>`; }).join('') || '<div class="small muted">No tenants at this site.</div>'}
       <h4>Parked items <span class="small muted">(${park.length})</span></h4>${park.length ? '<div class="small muted">Drag onto the map where it should go, then turn it with the buttons if needed.</div>' + park.map((f, i) => { const P = f.pts;
         return `<div class="pm-cust" draggable="true" data-item="${i}" style="border-color:#FDE68A;background:#FFFBEB"><b>${esc(f.label || 'Item')}</b><span class="small">${dist(P[0], P[1]).toFixed(1)} × ${dist(P[1], P[2]).toFixed(1)} m</span></div>`; }).join('') : '<div class="small muted">None – everything is on the map.</div>'}`;
   }
@@ -284,6 +290,18 @@
     if (!confirm('Clear this test layout?\n\n• All ' + BAYS.length + ' bays are removed – the ' + let_ + ' tenant bays go to “Tenants to place”.\n• ' + items.length + ' containers and other yellow items go to “Parked items”.\n• Buildings, wash bay, walls, brake test lane, bins and gate stay.\n\nThe live yard is not affected.')) return;
     PLAN.parked = (PLAN.parked || []).concat(items); PLAN.features = PLAN.features.filter((f) => !MOVABLE(f)); BAYS = []; SEL.clear(); PEND = null; MODE = 'edit'; TOOL = 'row'; dirty();
     msg('Yard cleared. Draw rows of bays with “Draw a row of bays”, then drag tenants and items back in.');
+  }
+  function tenantBlock(sel) {
+    const ids = [...new Set(sel.map((b) => b.agreement_id).filter(Boolean))], names = ids.map((i) => (AG.find((a) => a.id === i) || {}).customer || '?'), letN = sel.filter((b) => b.agreement_id).length;
+    return `<div class="pm-tip" style="background:#F4F7FC;border-color:#CBD5E1;margin-top:8px"><b>Tenant:</b> ${ids.length ? esc(names.join(', ')) + (sel.length > 1 ? ' <span class="muted">(' + letN + ' of ' + sel.length + ' bays)</span>' : '') : '<span style="color:#16A34A;font-weight:700">Free</span>'}
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><select id="pt_ag" style="flex:1;min-width:120px"><option value="">Put a tenant here…</option>${AG.filter((x) => x.site_id === SITE && x.status !== 'Ended' && sel.every((b) => fits(x, b))).map((x) => `<option value="${x.id}">${esc(x.customer)}</option>`).join('')}</select>
+      ${letN ? `<button class="mini" id="pt_rm" style="border-color:#DC2626;color:#B91C1C">Remove tenant${letN > 1 ? ' from ' + letN + ' bays' : ''}</button>` : ''}</div></div>`;
+  }
+  function wireTenant(sel) {
+    if ($('pt_ag')) $('pt_ag').onchange = (e) => { if (e.target.value) patchBays(sel, { agreement_id: +e.target.value, state: 'open' }); };
+    if ($('pt_rm')) $('pt_rm').onclick = () => { const let_ = sel.filter((b) => b.agreement_id), who = [...new Set(let_.map((b) => (agOf(b) || {}).customer))].join(', ');
+      if (!TEST && !confirm('Remove ' + who + ' from bay' + (let_.length > 1 ? 's ' : ' ') + let_.map((b) => b.code).join(', ') + '? The bay' + (let_.length > 1 ? 's become' : ' becomes') + ' free. Their parking agreement is not changed.')) return;
+      patchBays(let_, { agreement_id: null }); };
   }
   function selPanel(sel) {
     const f = PEND && PEND.feat;
@@ -301,6 +319,7 @@
     if (!sel.length) return '<div class="small muted" style="margin-top:10px">Click a bay to edit it, Shift-click or drag a box to pick several. Drag to move.</div>';
     const one = sel.length === 1 ? sel[0] : null;
     return `<h4>${one ? 'Bay ' + esc(one.code) : sel.length + ' bays selected'}</h4>
+      ${tenantBlock(sel)}
       ${one ? `<label>Number</label><input id="ps_code" value="${esc(one.code)}">` : `<label>Renumber as</label><div style="display:flex;gap:6px"><input id="ps_px" placeholder="Prefix e.g. B" style="width:50%"><input id="ps_n0" type="number" value="1" style="width:50%"></div>`}
       <label>Type</label><select id="ps_kind"><option value="">${one ? '' : '(keep)'}</option>${Object.keys(KINDS).map((k) => `<option ${one && one.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px"><div><label>Width</label><input id="ps_w" type="number" step="0.1" value="${one ? one.w : ''}"></div><div><label>Length</label><input id="ps_l" type="number" step="0.1" value="${one ? one.l : ''}"></div><div><label>Angle°</label><input id="ps_r" type="number" step="5" value="${one ? one.rot : ''}"></div></div>
@@ -320,6 +339,7 @@
       if ($('pf_gw')) $('pf_gw').onchange = (e) => { const P = f.pts, c = cent(P), d = dist(P[0], P[1]) || 1, k = (+e.target.value || d) / d; f.pts = P.map((p) => [Math.round((c[0] + (p[0] - c[0]) * k) * 100) / 100, Math.round((c[1] + (p[1] - c[1]) * k) * 100) / 100]); dirty(); };
       $('pf_del').onclick = () => { const g = [f].concat(PEND.more || []); PLAN.features = PLAN.features.filter((x) => !g.includes(x)); PEND = null; dirty(); }; $('pf_cl').onclick = () => { PEND = null; side(); render(); }; return; }
     if (!$('ps_ok')) return;
+    wireTenant(sel);
     $('ps_ok').onclick = () => {
       const k = $('ps_kind').value, w = $('ps_w').value, l = $('ps_l').value, r = $('ps_r').value;
       if (!tryBays(sel, () => sel.forEach((b) => { if (w !== '') b.w = +w; if (l !== '') b.l = +l; if (r !== '') b.rot = +r; }))) { side(); return; }
@@ -453,6 +473,7 @@
         f.pts = f.pts.map((q) => [Math.round((q[0] - c[0] + p[0]) * 100) / 100, Math.round((q[1] - c[1] + p[1]) * 100) / 100]);
         PLAN.parked.splice(i, 1); PLAN.features.push(f); MODE = 'edit'; TOOL = 'select'; PEND = { feat: f }; dirty(); msg((f.label || 'Item') + ' placed – drag or turn it to fit.'); return; } const g = document.elementFromPoint(e.clientX, e.clientY); const bi = g && g.closest('[data-bay]'); if (!bi) { msg('Drop the customer onto a bay.'); return; }
       const b = BAYS[+bi.dataset.bay], ag = +data; let list = SEL.has(b) ? BAYS.filter((x) => SEL.has(x)) : [b];
+      { const A0 = AG.find((x) => x.id === ag); if (A0 && !fits(A0, b)) { msg(A0.customer + ' only uses ' + typeName(A0) + ' bays – drop them on a ' + typeName(A0) + ' bay.'); return; } list = list.filter((x) => fits(A0, x)); }
       if (list.length > 1) { // only fill as many bays as the tenant still needs, nearest the drop first
         const A = AG.find((x) => x.id === ag), need = A ? Math.max(1, A.spaces - BAYS.filter((x) => x.agreement_id === ag && !list.includes(x)).length) : list.length;
         list = list.filter((x) => !x.agreement_id || x.agreement_id === ag).sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y)).slice(0, need); if (!list.includes(b) && !b.agreement_id) list[list.length - 1] = b; }
@@ -659,12 +680,17 @@
     } catch (e) { msg('Could not save: ' + e.message); }
   }
   async function patchBays(list, body) {
+    if (body.agreement_id) { const a = AG.find((x) => x.id === body.agreement_id), okb = list.filter((b) => fits(a, b));
+      if (!okb.length) { msg(a.customer + ' only uses ' + typeName(a) + ' bays – pick a ' + typeName(a) + ' bay.'); return; }
+      if (okb.length < list.length) setTimeout(() => msg(a.customer + ' placed on the ' + typeName(a) + ' bays only (' + okb.map((b) => b.code).join(', ') + ').'), 50);
+      list = okb; }
+    if (!body.agreement_id && 'agreement_id' in body && TEST) setTimeout(() => msg('Tenant removed from bay ' + list.map((b) => b.code).join(', ') + ' – press Save to keep it.'), 50);
     if (DIRTY || TEST) { list.forEach((b) => Object.assign(b, body, { _d: 1 })); DIRTY = true; draw(); const a = body.agreement_id && AG.find((x) => x.id === body.agreement_id);
       msg((a ? a.customer + ' placed on ' + list.map((b) => b.code).join(', ') : 'Changed') + ' – press Save to keep it.'); return; }
     try { const ids = list.filter((b) => b.id).map((b) => b.id); if (!ids.length) return;
       await api('park_bays?id=in.(' + ids.join(',') + ')', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ updated_at: new Date().toISOString() }, body)) });
       list.forEach((b) => Object.assign(b, body, { updated_at: new Date().toISOString() })); BAYSIG = sig(BAYS); const a = body.agreement_id && AG.find((x) => x.id === body.agreement_id);
-      draw(); msg(a ? list.map((b) => b.code).join(', ') + (a.status === 'Enquiry' ? ' held for ' : ' let to ') + a.customer + '.' : 'Saved.');
+      draw(); msg(a ? list.map((b) => b.code).join(', ') + (a.status === 'Enquiry' ? ' held for ' : ' let to ') + a.customer + '.' : ('agreement_id' in body && !body.agreement_id ? 'Tenant removed – bay ' + list.map((b) => b.code).join(', ') + ' is now free.' : 'Saved.'));
     } catch (e) { msg('Could not save: ' + e.message); }
   }
   async function applyLive() {
