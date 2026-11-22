@@ -13,7 +13,7 @@
   const today = () => new Date().toISOString().slice(0, 10);
   const in60 = () => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10); };
   const r1 = (v) => Math.round(v * 4) / 4;
-  let SITES = [], SITE = null, BAYS = [], AG = [], CAP = [], DEL = [], DIRTY = false, MODE = 'view', TOOL = 'select', SEL = new Set(), HL = '', VB = null, PLAN = null, PEND = null, ROWOPT = { kind: 'HGV', w: 4, l: 18, prefix: '', flip: false };
+  let SITES = [], SITE = null, BAYS = [], AG = [], CAP = [], DEL = [], DIRTY = false, MODE = 'view', TOOL = 'select', SEL = new Set(), HL = '', VB = null, PLAN = null, PEND = null, ONE = { kind: 'HGV', auto: true, rot: 0, gap: 0 }, ROWOPT = { kind: 'HGV', w: 4, l: 18, prefix: '', flip: false };
   let EL = null, PLANRAW = '', BAYSIG = '';
   let TEST = false, SCNS = [], SCN = null, LIVE = null, CHK = true, AIS = { full: 16, small: 10 };   // test layouts (sandbox)
   const sig = (bs) => bs.length + '|' + bs.reduce((m, b) => (b.updated_at > m ? b.updated_at : m), '');
@@ -186,7 +186,13 @@
       return;
     }
     // edit mode
-    p.innerHTML = `<h4>Tools</h4><div class="pm-tools">${[['select', 'Select / move'], ['row', 'Draw a row of bays'], ['building', 'Building'], ['nogo', 'No-parking area'], ['road', 'Roadway'], ['area', 'Labelled area'], ['gate', 'Gate'], ['boundary', 'Redraw boundary'], ['scale', 'Measure / set scale']].map(([k, t]) => `<button data-tool="${k}" class="${TOOL === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    p.innerHTML = `<h4>Tools</h4><div class="pm-tools">${[['select', 'Select / move'], ['one', 'Add one bay'], ['row', 'Draw a row of bays'], ['building', 'Building'], ['nogo', 'No-parking area'], ['road', 'Roadway'], ['area', 'Labelled area'], ['gate', 'Gate'], ['boundary', 'Redraw boundary'], ['scale', 'Measure / set scale']].map(([k, t]) => `<button data-tool="${k}" class="${TOOL === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+      ${TOOL === 'one' ? `<div class="pm-tip">Move over the map – a ghost bay follows you (green = fits, red = it would overlap or leave the yard). Click to add it. It snaps next to the nearest bay with the gap set below. Keep clicking to add more. <b>R</b> turns it 90°, <b>[</b> and <b>]</b> 5°. Esc to stop.</div>
+        <label>Bay</label><div class="pm-seg" style="display:flex">${[['HGV', 'Full 4 × 18 m'], ['Small bay', 'Small 4 × 7 m']].map(([k, t]) => `<button data-one="${k}" class="${ONE.kind === k ? 'on' : ''}" style="flex:1">${t}</button>`).join('')}</div>
+        <label><input type="checkbox" id="po_auto" ${ONE.auto ? 'checked' : ''} style="width:auto"> Match the angle of the nearest bay or fence</label>
+        <div style="display:${ONE.auto ? 'none' : 'block'}"><label>Angle°</label><input id="po_rot" type="number" step="1" value="${Math.round(ONE.rot * 10) / 10}"><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${[-90, -5, -1, 1, 5, 90].map((d) => `<button class="mini" data-orot="${d}">${d > 0 ? '+' : ''}${d}°</button>`).join('')}</div></div>
+        <label>Gap to the next bay (m)</label><input id="po_gap" type="number" step="0.1" min="0" value="${ONE.gap}">
+        <div class="small muted" style="margin-top:4px">0 = flush. A gap snaps exactly that far from the bay alongside.</div>` : ''}
       ${TOOL === 'row' ? `<div class="pm-tip">Click where the row starts, then where it ends. Bays fill the line at the width set below, facing to the left of the line (tick Flip for the other side).</div>
         <label>Bay type</label><select id="pe_kind">${Object.keys(KINDS).map((k) => `<option ${k === ROWOPT.kind ? 'selected' : ''}>${k}</option>`).join('')}</select>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pe_w" type="number" step="0.1" value="${ROWOPT.w}"></div><div><label>Length (m)</label><input id="pe_l" type="number" step="0.1" value="${ROWOPT.l}"></div></div>
@@ -205,6 +211,11 @@
       ${PLAN.bg && SAT ? `<h4>Satellite photo</h4><label>Strength <input type="range" id="pe_op" min="0" max="1" step="0.05" value="${PLAN.bg.opacity ?? 0.6}"></label>` : ''}
       <div class="small muted" style="margin-top:12px">Keys: Delete removes · R turns 90° · [ and ] turn 5° · arrow keys nudge 0.25 m (Shift = 1 m). Drag empty map to pan, scroll to zoom.</div>`;
     p.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => { TOOL = b.dataset.tool; PEND = null; if (TOOL !== 'select') SEL.clear(); side(); render(); }));
+    p.querySelectorAll('[data-one]').forEach((b) => (b.onclick = () => { ONE.kind = b.dataset.one; side(); }));
+    if ($('po_auto')) { $('po_auto').onchange = (e) => { ONE.auto = e.target.checked; if (!ONE.auto && PEND && PEND.one) ONE.rot = PEND.one.b.rot; side(); };
+      if ($('po_rot')) $('po_rot').onchange = (e) => { ONE.rot = +e.target.value || 0; };
+      p.querySelectorAll('[data-orot]').forEach((b) => (b.onclick = () => { ONE.rot = ((ONE.rot + +b.dataset.orot) % 360 + 360) % 360; side(); }));
+      $('po_gap').onchange = (e) => { ONE.gap = Math.max(0, +e.target.value || 0); }; }
     if ($('pe_kind')) { $('pe_kind').onchange = (e) => { ROWOPT.kind = e.target.value; [ROWOPT.w, ROWOPT.l] = KINDS[ROWOPT.kind]; side(); };
       $('pe_w').onchange = (e) => (ROWOPT.w = +e.target.value || 4); $('pe_l').onchange = (e) => (ROWOPT.l = +e.target.value || 18.5);
       $('pe_px').onchange = (e) => (ROWOPT.prefix = e.target.value.trim()); $('pe_flip').onchange = (e) => { ROWOPT.flip = e.target.checked; render(); }; }
@@ -398,6 +409,7 @@
     if (TEST && CHK) { const tc = turning();
       s += '<g pointer-events="none">' + tc.map((x) => `<polygon points="${x.Z.map((p) => p.join(',')).join(' ')}" fill="${x.ok ? 'rgba(250,204,21,.10)' : 'rgba(239,68,68,.28)'}" stroke="${x.ok ? 'rgba(250,204,21,.35)' : '#EF4444'}" stroke-width="0.15"/>`).join('') +
         tc.filter((x) => !x.ok).map((x) => `<polygon points="${bayPts(x.b).map((p) => p.join(',')).join(' ')}" fill="none" stroke="#EF4444" stroke-width="0.6"/>`).join('') + '</g>'; }
+    if (PEND && PEND.one) { const g = PEND.one; s += `<polygon points="${bayPts(g.b).map((q) => q.join(',')).join(' ')}" fill="${g.ok ? 'rgba(34,197,94,.35)' : 'rgba(239,68,68,.35)'}" stroke="${g.ok ? '#22C55E' : '#EF4444'}" stroke-width="0.4" stroke-dasharray="1 0.5" pointer-events="none"/>`; }
     if (PEND && PEND.row) s += rowPreview();
     if (PEND && PEND.shape) { const S = PEND.shape, P = shapePts(S); if (P.length) { s += (S.kind === 'gate' || P.length < 3 ? `<polyline points="${P.map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.6"/>` : `<polygon points="${P.map((p) => p.join(',')).join(' ')}" fill="rgba(228,97,29,.15)" stroke="#E4611D" stroke-width="0.4"/>`) + edgeLabels(P, S.kind !== 'gate' && P.length > 2 && !S.free, fsE) + P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.5" fill="#E4611D"/>`).join(''); } }
     if (PEND && PEND.rect) { const r = PEND.rect; s += `<rect x="${Math.min(r.x0, r.x1)}" y="${Math.min(r.y0, r.y1)}" width="${Math.abs(r.x1 - r.x0)}" height="${Math.abs(r.y1 - r.y0)}" fill="rgba(228,97,29,.12)" stroke="#E4611D" stroke-width="0.3" stroke-dasharray="1 0.6" pointer-events="none"/>`; }
@@ -459,6 +471,10 @@
         const M = PEND.meas, cur = Math.hypot(q[0] - M.p0[0], q[1] - M.p0[1]); M.p1 = q; render();
         setTimeout(() => { const ans = prompt('The map measures this as ' + cur.toFixed(1) + ' m.\nType the real distance in metres to rescale the plan, or leave blank to just measure.', ''); const real = parseFloat(ans);
           if (real > 0 && cur > 0.1) rescale(real / cur, M.p0); PEND = null; render(); }, 30); return; }
+      if (MODE === 'edit' && TOOL === 'one') { const g = ghost(p); if (!g.ok) { msg('Can’t put a bay there – it would overlap something or leave the yard.'); return; }
+        const small = g.b.kind === 'Small bay', nums = BAYS.filter((b) => (small ? /^S\d+$/.test(b.code) : /^\d+$/.test(b.code))).map((b) => +b.code.replace('S', '')), n = nums.length ? Math.max(...nums) + 1 : 1;
+        const nb = Object.assign(g.b, { id: null, site_id: SITE, code: (small ? 'S' : '') + n, state: 'open', agreement_id: null, _d: 1 }); BAYS.push(nb); if (!ONE.auto) ONE.rot = nb.rot;
+        dirty(); msg((small ? 'Small' : 'Full') + ' bay ' + nb.code + ' added. Click again to add the next one.'); return; }
       if (MODE === 'edit' && TOOL === 'row') { if (!PEND || !PEND.row) PEND = { row: { p0: [r1(p[0]), r1(p[1])] } }; else { addRow(PEND.row.p0, [r1(p[0]), r1(p[1])]); PEND = null; } render(); return; }
       if (MODE === 'edit' && (FEAT[TOOL] || TOOL === 'gate')) { const q = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
         if (!PEND || !PEND.shape) { PEND = { shape: { kind: TOOL, free: TOOL !== 'gate' && !!ROWOPT.free, pts: [q] } }; render(); return; }
@@ -486,6 +502,7 @@
     svg.onpointermove = (e) => {
       const p = pt(e); pop(e, drag);
       if (drag && drag.kind === 'mv') { if (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) > 6) { drag.moved = 1; svg.style.cursor = 'grabbing'; } return; }
+      if (MODE === 'edit' && TOOL === 'one' && !drag) { PEND = { one: ghost(p) }; render(); return; }
       if (PEND && PEND.row && !drag) { PEND.row.p1 = [r1(p[0]), r1(p[1])]; render(); return; }
       if (PEND && PEND.shape) { PEND.shape.hover = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; render(); return; }
       if (PEND && PEND.meas && !PEND.meas.p1) { PEND.meas.hover = [p[0], p[1]]; render(); return; }
@@ -520,7 +537,9 @@
     document.onkeydown = (e) => {
       if (!$('pm_svg') || MODE !== 'edit' || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
       const sel = BAYS.filter((b) => SEL.has(b));
-      if (e.key === 'Escape') { PEND = null; SEL.clear(); side(); render(); return; }
+      if (e.key === 'Escape') { PEND = null; SEL.clear(); if (TOOL === 'one') TOOL = 'select'; side(); render(); return; }
+      if (TOOL === 'one') { const t = e.key === 'r' || e.key === 'R' ? 90 : e.key === ']' ? 5 : e.key === '[' ? -5 : 0;
+        if (t) { ONE.rot = ((((ONE.auto && PEND && PEND.one ? PEND.one.b.rot : ONE.rot) + t) % 360) + 360) % 360; ONE.auto = false; side(); msg('Angle ' + ONE.rot.toFixed(1) + '°. Automatic angle is now off – tick “Match the angle” to switch it back on.'); } return; }
       if (PEND && PEND.feat && (e.key === 'Delete' || e.key === 'Backspace')) { const g = [PEND.feat].concat(PEND.more || []); PLAN.features = PLAN.features.filter((x) => !g.includes(x)); PEND = null; dirty(); return; }
       if (PEND && PEND.feat) { const f = PEND.feat, t = e.key === 'r' || e.key === 'R' ? 90 : e.key === ']' ? (e.shiftKey ? 1 : 5) : e.key === '[' ? (e.shiftKey ? -1 : -5) : 0;
         const st = e.shiftKey ? 1 : 0.25, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
@@ -551,13 +570,27 @@
     for (const b of list) { const P = bayPts(b), near = others.filter((o) => Math.hypot(o[0][0] - b.x, o[0][1] - b.y) < 45); if (near.some((o) => sat(P, o))) return b; } return null;
   }
   // pull a moved group flush against a neighbouring bay at the same angle when it's within 1.5 m
-  function snap(list) {
+  // ---- add one bay: ghost that follows the pointer ----
+  function autoRot(p) {
+    let best = null; BAYS.forEach((b) => { const d = Math.hypot(b.x - p[0], b.y - p[1]); if (d < 30 && (!best || d < best.d)) best = { d, rot: b.rot }; });
+    if (best) return best.rot;
+    const B = PLAN.boundary; if (B.length < 2) return 0; let e = null;   // perpendicular to the nearest fence
+    for (let i = 0; i < B.length; i++) { const d = segD(p, B[i], B[(i + 1) % B.length]); if (!e || d < e.d) e = { d, a: B[i], b: B[(i + 1) % B.length] }; }
+    const dx = e.b[0] - e.a[0], dy = e.b[1] - e.a[1], L = Math.hypot(dx, dy) || 1; return Math.round(Math.atan2(-(-dy / L), dx / L) * 18000 / Math.PI) / 100;
+  }
+  function ghost(p) {
+    const [w, l] = KINDS[ONE.kind] || [4, 18], b = { x: p[0], y: p[1], w, l, rot: ONE.auto ? autoRot(p) : ONE.rot, kind: ONE.kind };
+    snap([b], ONE.gap, 1.5 + ONE.gap);
+    const inYard = PLAN.boundary.length < 3 || bayPts(b).every((q) => pip(q, PLAN.boundary));
+    return { b, ok: inYard && !clash([b]) };
+  }
+  function snap(list, gap = 0, reach = 1.5) {
     const lead = list[0]; let best = null;
     BAYS.forEach((n) => { if (list.includes(n)) return; const dr = Math.abs((((lead.rot - n.rot) % 180) + 180) % 180); if (dr > 1 && dr < 179) return;
       if (Math.hypot(n.x - lead.x, n.y - lead.y) > 25) return;
       const a = n.rot * Math.PI / 180, ax = [-Math.sin(a), Math.cos(a)], bx = [Math.cos(a), Math.sin(a)], d = [lead.x - n.x, lead.y - n.y], sv = d[0] * bx[0] + d[1] * bx[1], tv = d[0] * ax[0] + d[1] * ax[1];
-      const cands = [[Math.sign(sv || 1) * (n.w + lead.w) / 2, Math.abs(tv) < 1.5 ? 0 : tv], [Math.abs(sv) < 1.5 ? 0 : sv, Math.sign(tv || 1) * (n.l + lead.l) / 2]];
-      cands.forEach(([s2, t2]) => { const nx = n.x + bx[0] * s2 + ax[0] * t2, ny = n.y + bx[1] * s2 + ax[1] * t2, dd = Math.hypot(nx - lead.x, ny - lead.y); if (dd < 1.5 && (!best || dd < best.d)) best = { d: dd, dx: nx - lead.x, dy: ny - lead.y }; }); });
+      const cands = [[Math.sign(sv || 1) * ((n.w + lead.w) / 2 + gap), Math.abs(tv) < 1.5 ? 0 : tv], [Math.abs(sv) < 1.5 ? 0 : sv, Math.sign(tv || 1) * ((n.l + lead.l) / 2 + gap)]];
+      cands.forEach(([s2, t2]) => { const nx = n.x + bx[0] * s2 + ax[0] * t2, ny = n.y + bx[1] * s2 + ax[1] * t2, dd = Math.hypot(nx - lead.x, ny - lead.y); if (dd < reach && (!best || dd < best.d)) best = { d: dd, dx: nx - lead.x, dy: ny - lead.y }; }); });
     if (best) list.forEach((b) => { b.x = Math.round((b.x + best.dx) * 100) / 100; b.y = Math.round((b.y + best.dy) * 100) / 100; });
   }
   // try a change to some bays; undo it if they would overlap anything
