@@ -15,6 +15,7 @@
   const r1 = (v) => Math.round(v * 4) / 4;
   let SITES = [], SITE = null, BAYS = [], AG = [], CAP = [], DEL = [], DIRTY = false, MODE = 'view', TOOL = 'select', SEL = new Set(), HL = '', VB = null, PLAN = null, PEND = null, ROWOPT = { kind: 'HGV', w: 4, l: 18, prefix: '', flip: false };
   let EL = null, PLANRAW = '', BAYSIG = '';
+  let TEST = false, SCNS = [], SCN = null, LIVE = null, CHK = true, AIS = { full: 16, small: 10 };   // test layouts (sandbox)
   const sig = (bs) => bs.length + '|' + bs.reduce((m, b) => (b.updated_at > m ? b.updated_at : m), '');
 
   async function load() {
@@ -26,6 +27,21 @@
     PLAN.width_m = PLAN.width_m || 140; PLAN.height_m = PLAN.height_m || 90; PLAN.features = PLAN.features || []; PLAN.boundary = PLAN.boundary || [];
     PLAN.features = PLAN.features.map((f) => (f.pts ? f : f.type === 'gate' ? { type: 'gate', label: f.label, pts: [[f.x - 3, f.y], [f.x + 3, f.y]] } : { type: f.type, label: f.label, pts: [[f.x, f.y], [f.x + f.w, f.y], [f.x + f.w, f.y + f.h], [f.x, f.y + f.h]] }));
     DEL = []; DIRTY = false; SEL.clear();
+    if (TEST) {
+      LIVE = { bays: BAYS, plan: PLAN };
+      SCNS = await api('park_scenarios?select=*&site_id=eq.' + SITE + '&order=updated_at.desc');
+      if (!SCNS.length) { await newScenario('Test layout 1'); return; }
+      SCN = SCNS.find((x) => SCN && x.id === SCN.id) || SCNS[0];
+      PLAN = JSON.parse(JSON.stringify(SCN.plan || {})); PLAN.features = PLAN.features || []; PLAN.boundary = PLAN.boundary || [];
+      BAYS = (SCN.bays || []).map((b, i) => Object.assign({}, b, { id: 't' + i, x: +b.x, y: +b.y, w: +b.w, l: +b.l, rot: +b.rot }));
+      if (!PLAN.width_m) { PLAN.width_m = LIVE.plan.width_m; PLAN.height_m = LIVE.plan.height_m; }
+    }
+  }
+  const cleanBays = (list) => list.map((b) => ({ code: b.code, kind: b.kind, x: +b.x, y: +b.y, w: +b.w, l: +b.l, rot: +b.rot, state: b.state || 'open', reserved_for: b.reserved_for || null, agreement_id: b.agreement_id || null }));
+  async function newScenario(name, from) {   // from = a scenario to copy; otherwise a copy of the live yard
+    const src = from ? { plan: from.plan, bays: from.bays } : { plan: LIVE.plan, bays: cleanBays(LIVE.bays) };
+    const r = await api('park_scenarios', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ site_id: SITE, name, plan: src.plan, bays: src.bays }) });
+    SCN = r[0]; await load();
   }
   const agOf = (b) => (b.agreement_id ? AG.find((a) => a.id === b.agreement_id) : null);
   function stateOf(b) {
@@ -36,12 +52,38 @@
   }
   X.parkMap = { stateOf };
 
+  X.routes['p-parktest'] = async function (el) {
+    TEST = true; MODE = 'edit'; EL = el; el.innerHTML = X.head('Test layouts', '') + '<div class="empty">Loading…</div>';
+    try { await load(); } catch (e) { el.innerHTML = X.head('Test layouts', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
+    VB = null; draw();
+  };
   X.routes['p-parkmap'] = async function (el) {
+    if (TEST) { TEST = false; MODE = 'view'; SCN = null; }
     EL = el; el.innerHTML = X.head('Parking map', '') + '<div class="empty">Loading…</div>';
     try { await load(); } catch (e) { el.innerHTML = X.head('Parking map', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
     VB = null; draw();
   };
   window.addEventListener('beforeunload', (e) => { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ---------- turning-space check: every bay needs a clear aisle in front of it ----------
+  const pip = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const segD = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t); };
+  const fenceD = (p) => { const B = PLAN.boundary; let m = 1e9; for (let i = 0; i < B.length; i++) m = Math.min(m, segD(p, B[i], B[(i + 1) % B.length])); return m; };
+  function turning() {
+    const solid = PLAN.features.filter((f) => f.pts.length > 2 && f.type !== 'road').map((f) => f.pts), bodies = BAYS.map(bayPts), out = [];
+    BAYS.forEach((b, i) => {
+      const A = b.kind === 'Small bay' ? AIS.small : AIS.full, a = b.rot * Math.PI / 180, ax = [-Math.sin(a), Math.cos(a)], bx = [Math.cos(a), Math.sin(a)];
+      const ends = [1, -1].map((sg) => { const e = [b.x + ax[0] * sg * b.l / 2, b.y + ax[1] * sg * b.l / 2], d = [ax[0] * sg, ax[1] * sg], w = (b.w - 0.4) / 2;
+        const Z = [[e[0] + bx[0] * w, e[1] + bx[1] * w], [e[0] - bx[0] * w, e[1] - bx[1] * w], [e[0] - bx[0] * w + d[0] * A, e[1] - bx[1] * w + d[1] * A], [e[0] + bx[0] * w + d[0] * A, e[1] + bx[1] * w + d[1] * A]];
+        const hit = (PLAN.boundary.length > 2 && ![0.4, 0.95].every((t) => pip([e[0] + d[0] * A * t, e[1] + d[1] * A * t], PLAN.boundary))) || bodies.some((o, j) => j !== i && sat(Z, o)) || solid.some((o) => sat(Z, o));
+        return { Z, hit, f: fenceD(e) }; });
+      const front = Math.abs(ends[0].f - ends[1].f) > 3 ? (ends[0].f > ends[1].f ? ends[0] : ends[1]) : (ends[0].hit ? ends[1] : ends[0]);
+      out.push({ b, Z: front.Z, ok: !front.hit });
+    });
+    return out;
+  }
+  const summary = (bays) => { const rate = (k) => +((CAP.find((c) => c.site_id === SITE && c.kind === k) || {}).list_rate || 0), f = bays.filter((b) => b.kind !== 'Small bay').length, sm = bays.length - f;
+    return { f, sm, t: bays.length, val: bays.reduce((t, b) => t + rate(b.kind), 0) }; };
 
   // ---------- page ----------
   function draw() {
@@ -50,18 +92,31 @@
     const rate = (k) => +((CAP.find((c) => c.site_id === SITE && c.kind === k) || {}).list_rate || 0);
     const freeVal = BAYS.filter((b) => stateOf(b) === 'free').reduce((t, b) => t + rate(b.kind), 0);
     const ags = AG.filter((a) => a.site_id === SITE && a.status !== 'Ended');
-    el.innerHTML = X.head('Parking map', 'Drag a customer onto a bay to let it. Click a bay for details. Shift-click to pick several bays, then drop a customer on any of them.') +
+    let testBar = '';
+    if (TEST) { const T = summary(BAYS), L = summary(LIVE.bays), tc = turning(), bad = tc.filter((x) => !x.ok).length, dd = (a, b) => (a - b > 0 ? '+' : a - b < 0 ? '−' : '±') + Math.abs(a - b);
+      testBar = `<div class="pm-test"><label>Test layout <select id="pt_scn">${SCNS.map((x) => `<option value="${x.id}" ${SCN && x.id === SCN.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <button class="mini" id="pt_new">+ New from live yard</button><button class="mini" id="pt_dup">Duplicate</button><button class="mini" id="pt_ren">Rename</button><button class="mini" id="pt_del">Delete</button>
+        <span class="pt-sep"></span>
+        <span class="pt-cmp"><b>This test:</b> ${T.f} full + ${T.sm} small = <b>${T.t}</b> bays · ${gbp(T.val)}/wk at list rate</span>
+        <span class="pt-cmp muted">Live yard: ${L.f} + ${L.sm} = ${L.t} · ${gbp(L.val)}/wk</span>
+        <span class="pt-cmp" style="color:${T.val >= L.val ? '#16A34A' : '#DC2626'};font-weight:700">${dd(T.t, L.t)} bays · ${T.val - L.val >= 0 ? '+' : '−'}${gbp(Math.abs(T.val - L.val))}/wk</span>
+        <span class="pt-cmp" style="color:${bad ? '#DC2626' : '#16A34A'};font-weight:700">${bad ? bad + ' bay' + (bad > 1 ? 's' : '') + ' without enough turning space' : 'All bays have turning space'}</span>
+        <label class="small"><input type="checkbox" id="pt_chk" ${CHK ? 'checked' : ''}> Show turning space</label>
+        <label class="small">Aisle: full <input id="pt_af" type="number" step="0.5" value="${AIS.full}" style="width:52px"> m · small <input id="pt_as" type="number" step="0.5" value="${AIS.small}" style="width:52px"> m</label>
+        <button class="mini" id="pt_apply" style="margin-left:auto;border-color:#E4611D;color:#B4470F">Use this layout for the live yard…</button></div>`; }
+    el.innerHTML = (TEST ? X.head('Test layouts', 'A sandbox copy of the yard – try anything here; the live parking map is not touched until you choose “Use this layout for the live yard”.') : X.head('Parking map', 'Drag a customer onto a bay to let it. Click a bay for details. Shift-click to pick several bays, then drop a customer on any of them.')) + testBar +
       `<div class="pm-top"><label>Site <select id="pm_site">${SITES.map((s) => `<option value="${s.id}" ${s.id === SITE ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
        <div class="pm-seg">${['view', 'edit'].map((m) => `<button data-mode="${m}" class="${MODE === m ? 'on' : ''}">${m === 'view' ? 'Manage bays' : 'Edit layout'}</button>`).join('')}</div>
        ${PLAN.bg && PLAN.bg.url ? `<label class="small" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="pm_sat" ${SAT ? 'checked' : ''}> Satellite photo</label>` : ''}
        <input id="pm_hl" placeholder="Find customer or bay…" value="${esc(HL)}" style="width:200px">
        <span class="pm-stat">${BAYS.length} bays · <b style="color:#16A34A">${cnt('free')} free</b> · ${cnt('let')} let · ${cnt('notice')} on notice · ${cnt('held')} held for enquiries · ${cnt('reserved')} reserved · ${cnt('out')} out of use${freeVal ? ' · free bays worth ' + gbp(freeVal) + '/week at list rate' : ''}</span>
-       ${DIRTY ? '<button class="pri2" id="pm_save">Save layout</button><button id="pm_undo">Discard changes</button>' : ''}<span id="pm_msg" class="small muted"></span></div>
+       ${DIRTY ? `<button class="pri2" id="pm_save">${TEST ? 'Save test layout' : 'Save layout'}</button><button id="pm_undo">Discard changes</button>` : ''}<span id="pm_msg" class="small muted"></span></div>
       <div class="pm-wrap"><div class="pm-side" id="pm_side"></div>
        <div class="pm-mapbox"><svg id="pm_svg" class="pm-svg"></svg>
         <div class="pm-pop" id="pm_pop"></div><div class="pm-zoom"><button id="pm_zi">+</button><button id="pm_zo">−</button><button id="pm_fit" title="Fit">⤢</button></div>
         <div class="pm-legend">${Object.entries(ST).map(([k, [f, s, t]]) => `<span><i style="background:${f};border-color:${s}"></i>${t}</span>`).join('')}<span><i style="background:#22C55E;border-color:#22C55E;height:4px;width:16px;vertical-align:2px"></i>Gate</span></div></div></div>
       <style>
+       .pm-test{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px}.pt-sep{width:1px;height:22px;background:#FED7AA}.pt-cmp{white-space:nowrap}
        .pm-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.pm-stat{font-size:13px;color:#475569}
        .pm-seg{display:inline-flex;border:1px solid #CBD5E1;border-radius:8px;overflow:hidden}.pm-seg button{border:0;background:#fff;padding:7px 12px;cursor:pointer;font:inherit}.pm-seg button.on{background:#164698;color:#fff}
        .pm-wrap{display:grid;grid-template-columns:300px 1fr;gap:12px;height:calc(100vh - 230px);min-height:520px}
@@ -79,6 +134,17 @@
       </style>`;
     $('pm_site').onchange = async (e) => { if (DIRTY && !confirm('Discard unsaved layout changes?')) { e.target.value = SITE; return; } SITE = +e.target.value; await load(); VB = null; draw(); };
     el.querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => { MODE = b.dataset.mode; TOOL = 'select'; PEND = null; SEL.clear(); draw(); }));
+    if (TEST) {
+      const guard = () => !DIRTY || confirm('You have unsaved changes to this test layout. Discard them?');
+      $('pt_scn').onchange = async (e) => { if (!guard()) { e.target.value = SCN.id; return; } SCN = SCNS.find((x) => x.id === +e.target.value); await load(); VB = null; draw(); };
+      $('pt_new').onclick = async () => { if (!guard()) return; const n = prompt('Name for the new test layout (starts as a copy of the live yard):', 'Test layout ' + (SCNS.length + 1)); if (n) { await newScenario(n.trim()); VB = null; draw(); } };
+      $('pt_dup').onclick = async () => { if (!guard()) return; const n = prompt('Name for the copy:', SCN.name + ' (copy)'); if (n) { await newScenario(n.trim(), { plan: PLAN, bays: cleanBays(BAYS) }); draw(); } };
+      $('pt_ren').onclick = async () => { const n = prompt('Rename test layout:', SCN.name); if (n && n.trim()) { await api('park_scenarios?id=eq.' + SCN.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: n.trim() }) }); SCN.name = n.trim(); draw(); } };
+      $('pt_del').onclick = async () => { if (!confirm('Delete the test layout “' + SCN.name + '”? The live yard is not affected.')) return; await api('park_scenarios?id=eq.' + SCN.id, { method: 'DELETE' }); SCN = null; await load(); VB = null; draw(); };
+      $('pt_chk').onchange = (e) => { CHK = e.target.checked; render(); };
+      $('pt_af').onchange = (e) => { AIS.full = +e.target.value || 16; draw(); }; $('pt_as').onchange = (e) => { AIS.small = +e.target.value || 10; draw(); };
+      $('pt_apply').onclick = applyLive;
+    }
     if ($('pm_sat')) $('pm_sat').onchange = (e) => { SAT = e.target.checked; side(); render(); };
     $('pm_hl').oninput = (e) => { HL = e.target.value; render(); };
     if ($('pm_save')) $('pm_save').onclick = save;
@@ -100,19 +166,19 @@
         <label>Bay status</label><select id="pv_st">${[['open', 'Available'], ['reserved', 'Reserved'], ['out', 'Out of use']].map(([k, t]) => `<option value="${k}" ${one && one.state === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <label>Reserved for / note</label><input id="pv_rf" value="${esc(one ? one.reserved_for || one.notes || '' : '')}" placeholder="e.g. Compton hire fleet, sales stock">
         <div style="margin-top:10px;display:flex;gap:6px"><button class="pri2" id="pv_ok">Save</button><button id="pv_cl">Close</button></div><hr style="margin:14px 0;border:0;border-top:1px solid #E2E8F0">` : '') +
-        (one && a && a.status === 'Enquiry' ? `<div class="pm-tip" style="margin-top:0"><b>${esc(a.customer)}</b> – enquiry holding ${BAYS.filter((b) => b.agreement_id === a.id).length} bay(s).<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="pri2 mini" id="pq_yes">Confirm – make active</button><button class="mini" id="pq_rel">Release the bays</button></div></div>` : '') +
-        `<div style="display:flex;justify-content:space-between;align-items:center"><h4>Customers – drag onto a bay</h4><button class="mini" id="pq_new">+ New enquiry</button></div><div id="pq_form"></div><div class="small muted">Drag a name onto a bay (Shift-click several bays first to drop onto all of them). Drag a let bay onto another bay to move that customer. Bars show bays placed against spaces agreed.</div>
+        (!TEST && one && a && a.status === 'Enquiry' ? `<div class="pm-tip" style="margin-top:0"><b>${esc(a.customer)}</b> – enquiry holding ${BAYS.filter((b) => b.agreement_id === a.id).length} bay(s).<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="pri2 mini" id="pq_yes">Confirm – make active</button><button class="mini" id="pq_rel">Release the bays</button></div></div>` : '') +
+        `<div style="display:flex;justify-content:space-between;align-items:center"><h4>Customers – drag onto a bay</h4>${TEST ? '' : '<button class="mini" id="pq_new">+ New enquiry</button>'}</div><div id="pq_form"></div><div class="small muted">Drag a name onto a bay (Shift-click several bays first to drop onto all of them). Drag a let bay onto another bay to move that customer. Bars show bays placed against spaces agreed.</div>
         ${ags.length ? ags.map((x) => { const n = BAYS.filter((b) => b.agreement_id === x.id).length, full = n >= x.spaces;
           return `<div class="pm-cust" draggable="true" data-ag="${x.id}"><b>${esc(x.customer)}</b><span class="small">${x.status === 'Enquiry' ? '<span style="color:#D97706;font-weight:700">Enquiry</span> · ' : x.status === 'Waiting list' ? '<span style="color:#E4611D">Waiting list</span> · ' : ''}${n} of ${x.spaces} × ${esc(x.kind)} placed${n > x.spaces ? ' <span style="color:#DC2626">– more bays than agreed</span>' : ''}</span><div class="bar"><i style="width:${Math.min(100, n / Math.max(1, x.spaces) * 100)}%;background:${full ? '#16A34A' : '#164698'}"></i></div></div>`; }).join('') : '<div class="small muted">No agreements at this site yet – add them on the <a href="#/p-parking">Parking</a> page.</div>'}
         <h4>Free bays by type</h4>${Object.keys(KINDS).map((k) => { const t = BAYS.filter((b) => b.kind === k), f = t.filter((b) => stateOf(b) === 'free').length; return t.length ? `<div class="small">${esc(k)}: <b>${f}</b> free of ${t.length}</div>` : ''; }).join('') || '<div class="small muted">No bays yet – use Edit layout.</div>'}
-        <div style="margin-top:10px"><button class="mini" id="pv_cap">Update Parking page space counts from the map</button></div>`;
+        ${TEST ? '' : '<div style="margin-top:10px"><button class="mini" id="pv_cap">Update Parking page space counts from the map</button></div>'}`;
       p.querySelectorAll('[data-ag]').forEach((d) => (d.ondragstart = (e) => { e.dataTransfer.setData('text/plain', d.dataset.ag); e.dataTransfer.effectAllowed = 'move'; }));
       if ($('pv_ok')) $('pv_ok').onclick = async () => {
         const ag = $('pv_ag').value ? +$('pv_ag').value : null, st = $('pv_st').value, rf = $('pv_rf').value.trim() || null;
         await patchBays(sel, { agreement_id: ag, state: ag ? 'open' : st, reserved_for: rf }); };
       if ($('pv_cl')) $('pv_cl').onclick = () => { SEL.clear(); side(); render(); };
-      $('pv_cap').onclick = syncCap;
-      $('pq_new').onclick = enquiryForm;
+      if ($('pv_cap')) $('pv_cap').onclick = syncCap;
+      if ($('pq_new')) $('pq_new').onclick = enquiryForm;
       if ($('pq_yes')) $('pq_yes').onclick = async () => { try { await api('park_agreements?id=eq.' + a.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'Active', start_date: a.start_date || today(), updated_at: new Date().toISOString() }) }); a.status = 'Active'; a.start_date = a.start_date || today(); draw(); msg(a.customer + ' is now active – add the rate and contact on the Parking page if missing.'); } catch (e) { msg('Could not save: ' + e.message); } };
       if ($('pq_rel')) $('pq_rel').onclick = () => patchBays(BAYS.filter((b) => b.agreement_id === a.id), { agreement_id: null });
       return;
@@ -179,7 +245,7 @@
     const a = agOf(from), b = agOf(to); if (!a || from === to) return;
     if (b && b !== a && !confirm('Bay ' + to.code + ' is let to ' + b.customer + '. Swap ' + a.customer + ' and ' + b.customer + '?')) return;
     const ups = [[to, a.id], [from, b && b !== a ? b.id : null]];
-    if (DIRTY) { ups.forEach(([x, id]) => { x.agreement_id = id; x._d = 1; }); side(); render(); msg('Moved – press Save layout to keep it.'); return; }
+    if (DIRTY || TEST) { ups.forEach(([x, id]) => { x.agreement_id = id; x._d = 1; }); DIRTY = true; draw(); msg('Moved – press Save to keep it.'); return; }
     try { for (const [x, id] of ups) await api('park_bays?id=eq.' + x.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ agreement_id: id, state: 'open', updated_at: new Date().toISOString() }) });
       ups.forEach(([x, id]) => { x.agreement_id = id; x.updated_at = new Date().toISOString(); }); BAYSIG = sig(BAYS); SEL.clear(); draw(); msg(a.customer + ' moved from ' + from.code + ' to ' + to.code + (b && b !== a ? ' (swapped with ' + b.customer + ')' : '') + '.');
     } catch (e) { msg('Could not move: ' + e.message); }
@@ -242,7 +308,7 @@
   const nextPrefix = () => { const used = new Set(BAYS.map((b) => (b.code.match(/^[A-Z]+/i) || [''])[0].toUpperCase())); for (const c of 'ABCDEFGHJKLMNPQRSTUVWXYZ') if (!used.has(c)) return c; return 'Z'; };
   const uniqueCode = (c) => { let n = c + "'"; while (BAYS.some((b) => b.code === n)) n += "'"; return n; };
   function delSel() { const sel = BAYS.filter((b) => SEL.has(b)); if (sel.some((b) => b.agreement_id) && !confirm('Some of these bays are let. Delete them anyway?')) return; sel.forEach((b) => b.id && DEL.push(b.id)); BAYS = BAYS.filter((b) => !SEL.has(b)); SEL.clear(); dirty(); }
-  function dirty(redraw = true) { const was = DIRTY; DIRTY = true; if (!was) draw(); else { if (redraw) side(); render(); } }
+  function dirty(redraw = true) { const was = DIRTY; DIRTY = true; if (!was || (TEST && redraw)) draw(); else { if (redraw) side(); render(); } }
   const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
   const cent = (P) => [P.reduce((t, p) => t + p[0], 0) / P.length, P.reduce((t, p) => t + p[1], 0) / P.length];
   const area = (P) => Math.abs(P.reduce((t, p, i) => { const q = P[(i + 1) % P.length]; return t + p[0] * q[1] - q[0] * p[1]; }, 0) / 2);
@@ -304,6 +370,9 @@
         <g transform="rotate(${tr})"><text y="${name ? -nfs * 0.55 : 0}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" font-weight="800" pointer-events="none">${esc(b.code)}</text>
         ${name ? `<text y="${fs * 0.62}" font-size="${nfs}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" opacity="0.92" pointer-events="none">${esc(name)}</text>` : ''}</g></g>`;
     });
+    if (TEST && CHK) { const tc = turning();
+      s += '<g pointer-events="none">' + tc.map((x) => `<polygon points="${x.Z.map((p) => p.join(',')).join(' ')}" fill="${x.ok ? 'rgba(250,204,21,.10)' : 'rgba(239,68,68,.28)'}" stroke="${x.ok ? 'rgba(250,204,21,.35)' : '#EF4444'}" stroke-width="0.15"/>`).join('') +
+        tc.filter((x) => !x.ok).map((x) => `<polygon points="${bayPts(x.b).map((p) => p.join(',')).join(' ')}" fill="none" stroke="#EF4444" stroke-width="0.6"/>`).join('') + '</g>'; }
     if (PEND && PEND.row) s += rowPreview();
     if (PEND && PEND.shape) { const S = PEND.shape, P = shapePts(S); if (P.length) { s += (S.kind === 'gate' || P.length < 3 ? `<polyline points="${P.map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.6"/>` : `<polygon points="${P.map((p) => p.join(',')).join(' ')}" fill="rgba(228,97,29,.15)" stroke="#E4611D" stroke-width="0.4"/>`) + edgeLabels(P, S.kind !== 'gate' && P.length > 2 && !S.free, fsE) + P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.5" fill="#E4611D"/>`).join(''); } }
     if (PEND && PEND.rect) { const r = PEND.rect; s += `<rect x="${Math.min(r.x0, r.x1)}" y="${Math.min(r.y0, r.y1)}" width="${Math.abs(r.x1 - r.x0)}" height="${Math.abs(r.y1 - r.y0)}" fill="rgba(228,97,29,.12)" stroke="#E4611D" stroke-width="0.3" stroke-dasharray="1 0.6" pointer-events="none"/>`; }
@@ -506,6 +575,9 @@
 
   // ---------- saving ----------
   async function save() {
+    if (TEST) { const codes = BAYS.map((b) => b.code), dup = codes.find((c, i) => codes.indexOf(c) !== i); if (dup) { msg('Two bays are numbered ' + dup + ' – renumber one first.'); return; }
+      try { await api('park_scenarios?id=eq.' + SCN.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ plan: PLAN, bays: cleanBays(BAYS), updated_at: new Date().toISOString() }) });
+        SCN.plan = JSON.parse(JSON.stringify(PLAN)); SCN.bays = cleanBays(BAYS); DIRTY = false; draw(); msg('Test layout saved.'); } catch (e) { msg('Could not save: ' + e.message); } return; }
     try { const [cur] = await api('park_sites?select=plan&id=eq.' + SITE), cb = await api('park_bays?select=id,updated_at&site_id=eq.' + SITE);
       if ((JSON.stringify(cur.plan) !== PLANRAW || sig(cb) !== BAYSIG) && !confirm('Someone has changed this layout since you opened it (maybe in another tab).\n\nOK = overwrite their changes with yours.\nCancel = keep theirs; then use Discard changes to reload.')) { msg('Not saved.'); return; } } catch (e) { /* carry on */ }
     const codes = BAYS.map((b) => b.code), dup = codes.find((c, i) => codes.indexOf(c) !== i); if (dup) { msg('Two bays are numbered ' + dup + ' – renumber one first.'); return; }
@@ -522,12 +594,27 @@
     } catch (e) { msg('Could not save: ' + e.message); }
   }
   async function patchBays(list, body) {
-    if (DIRTY) { list.forEach((b) => Object.assign(b, body, { _d: 1 })); side(); render(); msg('Changed – press Save layout to keep it.'); return; }
+    if (DIRTY || TEST) { list.forEach((b) => Object.assign(b, body, { _d: 1 })); DIRTY = true; draw(); msg('Changed – press Save to keep it.'); return; }
     try { const ids = list.filter((b) => b.id).map((b) => b.id); if (!ids.length) return;
       await api('park_bays?id=in.(' + ids.join(',') + ')', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ updated_at: new Date().toISOString() }, body)) });
       list.forEach((b) => Object.assign(b, body, { updated_at: new Date().toISOString() })); BAYSIG = sig(BAYS); const a = body.agreement_id && AG.find((x) => x.id === body.agreement_id);
       draw(); msg(a ? list.map((b) => b.code).join(', ') + (a.status === 'Enquiry' ? ' held for ' : ' let to ') + a.customer + '.' : 'Saved.');
     } catch (e) { msg('Could not save: ' + e.message); }
+  }
+  async function applyLive() {
+    if (DIRTY) { msg('Save the test layout first.'); return; }
+    const T = summary(BAYS), L = summary(LIVE.bays), moved = BAYS.filter((b) => b.agreement_id).length, bad = turning().filter((x) => !x.ok).length;
+    if (!confirm('Replace the LIVE yard with “' + SCN.name + '”?\n\nLive now: ' + L.t + ' bays. This layout: ' + T.t + ' bays (' + T.f + ' full, ' + T.sm + ' small).\n' + moved + ' bays keep their customers as placed in this test.' + (bad ? '\n\nWarning: ' + bad + ' bays don\u2019t have enough turning space.' : '') + '\n\nThis changes the real parking map.')) return;
+    if (prompt('Type LIVE to confirm') !== 'LIVE') { msg('Not applied.'); return; }
+    try { msg('Applying…');
+      await api('park_bays?site_id=eq.' + SITE, { method: 'DELETE' });
+      if (BAYS.length) await api('park_bays', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(cleanBays(BAYS).map((b) => Object.assign(b, { site_id: SITE, agreement_id: b.agreement_id && AG.some((a) => a.id === b.agreement_id) ? b.agreement_id : null, updated_at: new Date().toISOString() }))) });
+      await api('park_sites?id=eq.' + SITE, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ plan: PLAN }) });
+      await api('park_scenarios?id=eq.' + SCN.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ applied_at: new Date().toISOString() }) });
+      const by = {}; BAYS.filter((b) => b.state !== 'out').forEach((b) => (by[b.kind] = (by[b.kind] || 0) + 1));
+      for (const [kind, n] of Object.entries(by)) await api('park_capacity?on_conflict=site_id,kind', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ site_id: SITE, kind, spaces: n }) });
+      await load(); draw(); msg('Applied – the live parking map now uses “' + SCN.name + '”.');
+    } catch (e) { msg('Could not apply: ' + e.message); }
   }
   async function syncCap() {
     const by = {}; BAYS.filter((b) => b.state !== 'out').forEach((b) => (by[b.kind] = (by[b.kind] || 0) + 1));
