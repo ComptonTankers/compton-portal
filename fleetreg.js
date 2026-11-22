@@ -7,16 +7,24 @@
   const STATUS = ['Available', 'On hire', 'Workshop', 'Reserved', 'For sale', 'On order'];
   const REMOVE = ['Sold', 'Scrapped / disposed', 'Moved off fleet', 'Entered in error'];
   const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
-  let CATS = [], UNITS = [], CON = [], TAB = 'units', F = { cat: '', status: '', q: '', removed: false }, EDIT = null;
+  let CATS = [], UNITS = [], CON = [], BK = [], TAB = 'units', F = { cat: '', status: '', q: '', removed: false }, EDIT = null;
 
   async function load() {
-    [CATS, UNITS, CON] = await Promise.all([all('asset_categories', 'sort.asc,name.asc'), all('assets', 'unit.asc'), api('contracts?select=unit,customer,monthly_rate,start_date,end_date,rolling&active=is.true')]);
+    [CATS, UNITS, CON] = await Promise.all([all('asset_categories', 'sort.asc,name.asc'), all('assets', 'unit.asc'), api('contracts?select=id,unit,customer,monthly_rate,start_date,end_date,rolling,notice_days&active=is.true')]);
+    try { BK = await api('hire_bookings?select=*&status=neq.Cancelled&order=start_date.asc'); } catch (e) { BK = []; }
   }
   const cat = (id) => CATS.find((c) => c.id === id) || {};
   const con = (u) => CON.find((c) => norm(c.unit) === norm(u.unit));
   const stdRate = (u) => (u.weekly_rate != null ? +u.weekly_rate : cat(u.category_id).default_weekly_rate != null ? +cat(u.category_id).default_weekly_rate : null);
-  const status = (u) => (u.active === false ? 'Removed' : con(u) ? 'On hire' : u.status === 'On hire' ? 'Available' : u.status);   // live contracts decide "On hire"
-  X.fleetReg = { load, cats: () => CATS, units: () => UNITS.filter((u) => u.active !== false), status, stdRate, cat, con };
+  const today = () => new Date().toISOString().slice(0, 10);
+  const bookings = (u) => BK.filter((b) => norm(b.unit) === norm(u.unit) && (!b.end_date || b.end_date >= today()));
+  const onHireBk = (u) => bookings(u).find((b) => b.status === 'On hire');
+  const nextBk = (u) => bookings(u).find((b) => b.status === 'Booked');
+  const status = (u) => (u.active === false ? 'Removed' : con(u) || onHireBk(u) ? 'On hire' : nextBk(u) && nextBk(u).start_date <= today() ? 'Booked' : u.status === 'On hire' ? 'Available' : u.status);   // live contracts decide "On hire"
+  // the full product description used on quotes and hire agreements
+  const fullDesc = (u) => { const c = cat(u.category_id); return { title: u.description || c.name || u.unit, lines: [[u.make, u.model].filter(Boolean).join(' '), u.capacity, u.spec, c.spec].filter(Boolean),
+    year: u.year, condition: u.condition, chassis: u.chassis_no, tank: u.tank_serial, reg: u.reg && u.reg !== u.unit ? u.reg : '', value: u.replacement_value, catDesc: c.description }; };
+  X.fleetReg = { load, cats: () => CATS, units: () => UNITS.filter((u) => u.active !== false), status, stdRate, cat, con, bookings, nextBk, onHireBk, allBookings: () => BK, contracts: () => CON, fullDesc, norm };
 
   X.routes['p-register'] = async function (el) {
     el.innerHTML = X.head('Fleet register', '') + '<div class="empty">Loading…</div>';
@@ -43,7 +51,7 @@
       && (!q || [u.unit, u.reg, u.make, u.model, u.location, (con(u) || {}).customer, cat(u.category_id).name].join(' ').toLowerCase().includes(q)));
     box.innerHTML = `<div class="form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
         <label>Category <select id="fr_c"><option value="">All</option>${CATS.map((c) => `<option value="${c.id}" ${String(c.id) === F.cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-        <label>Status <select id="fr_s"><option value="">All</option>${STATUS.map((s) => `<option ${s === F.status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+        <label>Status <select id="fr_s"><option value="">All</option>${['Available', 'Booked', ...STATUS.slice(1)].map((s) => `<option ${s === F.status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
         <label>Search <input id="fr_q" value="${esc(F.q)}" placeholder="Unit, reg, customer…"></label>
         <label class="small" style="align-self:center"><input type="checkbox" id="fr_r" ${F.removed ? 'checked' : ''}> Show removed units</label>
         <button class="pri2" id="fr_add" style="margin-left:auto">+ Add unit</button></div><div id="fr_form"></div>
@@ -51,7 +59,7 @@
       <table><thead><tr><th>Unit</th><th>Category</th><th>Status</th><th>Customer</th><th class="n">On-hire £/wk</th><th class="n">Standard £/wk</th><th>Location</th><th></th></tr></thead><tbody>
       ${rows.map((u) => { const c = con(u), st = status(u);
         return `<tr><td><b>${esc(u.unit)}</b>${u.reg && u.reg !== u.unit ? `<div class="small muted">${esc(u.reg)}</div>` : ''}${u.make || u.model ? `<div class="small muted">${esc([u.make, u.model, u.year].filter(Boolean).join(' '))}</div>` : ''}</td>
-          <td>${esc(cat(u.category_id).name || '–')}</td><td><span style="color:${st === 'On hire' ? '#164698' : st === 'Available' ? '#16A34A' : st === 'Removed' ? '#94A3B8' : '#B45309'};font-weight:600">${esc(st)}</span>${u.removed_reason ? `<div class="small muted">${esc(u.removed_reason)} ${u.removed_at ? new Date(u.removed_at).toLocaleDateString('en-GB') : ''}</div>` : ''}</td>
+          <td>${esc(cat(u.category_id).name || '–')}</td><td><span style="color:${st === 'On hire' ? '#164698' : st === 'Available' ? '#16A34A' : st === 'Removed' ? '#94A3B8' : st === 'Booked' ? '#7C3AED' : '#B45309'};font-weight:600">${esc(st)}</span>${u.removed_reason ? `<div class="small muted">${esc(u.removed_reason)} ${u.removed_at ? new Date(u.removed_at).toLocaleDateString('en-GB') : ''}</div>` : ''}</td>
           <td>${c ? esc(c.customer) : ''}</td><td class="n">${c ? gbp(c.monthly_rate * 12 / 52) : ''}</td><td class="n">${stdRate(u) != null ? gbp(stdRate(u)) : '<span class="muted">–</span>'}</td><td>${esc(u.location || '')}</td>
           <td><a href="#" data-ed="${u.id}">Edit</a></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">No units match.</td></tr>'}</tbody></table>`;
     $('fr_c').onchange = (e) => { F.cat = e.target.value; units(box, el); };
@@ -72,7 +80,12 @@
       <label>Make<input id="fu_make" value="${f('make')}"></label><label>Model<input id="fu_model" value="${f('model')}"></label>
       <label>Year<input id="fu_year" type="number" value="${f('year')}"></label><label>Capacity<input id="fu_capacity" value="${f('capacity')}" placeholder="e.g. 38,000 L, 5 compartments"></label>
       <label>Location<input id="fu_location" value="${f('location')}"></label><label>Standard £/wk (blank = category rate)<input id="fu_rate" type="number" step="0.01" value="${f('weekly_rate')}"></label>
-      <label style="grid-column:span 2">Spec / notes<input id="fu_notes" value="${f('notes')}"></label></div>
+      <label style="grid-column:span 2">Full description (shown on quotes and hire agreements)<input id="fu_description" value="${f('description')}" placeholder="e.g. 18t Whale gully tanker, 9,000 L sludge / 4,000 L water"></label>
+      <label style="grid-column:span 2">Key specification<input id="fu_spec" value="${f('spec')}" placeholder="Compartments, volume, axles, pump, ADR…"></label>
+      <label>Condition<select id="fu_condition">${['', 'New', 'Excellent used', 'Good used', 'Fair used'].map((c) => `<option ${c === (v.condition || '') ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
+      <label>Chassis / VIN<input id="fu_chassis_no" value="${f('chassis_no')}"></label><label>Tank serial no.<input id="fu_tank_serial" value="${f('tank_serial')}"></label>
+      <label>Full replacement value £<input id="fu_replacement_value" type="number" step="1" value="${f('replacement_value')}"></label>
+      <label style="grid-column:span 4">Internal notes<input id="fu_notes" value="${f('notes')}"></label></div>
       ${u && con(u) ? `<div class="small muted" style="margin-top:6px">On hire to ${esc(con(u).customer)} – status shows “On hire” while the contract is live.</div>` : ''}
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="pri2" id="fu_save">Save</button><button id="fu_x">Cancel</button>
       ${u ? (removed ? '<button id="fu_restore">Put back on the fleet</button>' : `<span style="margin-left:auto" class="small">Remove from fleet: <select id="fu_why">${REMOVE.map((r) => `<option>${r}</option>`).join('')}</select> <input id="fu_when" type="date" value="${new Date().toISOString().slice(0, 10)}"> <button id="fu_rm" style="border-color:#DC2626;color:#B91C1C">Remove</button></span>`) : ''}
@@ -81,7 +94,7 @@
     const done = async () => { await load(); draw(el); };
     $('fu_save').onclick = async () => {
       const g = (k) => $('fu_' + k).value.trim(), body = { unit: g('unit'), reg: g('reg') || null, category_id: +g('cat'), status: g('status'), make: g('make') || null, model: g('model') || null, year: g('year') ? +g('year') : null,
-        capacity: g('capacity') || null, location: g('location') || null, weekly_rate: g('rate') === '' ? null : +g('rate'), notes: g('notes') || null, updated_at: new Date().toISOString() };
+        capacity: g('capacity') || null, location: g('location') || null, weekly_rate: g('rate') === '' ? null : +g('rate'), notes: g('notes') || null, description: g('description') || null, spec: g('spec') || null, condition: g('condition') || null, chassis_no: g('chassis_no') || null, tank_serial: g('tank_serial') || null, replacement_value: g('replacement_value') === '' ? null : +g('replacement_value'), updated_at: new Date().toISOString() };
       if (!body.unit) { $('fu_msg').textContent = 'Give the unit a fleet number.'; return; }
       if (!u && UNITS.some((x) => norm(x.unit) === norm(body.unit))) { $('fu_msg').textContent = body.unit + ' is already on the register.'; return; }
       try { await api(u ? 'assets?id=eq.' + u.id : 'assets', { method: u ? 'PATCH' : 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); await done(); }
