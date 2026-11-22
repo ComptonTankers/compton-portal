@@ -5,7 +5,7 @@
   const X = window.CT; if (!X || !X.routes) return;
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
-  const KINDS = { 'HGV': [4, 18.5], 'Artic / trailer': [3.8, 15], 'Rigid': [3.5, 12], 'Van': [3, 7], 'Car': [2.5, 5], 'Container / storage': [3, 12.5], 'Other': [3.5, 10] };
+  const KINDS = { 'HGV': [4, 18], 'Small bay': [4, 7], 'Artic / trailer': [3.8, 15], 'Rigid': [3.5, 12], 'Van': [3, 7], 'Car': [2.5, 5], 'Container / storage': [3, 12.5], 'Other': [3.5, 10] };
   const ST = { free: ['rgba(74,222,128,.16)', '#FFFFFF', 'Free'], let: ['#2F6BD8', '#FFFFFF', 'Let'], notice: ['#E4611D', '#FFD3BC', 'On notice / ending'], reserved: ['#6D4BC2', '#C4B5FD', 'Reserved'], out: ['#334155', '#64748B', 'Out of use'] };
   const FEAT = { building: ['#164698', '#FFFFFF', 'Building'], nogo: ['rgba(248,113,113,.25)', '#F87171', 'No parking'], road: ['rgba(255,255,255,.07)', '#5B7FC4', 'Roadway'], area: ['rgba(250,204,21,.10)', '#FACC15', 'Area'] };
   const BG = '#0B2A66', DIM = '#FFB27A', HI = '#FACC15';   // drawing colours: navy sheet, orange dimensions, yellow selection
@@ -13,7 +13,7 @@
   const today = () => new Date().toISOString().slice(0, 10);
   const in60 = () => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10); };
   const r1 = (v) => Math.round(v * 4) / 4;
-  let SITES = [], SITE = null, BAYS = [], AG = [], CAP = [], DEL = [], DIRTY = false, MODE = 'view', TOOL = 'select', SEL = new Set(), HL = '', VB = null, PLAN = null, PEND = null, ROWOPT = { kind: 'HGV', w: 4, l: 18.5, prefix: '', flip: false };
+  let SITES = [], SITE = null, BAYS = [], AG = [], CAP = [], DEL = [], DIRTY = false, MODE = 'view', TOOL = 'select', SEL = new Set(), HL = '', VB = null, PLAN = null, PEND = null, ROWOPT = { kind: 'HGV', w: 4, l: 18, prefix: '', flip: false };
   let EL = null;
 
   async function load() {
@@ -218,14 +218,18 @@
           ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#fff"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.4}" font-size="${fsE}" text-anchor="middle" fill="${DIM}" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
       } else { const [fill, st] = FEAT[f.type] || FEAT.area, c = cent(P), pts = P.map((p) => p.join(',')).join(' ');
         s += `<g data-feat="${i}" style="cursor:${cur}"><polygon points="${pts}" fill="${fill}" stroke="${on ? HI : st}" stroke-width="${on ? 0.5 : 0.25}" stroke-dasharray="${f.type === 'road' ? '1.2 0.8' : ''}"/>${f.type === 'nogo' || f.type === 'building' ? `<polygon points="${pts}" fill="url(#${f.type === 'nogo' ? 'pmhatchR' : 'pmhatchW'})" pointer-events="none"/>` : ''}
-          ${f.label ? `<text x="${c[0]}" y="${c[1]}" font-size="${fsE * 1.1}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" letter-spacing="${fsE / 12}" pointer-events="none">${esc(String(f.label).toUpperCase())}</text>` : ''}</g>`; }
+          ${f.label ? (() => { // label fits inside the shape and runs along its longer side
+            const e0 = dist(P[0], P[1]), e1 = dist(P[1], P[2] || P[0]), lg = e0 >= e1 ? [P[0], P[1]] : [P[1], P[2]], lo = Math.max(e0, e1), sh = Math.min(e0, e1) || lo, txt = String(f.label).toUpperCase();
+            let ang = Math.atan2(lg[1][1] - lg[0][1], lg[1][0] - lg[0][0]) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
+            const fz = Math.max(0.5, Math.min(fsE * 1.1, sh * 0.42, lo * 0.9 / (txt.length * 0.62)));
+            return `<text transform="translate(${c[0]},${c[1]}) rotate(${ang})" font-size="${fz}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fz / 3}" letter-spacing="${fz / 14}" pointer-events="none">${esc(txt)}</text>`; })() : ''}</g>`; }
       if (on && MODE === 'edit') { const hs = Math.max(0.6, VB.w / 160);
         s += edgeLabels(P, f.type !== 'gate', fsE) + P.map((p, k) => `<rect data-fv="${k}" x="${p[0] - hs}" y="${p[1] - hs}" width="${hs * 2}" height="${hs * 2}" fill="${BG}" stroke="${HI}" stroke-width="${hs / 3}" style="cursor:crosshair"/>`).join('')
           + (f.type !== 'gate' ? P.map((p, k) => { const q = P[(k + 1) % P.length]; return `<line data-fseg="${k}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.5}" style="cursor:copy"/>`; }).join('') : ''); }
     });
     BAYS.forEach((b, i) => {
       const k = stateOf(b), [fill, st] = ST[k], a = agOf(b), on = SEL.has(b), dim = q && !hit(b);
-      const fs = Math.max(0.8, Math.min(1.6, b.w * 0.36)), name = a ? a.customer : b.state === 'reserved' ? b.reserved_for || 'Reserved' : '';
+      const fs = Math.max(0.8, Math.min(1.7, b.w * 0.4)), name = a ? a.customer : b.state === 'reserved' ? b.reserved_for || 'Reserved' : '';
       const tc = '#fff', vert = Math.abs(((b.rot % 180) + 180) % 180 - 90) > 45;   // text runs along the bay's length
       s += `<g data-bay="${i}" transform="translate(${b.x},${b.y}) rotate(${b.rot})" opacity="${dim ? 0.25 : 1}" style="cursor:pointer">
         <rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="${fill}" stroke="${on || (q && hit(b)) ? HI : st}" stroke-width="${on || (q && hit(b)) ? 0.5 : 0.18}"/>${k === 'out' ? `<rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="url(#pmhatch)" pointer-events="none"/>` : ''}

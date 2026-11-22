@@ -4,7 +4,7 @@
   const X = window.CT; if (!X || !X.routes) return;
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
-  const KINDS = ['HGV', 'Artic / trailer', 'Rigid', 'Van', 'Car', 'Container / storage', 'Other'];
+  const KINDS = ['HGV', 'Small bay', 'Artic / trailer', 'Rigid', 'Van', 'Car', 'Container / storage', 'Other'];
   const STATUS = ['Active', 'On notice', 'Waiting list', 'Ended'];
   const INV = ['MCS', 'Xero', 'Not invoiced yet'];
   const today = () => new Date().toISOString().slice(0, 10);
