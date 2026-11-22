@@ -6,7 +6,7 @@
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
   const KINDS = { 'HGV': [4, 18], 'Small bay': [4, 7], 'Artic / trailer': [3.8, 15], 'Rigid': [3.5, 12], 'Van': [3, 7], 'Car': [2.5, 5], 'Container / storage': [3, 12.5], 'Other': [3.5, 10] };
-  const ST = { free: ['rgba(74,222,128,.16)', '#FFFFFF', 'Free'], let: ['#2F6BD8', '#FFFFFF', 'Let'], notice: ['#E4611D', '#FFD3BC', 'On notice / ending'], reserved: ['#6D4BC2', '#C4B5FD', 'Reserved'], out: ['#334155', '#64748B', 'Out of use'] };
+  const ST = { free: ['rgba(74,222,128,.16)', '#FFFFFF', 'Free'], let: ['#2F6BD8', '#FFFFFF', 'Let'], notice: ['#E4611D', '#FFD3BC', 'On notice / ending'], held: ['#D97706', '#FDE68A', 'Held for enquiry'], reserved: ['#6D4BC2', '#C4B5FD', 'Reserved'], out: ['#334155', '#64748B', 'Out of use'] };
   const FEAT = { building: ['#164698', '#FFFFFF', 'Building'], nogo: ['rgba(248,113,113,.25)', '#F87171', 'No parking'], road: ['rgba(255,255,255,.07)', '#5B7FC4', 'Roadway'], area: ['rgba(250,204,21,.10)', '#FACC15', 'Area'] };
   const BG = '#0B2A66', DIM = '#FFB27A', HI = '#FACC15';   // drawing colours: navy sheet, orange dimensions, yellow selection
   let SAT = false;
@@ -14,14 +14,15 @@
   const in60 = () => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10); };
   const r1 = (v) => Math.round(v * 4) / 4;
   let SITES = [], SITE = null, BAYS = [], AG = [], CAP = [], DEL = [], DIRTY = false, MODE = 'view', TOOL = 'select', SEL = new Set(), HL = '', VB = null, PLAN = null, PEND = null, ROWOPT = { kind: 'HGV', w: 4, l: 18, prefix: '', flip: false };
-  let EL = null;
+  let EL = null, PLANRAW = '', BAYSIG = '';
+  const sig = (bs) => bs.length + '|' + bs.reduce((m, b) => (b.updated_at > m ? b.updated_at : m), '');
 
   async function load() {
     [SITES, AG, CAP] = await Promise.all([all('park_sites', 'id.asc'), all('park_agreements', 'customer.asc'), all('park_capacity', 'id.asc')]);
     if (!SITE || !SITES.find((s) => s.id === SITE)) SITE = (SITES.find((s) => s.status === 'Open') || SITES[0] || {}).id;
     BAYS = SITE ? await api('park_bays?select=*&site_id=eq.' + SITE + '&order=code.asc') : [];
     BAYS.forEach((b) => ['x', 'y', 'w', 'l', 'rot'].forEach((k) => (b[k] = +b[k])));
-    const s = SITES.find((x) => x.id === SITE); PLAN = JSON.parse(JSON.stringify((s && s.plan) || {}));
+    BAYSIG = sig(BAYS); const s = SITES.find((x) => x.id === SITE); PLANRAW = JSON.stringify((s && s.plan) || {}); PLAN = JSON.parse(JSON.stringify((s && s.plan) || {}));
     PLAN.width_m = PLAN.width_m || 140; PLAN.height_m = PLAN.height_m || 90; PLAN.features = PLAN.features || []; PLAN.boundary = PLAN.boundary || [];
     PLAN.features = PLAN.features.map((f) => (f.pts ? f : f.type === 'gate' ? { type: 'gate', label: f.label, pts: [[f.x - 3, f.y], [f.x + 3, f.y]] } : { type: f.type, label: f.label, pts: [[f.x, f.y], [f.x + f.w, f.y], [f.x + f.w, f.y + f.h], [f.x, f.y + f.h]] }));
     DEL = []; DIRTY = false; SEL.clear();
@@ -29,7 +30,8 @@
   const agOf = (b) => (b.agreement_id ? AG.find((a) => a.id === b.agreement_id) : null);
   function stateOf(b) {
     if (b.state === 'out') return 'out'; const a = agOf(b);
-    if (a && a.status !== 'Ended' && a.status !== 'Waiting list') return a.status === 'On notice' || (a.end_date && a.end_date <= in60()) ? 'notice' : 'let';
+    if (a && (a.status === 'Enquiry' || a.status === 'Waiting list')) return 'held';
+    if (a && a.status !== 'Ended') return a.status === 'On notice' || (a.end_date && a.end_date <= in60()) ? 'notice' : 'let';
     return b.state === 'reserved' ? 'reserved' : 'free';
   }
   X.parkMap = { stateOf };
@@ -53,11 +55,11 @@
        <div class="pm-seg">${['view', 'edit'].map((m) => `<button data-mode="${m}" class="${MODE === m ? 'on' : ''}">${m === 'view' ? 'Manage bays' : 'Edit layout'}</button>`).join('')}</div>
        ${PLAN.bg && PLAN.bg.url ? `<label class="small" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="pm_sat" ${SAT ? 'checked' : ''}> Satellite photo</label>` : ''}
        <input id="pm_hl" placeholder="Find customer or bay…" value="${esc(HL)}" style="width:200px">
-       <span class="pm-stat">${BAYS.length} bays · <b style="color:#16A34A">${cnt('free')} free</b> · ${cnt('let')} let · ${cnt('notice')} on notice · ${cnt('reserved')} reserved · ${cnt('out')} out of use${freeVal ? ' · free bays worth ' + gbp(freeVal) + '/week at list rate' : ''}</span>
+       <span class="pm-stat">${BAYS.length} bays · <b style="color:#16A34A">${cnt('free')} free</b> · ${cnt('let')} let · ${cnt('notice')} on notice · ${cnt('held')} held for enquiries · ${cnt('reserved')} reserved · ${cnt('out')} out of use${freeVal ? ' · free bays worth ' + gbp(freeVal) + '/week at list rate' : ''}</span>
        ${DIRTY ? '<button class="pri2" id="pm_save">Save layout</button><button id="pm_undo">Discard changes</button>' : ''}<span id="pm_msg" class="small muted"></span></div>
       <div class="pm-wrap"><div class="pm-side" id="pm_side"></div>
        <div class="pm-mapbox"><svg id="pm_svg" class="pm-svg"></svg>
-        <div class="pm-zoom"><button id="pm_zi">+</button><button id="pm_zo">−</button><button id="pm_fit" title="Fit">⤢</button></div>
+        <div class="pm-pop" id="pm_pop"></div><div class="pm-zoom"><button id="pm_zi">+</button><button id="pm_zo">−</button><button id="pm_fit" title="Fit">⤢</button></div>
         <div class="pm-legend">${Object.entries(ST).map(([k, [f, s, t]]) => `<span><i style="background:${f};border-color:${s}"></i>${t}</span>`).join('')}</div></div></div>
       <style>
        .pm-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.pm-stat{font-size:13px;color:#475569}
@@ -72,6 +74,7 @@
        .pm-cust .bar{height:5px;background:#E2E8F0;border-radius:3px;margin-top:5px;overflow:hidden}.pm-cust .bar i{display:block;height:100%;background:#164698}
        .pm-side h4{margin:12px 0 6px;font-size:13px;color:#0B2A66}.pm-side label{display:block;margin:6px 0 2px;font-size:12px;color:#64748B}.pm-side input,.pm-side select{width:100%;box-sizing:border-box}
        .pm-tools{display:grid;grid-template-columns:1fr 1fr;gap:6px}.pm-tools button{padding:7px;border:1px solid #CBD5E1;border-radius:6px;background:#fff;cursor:pointer;font:inherit;font-size:12.5px}.pm-tools button.on{background:#164698;color:#fff;border-color:#164698}
+       .pm-pop{position:absolute;display:none;pointer-events:none;background:#fff;color:#0B2A66;border:1px solid #CBD5E1;border-left:4px solid #E4611D;border-radius:6px;padding:6px 10px;font-size:12.5px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:5;max-width:260px}
        .pm-tip{background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;padding:8px;font-size:12px;margin-top:8px}
       </style>`;
     $('pm_site').onchange = async (e) => { if (DIRTY && !confirm('Discard unsaved layout changes?')) { e.target.value = SITE; return; } SITE = +e.target.value; await load(); VB = null; draw(); };
@@ -89,17 +92,18 @@
     const p = $('pm_side'); if (!p) return;
     const sel = BAYS.filter((b) => SEL.has(b));
     if (MODE === 'view') {
-      const ags = AG.filter((a) => a.site_id === SITE && (a.status === 'Active' || a.status === 'On notice' || a.status === 'Waiting list'));
+      const ags = AG.filter((a) => a.site_id === SITE && ['Enquiry', 'Active', 'On notice', 'Waiting list'].includes(a.status)).sort((x, y) => (x.status === 'Enquiry' ? 0 : 1) - (y.status === 'Enquiry' ? 0 : 1) || String(x.customer).localeCompare(y.customer));
       const one = sel.length === 1 ? sel[0] : null, a = one && agOf(one);
-      p.innerHTML = (sel.length ? `<h4>${sel.length === 1 ? 'Bay ' + esc(one.code) : sel.length + ' bays selected'}</h4>
+      p.innerHTML = (sel.length ? `<h4>${sel.length === 1 ? (one.kind === 'Small bay' ? 'Small bay ' : 'Full bay ') + esc(one.code) : sel.length + ' bays selected'}</h4>
         ${one ? `<div class="small muted">${esc(one.kind)} · ${one.w} × ${one.l} m</div>${a ? `<div style="margin:8px 0"><b>${esc(a.customer)}</b><div class="small">${gbp(a.weekly_rate)}/space/week · ${esc(a.status)}${a.end_date ? ' · ends ' + new Date(a.end_date).toLocaleDateString('en-GB') : ''}</div>${a.contact_name ? `<div class="small">${esc(a.contact_name)} ${esc(a.contact_phone || '')}</div>` : ''}</div>` : '<div style="margin:8px 0;color:#16A34A"><b>Free</b></div>'}` : `<div class="small muted">${sel.map((b) => esc(b.code)).join(', ')}</div>`}
         <label>Let to</label><select id="pv_ag"><option value="">– free –</option>${AG.filter((x) => x.site_id === SITE && x.status !== 'Ended').map((x) => `<option value="${x.id}" ${one && one.agreement_id === x.id ? 'selected' : ''}>${esc(x.customer)} (${x.spaces} × ${esc(x.kind)})</option>`).join('')}</select>
         <label>Bay status</label><select id="pv_st">${[['open', 'Available'], ['reserved', 'Reserved'], ['out', 'Out of use']].map(([k, t]) => `<option value="${k}" ${one && one.state === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <label>Reserved for / note</label><input id="pv_rf" value="${esc(one ? one.reserved_for || one.notes || '' : '')}" placeholder="e.g. Compton hire fleet, sales stock">
         <div style="margin-top:10px;display:flex;gap:6px"><button class="pri2" id="pv_ok">Save</button><button id="pv_cl">Close</button></div><hr style="margin:14px 0;border:0;border-top:1px solid #E2E8F0">` : '') +
-        `<h4>Customers – drag onto a bay</h4><div class="small muted">Bars show bays placed against spaces agreed.</div>
+        (one && a && a.status === 'Enquiry' ? `<div class="pm-tip" style="margin-top:0"><b>${esc(a.customer)}</b> – enquiry holding ${BAYS.filter((b) => b.agreement_id === a.id).length} bay(s).<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="pri2 mini" id="pq_yes">Confirm – make active</button><button class="mini" id="pq_rel">Release the bays</button></div></div>` : '') +
+        `<div style="display:flex;justify-content:space-between;align-items:center"><h4>Customers – drag onto a bay</h4><button class="mini" id="pq_new">+ New enquiry</button></div><div id="pq_form"></div><div class="small muted">Drag a name onto a bay (Shift-click several bays first to drop onto all of them). Drag a let bay onto another bay to move that customer. Bars show bays placed against spaces agreed.</div>
         ${ags.length ? ags.map((x) => { const n = BAYS.filter((b) => b.agreement_id === x.id).length, full = n >= x.spaces;
-          return `<div class="pm-cust" draggable="true" data-ag="${x.id}"><b>${esc(x.customer)}</b><span class="small">${x.status === 'Waiting list' ? '<span style="color:#E4611D">Waiting list</span> · ' : ''}${n} of ${x.spaces} × ${esc(x.kind)} placed${n > x.spaces ? ' <span style="color:#DC2626">– more bays than agreed</span>' : ''}</span><div class="bar"><i style="width:${Math.min(100, n / Math.max(1, x.spaces) * 100)}%;background:${full ? '#16A34A' : '#164698'}"></i></div></div>`; }).join('') : '<div class="small muted">No agreements at this site yet – add them on the <a href="#/p-parking">Parking</a> page.</div>'}
+          return `<div class="pm-cust" draggable="true" data-ag="${x.id}"><b>${esc(x.customer)}</b><span class="small">${x.status === 'Enquiry' ? '<span style="color:#D97706;font-weight:700">Enquiry</span> · ' : x.status === 'Waiting list' ? '<span style="color:#E4611D">Waiting list</span> · ' : ''}${n} of ${x.spaces} × ${esc(x.kind)} placed${n > x.spaces ? ' <span style="color:#DC2626">– more bays than agreed</span>' : ''}</span><div class="bar"><i style="width:${Math.min(100, n / Math.max(1, x.spaces) * 100)}%;background:${full ? '#16A34A' : '#164698'}"></i></div></div>`; }).join('') : '<div class="small muted">No agreements at this site yet – add them on the <a href="#/p-parking">Parking</a> page.</div>'}
         <h4>Free bays by type</h4>${Object.keys(KINDS).map((k) => { const t = BAYS.filter((b) => b.kind === k), f = t.filter((b) => stateOf(b) === 'free').length; return t.length ? `<div class="small">${esc(k)}: <b>${f}</b> free of ${t.length}</div>` : ''; }).join('') || '<div class="small muted">No bays yet – use Edit layout.</div>'}
         <div style="margin-top:10px"><button class="mini" id="pv_cap">Update Parking page space counts from the map</button></div>`;
       p.querySelectorAll('[data-ag]').forEach((d) => (d.ondragstart = (e) => { e.dataTransfer.setData('text/plain', d.dataset.ag); e.dataTransfer.effectAllowed = 'move'; }));
@@ -108,6 +112,9 @@
         await patchBays(sel, { agreement_id: ag, state: ag ? 'open' : st, reserved_for: rf }); };
       if ($('pv_cl')) $('pv_cl').onclick = () => { SEL.clear(); side(); render(); };
       $('pv_cap').onclick = syncCap;
+      $('pq_new').onclick = enquiryForm;
+      if ($('pq_yes')) $('pq_yes').onclick = async () => { try { await api('park_agreements?id=eq.' + a.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'Active', start_date: a.start_date || today(), updated_at: new Date().toISOString() }) }); a.status = 'Active'; a.start_date = a.start_date || today(); draw(); msg(a.customer + ' is now active – add the rate and contact on the Parking page if missing.'); } catch (e) { msg('Could not save: ' + e.message); } };
+      if ($('pq_rel')) $('pq_rel').onclick = () => patchBays(BAYS.filter((b) => b.agreement_id === a.id), { agreement_id: null });
       return;
     }
     // edit mode
@@ -124,6 +131,7 @@
       ${TOOL === 'scale' ? '<div class="pm-tip">Click one end of something you know the length of, then the other end. You\'ll see what the map measures it as, and can type the real distance to rescale the whole plan (image, boundary and everything on it).</div>' : ''}
       ${TOOL === 'select' && PLAN.boundary.length ? '<div class="small muted" style="margin-top:8px">Boundary: drag the numbered orange corners to move them. Double-click a corner to remove it; double-click the boundary line to add a corner there.</div>' : ''}
       ${TOOL === 'select' ? selPanel(sel) : ''}
+      <div style="margin-top:10px"><button class="mini" id="pe_renum">Renumber all bays</button> <span class="small muted">Full bays 1, 2, 3… and small bays S1, S2… clockwise from the gate.</span></div>
       <h4>Site size</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pe_sw" type="number" value="${PLAN.width_m}"></div><div><label>Depth (m)</label><input id="pe_sh" type="number" value="${PLAN.height_m}"></div></div>
       ${PLAN.bg && SAT ? `<h4>Satellite photo</h4><label>Strength <input type="range" id="pe_op" min="0" max="1" step="0.05" value="${PLAN.bg.opacity ?? 0.6}"></label>` : ''}
       <div class="small muted" style="margin-top:12px">Keys: Delete removes · R turns 90° · [ and ] turn 5° · arrow keys nudge 0.25 m (Shift = 1 m). Drag empty map to pan, scroll to zoom.</div>`;
@@ -132,19 +140,61 @@
       $('pe_w').onchange = (e) => (ROWOPT.w = +e.target.value || 4); $('pe_l').onchange = (e) => (ROWOPT.l = +e.target.value || 18.5);
       $('pe_px').onchange = (e) => (ROWOPT.prefix = e.target.value.trim()); $('pe_flip').onchange = (e) => { ROWOPT.flip = e.target.checked; render(); }; }
     if ($('pe_free')) $('pe_free').onchange = (e) => { ROWOPT.free = e.target.checked; PEND = null; render(); };
+    $('pe_renum').onclick = () => { if (!confirm('Renumber every bay at this site? Full bays become 1, 2, 3… and small bays S1, S2…, going clockwise from the gate. Press Save layout afterwards to keep it.')) return; renumberAll(); };
     $('pe_sw').onchange = (e) => { PLAN.width_m = +e.target.value || PLAN.width_m; dirty(); };
     $('pe_sh').onchange = (e) => { PLAN.height_m = +e.target.value || PLAN.height_m; dirty(); };
     if ($('pe_op')) $('pe_op').oninput = (e) => { PLAN.bg.opacity = +e.target.value; DIRTY = true; render(); };
     wireSelPanel(sel);
   }
+  function enquiryForm() {
+    const f = $('pq_form'); if (!f) return;
+    f.innerHTML = `<div class="pm-tip" style="background:#FFFBEB;border-color:#FDE68A"><label>Customer</label><input id="pq_c">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Bay type</label><select id="pq_k"><option>HGV</option><option>Small bay</option></select></div><div><label>Spaces</label><input id="pq_n" type="number" min="1" value="1"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>£/space/week</label><input id="pq_r" type="number" step="0.01"></div><div><label>Phone</label><input id="pq_p"></div></div>
+      <label>Contact</label><input id="pq_ct"><label>Notes</label><input id="pq_nt" placeholder="e.g. wants to start January">
+      <div style="margin-top:8px;display:flex;gap:6px"><button class="pri2" id="pq_ok">Add – then drag onto bays</button><button id="pq_x">Cancel</button></div></div>`;
+    $('pq_x').onclick = () => (f.innerHTML = ''); $('pq_c').focus();
+    $('pq_ok').onclick = async () => {
+      const c = $('pq_c').value.trim(); if (!c) { $('pq_c').focus(); return; }
+      try { const r = await api('park_agreements', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ site_id: SITE, customer: c, kind: $('pq_k').value, spaces: +$('pq_n').value || 1, weekly_rate: +$('pq_r').value || 0, contact_name: $('pq_ct').value.trim() || null, contact_phone: $('pq_p').value.trim() || null, notes: $('pq_nt').value.trim() || null, status: 'Enquiry', start_date: null }) });
+        AG.push(r[0]); side(); msg(c + ' added as an enquiry – drag it onto the bays to hold them.'); } catch (e) { msg('Could not add: ' + e.message); } };
+  }
+  // hover pop-up for bays and shapes
+  function pop(e, drag) {
+    const el = $('pm_pop'); if (!el) return;
+    const g = document.elementFromPoint(e.clientX, e.clientY), t = g && g.closest && g.closest('[data-bay],[data-feat]');
+    if (!t || (PEND && (PEND.shape || PEND.row || PEND.meas || PEND.poly))) { el.style.display = 'none'; return; }
+    let h = '';
+    if (t.dataset.bay != null) { const b = BAYS[+t.dataset.bay]; if (!b) return; const a = agOf(b), k = stateOf(b);
+      h = `<b>${b.kind === 'Small bay' ? 'Small bay ' : 'Full bay '}${esc(b.code)}</b> <span style="color:#64748B">${b.w} × ${b.l} m</span><br>` +
+        (a ? `<b>${esc(a.customer)}</b><br><span style="color:#64748B">${a.status === 'Enquiry' ? 'Enquiry – bay held' : esc(a.status)} · ${+a.weekly_rate ? gbp(a.weekly_rate) + '/week' : 'rate not set'}${a.end_date ? ' · ends ' + new Date(a.end_date).toLocaleDateString('en-GB') : ''}</span>`
+          : k === 'reserved' ? 'Reserved' + (b.reserved_for ? ': ' + esc(b.reserved_for) : '') : k === 'out' ? 'Out of use' : '<b style="color:#16A34A">Free</b>');
+    } else { const f = PLAN.features[+t.dataset.feat]; if (!f) return; const P = f.pts;
+      h = `<b>${esc(f.label || (f.type === 'gate' ? 'Gate' : (FEAT[f.type] || FEAT.area)[2]))}</b><br><span style="color:#64748B">` + (f.type === 'gate' ? 'Width ' + dist(P[0], P[1]).toFixed(1) + ' m' : P.map((p, i) => dist(p, P[(i + 1) % P.length]).toFixed(1)).slice(0, 2).join(' × ') + ' m · ' + Math.round(area(P)) + ' m²') + '</span>'; }
+    if (drag && drag.kind === 'mv' && drag.moved && t.dataset.bay != null) { const b = BAYS[+t.dataset.bay]; h = b === drag.from ? h : `Move <b>${esc((agOf(drag.from) || {}).customer || '')}</b> to bay <b>${esc(b.code)}</b>` + (b.agreement_id && b.agreement_id !== drag.from.agreement_id ? '<br><span style="color:#B45309">swaps with ' + esc(agOf(b).customer) + '</span>' : ''); }
+    const r = el.parentElement.getBoundingClientRect(); el.innerHTML = h; el.style.display = 'block';
+    el.style.left = Math.min(r.width - 270, e.clientX - r.left + 14) + 'px'; el.style.top = Math.min(r.height - 70, e.clientY - r.top + 14) + 'px';
+  }
+  async function moveCustomer(from, to) {
+    const a = agOf(from), b = agOf(to); if (!a || from === to) return;
+    if (b && b !== a && !confirm('Bay ' + to.code + ' is let to ' + b.customer + '. Swap ' + a.customer + ' and ' + b.customer + '?')) return;
+    const ups = [[to, a.id], [from, b && b !== a ? b.id : null]];
+    if (DIRTY) { ups.forEach(([x, id]) => { x.agreement_id = id; x._d = 1; }); side(); render(); msg('Moved – press Save layout to keep it.'); return; }
+    try { for (const [x, id] of ups) await api('park_bays?id=eq.' + x.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ agreement_id: id, state: 'open', updated_at: new Date().toISOString() }) });
+      ups.forEach(([x, id]) => { x.agreement_id = id; x.updated_at = new Date().toISOString(); }); BAYSIG = sig(BAYS); SEL.clear(); draw(); msg(a.customer + ' moved from ' + from.code + ' to ' + to.code + (b && b !== a ? ' (swapped with ' + b.customer + ')' : '') + '.');
+    } catch (e) { msg('Could not move: ' + e.message); }
+  }
   function selPanel(sel) {
     const f = PEND && PEND.feat;
     if (f) { const P = f.pts, gate = f.type === 'gate';
+      if ((PEND.more || []).length) return `<h4>${PEND.more.length + 1} shapes selected</h4><div class="small muted">${[f].concat(PEND.more).map((x) => esc(x.label || x.type)).join(', ')}</div><div class="small muted" style="margin-top:6px">Drag any of them to move them together, or turn them together below.</div>
+        <label>Turn</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[-90, -5, -1, 1, 5, 90].map((d) => `<button class="mini" data-rot="${d}">${d > 0 ? '+' : ''}${d}°</button>`).join('')}</div>
+        <div style="margin-top:8px;display:flex;gap:6px"><button id="pf_del">Delete all</button><button id="pf_cl">Done</button></div><input type="hidden" id="pf_lb"><select id="pf_ty" style="display:none"></select>`;
       return `<h4>${esc(gate ? 'Gate' : (FEAT[f.type] || FEAT.area)[2])}</h4><label>Label</label><input id="pf_lb" value="${esc(f.label || '')}">
       <label>Type</label><select id="pf_ty">${(gate ? [['gate', 'Gate']] : Object.entries(FEAT).map(([k, v]) => [k, v[2]])).map(([k, t]) => `<option value="${k}" ${k === f.type ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <div class="small" style="margin-top:8px">${gate ? 'Width <b>' + dist(P[0], P[1]).toFixed(1) + ' m</b>' : 'Sides: ' + P.map((p, i) => dist(p, P[(i + 1) % P.length]).toFixed(1)).join(' × ') + ' m<br>Area <b>' + Math.round(area(P)) + ' m²</b>'}</div>
       <label>Turn</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[-90, -5, -1, 1, 5, 90].map((d) => `<button class="mini" data-rot="${d}">${d > 0 ? '+' : ''}${d}°</button>`).join('')}</div>
-      <div class="small muted" style="margin-top:6px">Drag the shape to move it, drag its square corners to reshape it.${gate ? '' : ' Double-click a corner to remove it, double-click an edge to add one.'}</div>
+      <div class="small muted" style="margin-top:6px">Drag the shape to move it, drag its square corners to reshape it. Shift-click other shapes to move or turn them together.${gate ? '' : ' Double-click a corner to remove it, double-click an edge to add one.'}</div>
       <div style="margin-top:8px;display:flex;gap:6px"><button id="pf_del">Delete</button><button id="pf_cl">Done</button></div>`; }
     if (!sel.length) return '<div class="small muted" style="margin-top:10px">Click a bay to edit it, Shift-click or drag a box to pick several. Drag to move.</div>';
     const one = sel.length === 1 ? sel[0] : null;
@@ -156,9 +206,9 @@
   }
   function wireSelPanel(sel) {
     if ($('pf_lb')) { const f = PEND.feat; $('pf_lb').oninput = (e) => { f.label = e.target.value; DIRTY = true; render(); };
-      $('pf_ty').onchange = (e) => { f.type = e.target.value; dirty(); };
-      document.querySelectorAll('[data-rot]').forEach((b) => (b.onclick = () => { f.pts = rotPts(f.pts, +b.dataset.rot); dirty(); }));
-      $('pf_del').onclick = () => { PLAN.features = PLAN.features.filter((x) => x !== f); PEND = null; dirty(); }; $('pf_cl').onclick = () => { PEND = null; side(); render(); }; return; }
+      $('pf_ty').onchange = (e) => { if (e.target.value) { f.type = e.target.value; dirty(); } };
+      document.querySelectorAll('[data-rot]').forEach((b) => (b.onclick = () => { turnGroup(+b.dataset.rot); }));
+      $('pf_del').onclick = () => { const g = [f].concat(PEND.more || []); PLAN.features = PLAN.features.filter((x) => !g.includes(x)); PEND = null; dirty(); }; $('pf_cl').onclick = () => { PEND = null; side(); render(); }; return; }
     if (!$('ps_ok')) return;
     $('ps_ok').onclick = () => {
       const k = $('ps_kind').value, w = $('ps_w').value, l = $('ps_l').value, r = $('ps_r').value;
@@ -208,28 +258,28 @@
     if (MODE === 'edit' && PLAN.boundary.length > 1) {
       const B = PLAN.boundary, hs = Math.max(0.8, VB.w / 110);
       B.forEach((p, i) => { const q = B[(i + 1) % B.length]; s += `<line data-seg="${i}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.6}" style="cursor:copy"/>`; });
-      s += edgeLabels(PLAN.boundary, true, Math.max(0.9, VB.w / 75));
+      s += edgeLabels(PLAN.boundary, true, Math.max(0.7, VB.w / 110));
     }
-    const fsE = Math.max(0.9, VB.w / 75);
+    const fsE = Math.max(0.7, VB.w / 95);
     PLAN.features.forEach((f, i) => {
-      const P = f.pts, on = PEND && PEND.feat === f, cur = MODE === 'edit' ? 'move' : 'default';
+      const P = f.pts, on = PEND && (PEND.feat === f || (PEND.more || []).includes(f)), cur = MODE === 'edit' ? 'move' : 'default';
       if (f.type === 'gate') { const c = cent(P);
         s += `<g data-feat="${i}" style="cursor:${cur}"><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="transparent" stroke-width="3"/><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="#E4611D" stroke-width="${on ? 1.3 : 0.9}" stroke-linecap="round"/>
-          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#fff"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.4}" font-size="${fsE}" text-anchor="middle" fill="${DIM}" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
+          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#fff"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.1}" font-size="${fsE * 0.6}" text-anchor="middle" fill="${DIM}" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
       } else { const [fill, st] = FEAT[f.type] || FEAT.area, c = cent(P), pts = P.map((p) => p.join(',')).join(' ');
         s += `<g data-feat="${i}" style="cursor:${cur}"><polygon points="${pts}" fill="${fill}" stroke="${on ? HI : st}" stroke-width="${on ? 0.5 : 0.25}" stroke-dasharray="${f.type === 'road' ? '1.2 0.8' : ''}"/>${f.type === 'nogo' || f.type === 'building' ? `<polygon points="${pts}" fill="url(#${f.type === 'nogo' ? 'pmhatchR' : 'pmhatchW'})" pointer-events="none"/>` : ''}
           ${f.label ? (() => { // label fits inside the shape and runs along its longer side
             const e0 = dist(P[0], P[1]), e1 = dist(P[1], P[2] || P[0]), lg = e0 >= e1 ? [P[0], P[1]] : [P[1], P[2]], lo = Math.max(e0, e1), sh = Math.min(e0, e1) || lo, txt = String(f.label).toUpperCase();
             let ang = Math.atan2(lg[1][1] - lg[0][1], lg[1][0] - lg[0][0]) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
-            const fz = Math.max(0.5, Math.min(fsE * 1.1, sh * 0.42, lo * 0.9 / (txt.length * 0.62)));
+            const fz = Math.min(fsE * 0.55, sh * 0.35, lo * 0.85 / (txt.length * 0.62)); if (fz < 0.55) return '';
             return `<text transform="translate(${c[0]},${c[1]}) rotate(${ang})" font-size="${fz}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fz / 3}" letter-spacing="${fz / 14}" pointer-events="none">${esc(txt)}</text>`; })() : ''}</g>`; }
-      if (on && MODE === 'edit') { const hs = Math.max(0.6, VB.w / 160);
+      if (on && MODE === 'edit' && PEND.feat === f && !(PEND.more || []).length) { const hs = Math.max(0.6, VB.w / 160);
         s += edgeLabels(P, f.type !== 'gate', fsE) + P.map((p, k) => `<rect data-fv="${k}" x="${p[0] - hs}" y="${p[1] - hs}" width="${hs * 2}" height="${hs * 2}" fill="${BG}" stroke="${HI}" stroke-width="${hs / 3}" style="cursor:crosshair"/>`).join('')
           + (f.type !== 'gate' ? P.map((p, k) => { const q = P[(k + 1) % P.length]; return `<line data-fseg="${k}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.5}" style="cursor:copy"/>`; }).join('') : ''); }
     });
     BAYS.forEach((b, i) => {
       const k = stateOf(b), [fill, st] = ST[k], a = agOf(b), on = SEL.has(b), dim = q && !hit(b);
-      const fs = Math.max(0.8, Math.min(1.7, b.w * 0.4)), name = a ? a.customer : b.state === 'reserved' ? b.reserved_for || 'Reserved' : '';
+      const fs = Math.max(0.6, Math.min(1.25, b.w * 0.3)), name = '';
       const tc = '#fff', vert = Math.abs(((b.rot % 180) + 180) % 180 - 90) > 45;   // text runs along the bay's length
       s += `<g data-bay="${i}" transform="translate(${b.x},${b.y}) rotate(${b.rot})" opacity="${dim ? 0.25 : 1}" style="cursor:pointer">
         <rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="${fill}" stroke="${on || (q && hit(b)) ? HI : st}" stroke-width="${on || (q && hit(b)) ? 0.5 : 0.18}"/>${k === 'out' ? `<rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="url(#pmhatch)" pointer-events="none"/>` : ''}
@@ -282,7 +332,7 @@
       const ga = (k) => { const n = e.target.closest('[data-' + k + ']'); return n ? n.getAttribute('data-' + k) : null; }, hit = { bv: ga('bv'), seg: ga('seg'), fv: ga('fv'), fseg: ga('fseg') }, now = Date.now();
       if (MODE === 'edit' && LASTD && now - LASTD.t < 450 && Math.hypot(e.clientX - LASTD.x, e.clientY - LASTD.y) < 8) { const h = LASTD.h; LASTD = null; if (dbl(h, p)) return; }
       LASTD = { t: now, x: e.clientX, y: e.clientY, h: hit };
-      if (MODE === 'edit' && hit.fseg != null && PEND && PEND.feat) { drag = { kind: 'feat', p, f: PEND.feat, pts: PEND.feat.pts.map((q) => q.slice()) }; svg.setPointerCapture(e.pointerId); return; }
+      if (MODE === 'edit' && hit.fseg != null && PEND && PEND.feat) { drag = { kind: 'feat', p, grp: [PEND.feat].concat(PEND.more || []).map((g) => [g, g.pts.map((q) => q.slice())]) }; svg.setPointerCapture(e.pointerId); return; }
       const bv = e.target.closest('[data-bv]');
       if (MODE === 'edit' && bv && (TOOL === 'select' || TOOL === 'boundary') && !(PEND && PEND.poly)) { drag = { kind: 'bv', i: +bv.dataset.bv }; svg.setPointerCapture(e.pointerId); return; }
       if (MODE === 'edit' && TOOL === 'scale') { const q = [p[0], p[1]];
@@ -303,16 +353,20 @@
         if (e.shiftKey) { SEL.has(b) ? SEL.delete(b) : SEL.add(b); } else if (!SEL.has(b)) { SEL.clear(); SEL.add(b); }
         PEND = null; side(); render();
         if (MODE === 'edit') { drag = { kind: 'bays', p, start: BAYS.filter((x) => SEL.has(x)).map((x) => [x, x.x, x.y]) }; svg.setPointerCapture(e.pointerId); }
+        else if (b.agreement_id) { drag = { kind: 'mv', from: b, cx: e.clientX, cy: e.clientY }; svg.setPointerCapture(e.pointerId); }
         return; }
       const fv = e.target.closest('[data-fv]');
       if (MODE === 'edit' && fv && PEND && PEND.feat) { drag = { kind: 'fv', f: PEND.feat, k: +fv.dataset.fv }; svg.setPointerCapture(e.pointerId); return; }
-      if (MODE === 'edit' && fg) { const f = PLAN.features[+fg.dataset.feat]; SEL.clear(); PEND = { feat: f }; side(); render(); drag = { kind: 'feat', p, f, pts: f.pts.map((q) => q.slice()) }; svg.setPointerCapture(e.pointerId); return; }
+      if (MODE === 'edit' && fg) { const f = PLAN.features[+fg.dataset.feat]; SEL.clear();
+        if (e.shiftKey && PEND && PEND.feat && PEND.feat !== f) { PEND.more = (PEND.more || []).filter((x) => x !== f).concat([f]); } else if (!(PEND && PEND.feat && (PEND.feat === f || (PEND.more || []).includes(f)))) PEND = { feat: f };
+        side(); render(); const grp = [PEND.feat].concat(PEND.more || []); drag = { kind: 'feat', p, grp: grp.map((g) => [g, g.pts.map((q) => q.slice())]) }; svg.setPointerCapture(e.pointerId); return; }
       if (MODE === 'edit' && e.shiftKey) { PEND = { box: 1, rect: { x0: p[0], y0: p[1], x1: p[0], y1: p[1] } }; svg.setPointerCapture(e.pointerId); return; }
       if (!e.shiftKey && (SEL.size || PEND)) { SEL.clear(); PEND = null; side(); render(); }
       drag = { kind: 'pan', cx: e.clientX, cy: e.clientY, vb: Object.assign({}, VB) }; svg.setPointerCapture(e.pointerId);
     };
     svg.onpointermove = (e) => {
-      const p = pt(e);
+      const p = pt(e); pop(e, drag);
+      if (drag && drag.kind === 'mv') { if (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) > 6) { drag.moved = 1; svg.style.cursor = 'grabbing'; } return; }
       if (PEND && PEND.row && !drag) { PEND.row.p1 = [r1(p[0]), r1(p[1])]; render(); return; }
       if (PEND && PEND.shape) { PEND.shape.hover = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; render(); return; }
       if (PEND && PEND.meas && !PEND.meas.p1) { PEND.meas.hover = [p[0], p[1]]; render(); return; }
@@ -324,10 +378,12 @@
       if (drag.kind === 'pan') { const r = svg.getBoundingClientRect(), k = VB.w / r.width; VB.x = drag.vb.x - (e.clientX - drag.cx) * k; VB.y = drag.vb.y - (e.clientY - drag.cy) * k; render(); return; }
       const dx = r1(p[0] - drag.p[0]), dy = r1(p[1] - drag.p[1]); if (!dx && !dy) return; drag.moved = 1;
       if (drag.kind === 'bays') drag.start.forEach(([b, x, y]) => { b.x = x + dx; b.y = y + dy; b._d = 1; });
-      if (drag.kind === 'feat') drag.f.pts = drag.pts.map((q) => [q[0] + dx, q[1] + dy]);
+      if (drag.kind === 'feat') drag.grp.forEach(([g, pts]) => (g.pts = pts.map((q) => [q[0] + dx, q[1] + dy])));
       render();
     };
-    svg.onpointerup = () => {
+    svg.onpointerleave = () => { const el = $('pm_pop'); if (el) el.style.display = 'none'; };
+    svg.onpointerup = (e) => {
+      if (drag && drag.kind === 'mv') { svg.style.cursor = ''; const d = drag; drag = null; if (d.moved) { const g = document.elementFromPoint(e.clientX, e.clientY), t = g && g.closest('[data-bay]'); if (t) moveCustomer(d.from, BAYS[+t.dataset.bay]); else msg('Drop onto another bay to move the customer.'); } return; }
       if (PEND && PEND.rect) { const r = PEND.rect, x = Math.min(r.x0, r.x1), y = Math.min(r.y0, r.y1), w = Math.abs(r.x1 - r.x0), h = Math.abs(r.y1 - r.y0);
         if (PEND.box) { BAYS.forEach((b) => { if (b.x >= x && b.x <= x + w && b.y >= y && b.y <= y + h) SEL.add(b); }); PEND = null; side(); render(); }
         else { PEND = null; render(); } }
@@ -346,10 +402,10 @@
       if (!$('pm_svg') || MODE !== 'edit' || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
       const sel = BAYS.filter((b) => SEL.has(b));
       if (e.key === 'Escape') { PEND = null; SEL.clear(); side(); render(); return; }
-      if (PEND && PEND.feat && (e.key === 'Delete' || e.key === 'Backspace')) { PLAN.features = PLAN.features.filter((x) => x !== PEND.feat); PEND = null; dirty(); return; }
+      if (PEND && PEND.feat && (e.key === 'Delete' || e.key === 'Backspace')) { const g = [PEND.feat].concat(PEND.more || []); PLAN.features = PLAN.features.filter((x) => !g.includes(x)); PEND = null; dirty(); return; }
       if (PEND && PEND.feat) { const f = PEND.feat, t = e.key === 'r' || e.key === 'R' ? 90 : e.key === ']' ? (e.shiftKey ? 1 : 5) : e.key === '[' ? (e.shiftKey ? -1 : -5) : 0;
         const st = e.shiftKey ? 1 : 0.25, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
-        if (t) { f.pts = rotPts(f.pts, t); dirty(); } else if (mv) { e.preventDefault(); f.pts = f.pts.map((q) => [q[0] + mv[0], q[1] + mv[1]]); dirty(false); } return; }
+        if (t) turnGroup(t); else if (mv) { e.preventDefault(); [f].concat(PEND.more || []).forEach((x) => (x.pts = x.pts.map((q) => [q[0] + mv[0], q[1] + mv[1]]))); dirty(false); } return; }
       if (!sel.length) return; const st = e.shiftKey ? 1 : 0.25;
       const mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
       if (mv) { e.preventDefault(); sel.forEach((b) => { b.x += mv[0]; b.y += mv[1]; b._d = 1; }); dirty(false); return; }
@@ -360,6 +416,14 @@
         sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = r1(cx + x * Math.cos(a) - y * Math.sin(a)); b.y = r1(cy + x * Math.sin(a) + y * Math.cos(a)); b.rot = ((b.rot + turn) % 360 + 360) % 360; b._d = 1; }); dirty(false); }
     };
   }
+  function renumberAll() {
+    const all = BAYS.reduce((a, b) => a.concat([[b.x, b.y]]), []), c = all.length ? cent(all) : [0, 0], g = PLAN.features.find((f) => f.type === 'gate'), g0 = g ? cent(g.pts) : [c[0], c[1] - 1];
+    const a0 = Math.atan2(g0[1] - c[1], g0[0] - c[0]), ang = (b) => ((Math.atan2(b.y - c[1], b.x - c[0]) - a0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    const ord = BAYS.slice().sort((p, q) => ang(p) - ang(q)); let nf = 1, ns = 1;
+    ord.forEach((b) => { b.code = '~' + (b.id || Math.random()); });
+    ord.forEach((b) => { b.code = b.kind === 'Small bay' ? 'S' + ns++ : String(nf++); b._d = 1; }); dirty();
+  }
+  function turnGroup(deg) { const g = [PEND.feat].concat(PEND.more || []), c = cent(g.reduce((a, x) => a.concat(x.pts), [])); g.forEach((x) => (x.pts = rotPts(x.pts, deg, c))); dirty(); }
   // shape being drawn: rectangle at any angle (3 clicks), any polygon, or a gate line (2 clicks)
   function shapePts(S) {
     const P = S.pts.slice(), h = S.hover;
@@ -394,6 +458,8 @@
 
   // ---------- saving ----------
   async function save() {
+    try { const [cur] = await api('park_sites?select=plan&id=eq.' + SITE), cb = await api('park_bays?select=id,updated_at&site_id=eq.' + SITE);
+      if ((JSON.stringify(cur.plan) !== PLANRAW || sig(cb) !== BAYSIG) && !confirm('Someone has changed this layout since you opened it (maybe in another tab).\n\nOK = overwrite their changes with yours.\nCancel = keep theirs; then use Discard changes to reload.')) { msg('Not saved.'); return; } } catch (e) { /* carry on */ }
     const codes = BAYS.map((b) => b.code), dup = codes.find((c, i) => codes.indexOf(c) !== i); if (dup) { msg('Two bays are numbered ' + dup + ' – renumber one first.'); return; }
     msg('Saving…');
     try {
@@ -411,8 +477,8 @@
     if (DIRTY) { list.forEach((b) => Object.assign(b, body, { _d: 1 })); side(); render(); msg('Changed – press Save layout to keep it.'); return; }
     try { const ids = list.filter((b) => b.id).map((b) => b.id); if (!ids.length) return;
       await api('park_bays?id=in.(' + ids.join(',') + ')', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ updated_at: new Date().toISOString() }, body)) });
-      list.forEach((b) => Object.assign(b, body)); const a = body.agreement_id && AG.find((x) => x.id === body.agreement_id);
-      draw(); msg(a ? list.map((b) => b.code).join(', ') + ' let to ' + a.customer + '.' : 'Saved.');
+      list.forEach((b) => Object.assign(b, body, { updated_at: new Date().toISOString() })); BAYSIG = sig(BAYS); const a = body.agreement_id && AG.find((x) => x.id === body.agreement_id);
+      draw(); msg(a ? list.map((b) => b.code).join(', ') + (a.status === 'Enquiry' ? ' held for ' : ' let to ') + a.customer + '.' : 'Saved.');
     } catch (e) { msg('Could not save: ' + e.message); }
   }
   async function syncCap() {

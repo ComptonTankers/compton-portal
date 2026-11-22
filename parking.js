@@ -5,7 +5,7 @@
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
   const KINDS = ['HGV', 'Small bay', 'Artic / trailer', 'Rigid', 'Van', 'Car', 'Container / storage', 'Other'];
-  const STATUS = ['Active', 'On notice', 'Waiting list', 'Ended'];
+  const STATUS = ['Enquiry', 'Active', 'On notice', 'Waiting list', 'Ended'];
   const INV = ['MCS', 'Xero', 'Not invoiced yet'];
   const today = () => new Date().toISOString().slice(0, 10);
   const addDays = (s, n) => { const d = new Date(s); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
