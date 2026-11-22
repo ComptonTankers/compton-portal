@@ -203,6 +203,8 @@
       ${one ? `<label>Number</label><input id="ps_code" value="${esc(one.code)}">` : `<label>Renumber as</label><div style="display:flex;gap:6px"><input id="ps_px" placeholder="Prefix e.g. B" style="width:50%"><input id="ps_n0" type="number" value="1" style="width:50%"></div>`}
       <label>Type</label><select id="ps_kind"><option value="">${one ? '' : '(keep)'}</option>${Object.keys(KINDS).map((k) => `<option ${one && one.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px"><div><label>Width</label><input id="ps_w" type="number" step="0.1" value="${one ? one.w : ''}"></div><div><label>Length</label><input id="ps_l" type="number" step="0.1" value="${one ? one.l : ''}"></div><div><label>Angle°</label><input id="ps_r" type="number" step="5" value="${one ? one.rot : ''}"></div></div>
+      <label>Turn ${sel.length > 1 ? 'these bays together' : 'this bay'}</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[-90, -5, -1, 1, 5, 90].map((d) => `<button class="mini" data-brot="${d}">${d > 0 ? '+' : ''}${d}°</button>`).join('')}</div>
+      <div class="small muted" style="margin-top:4px">Bays in a row touch each other, so to turn a row select the whole row first (Shift-drag a box round it).</div>
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button id="ps_ok" class="pri2">Apply</button><button id="ps_dup">Copy</button><button id="ps_del">Delete</button></div>`;
   }
   function wireSelPanel(sel) {
@@ -230,6 +232,7 @@
       for (const k of [1, -1, 2, -2, 3, -3]) { nb.forEach((c, i) => { c.x = sel[i].x + bx[0] * span * k; c.y = sel[i].y + bx[1] * span * k; }); if (!clash(nb)) { SEL = new Set(nb); dirty(); return; } }
       BAYS = BAYS.filter((b) => !nb.includes(b)); msg('No clear space right beside these bays to copy into – drag them first.'); };
     $('ps_del').onclick = delSel;
+    document.querySelectorAll('[data-brot]').forEach((x) => (x.onclick = () => turnBays(sel, +x.dataset.brot)));
   }
   function renumber(list, px, n0) {
     // order along the row: by position projected on the row direction
@@ -285,7 +288,7 @@
           ${f.label ? (() => { // label fits inside the shape and runs along its longer side
             const e0 = dist(P[0], P[1]), e1 = dist(P[1], P[2] || P[0]), lg = e0 >= e1 ? [P[0], P[1]] : [P[1], P[2]], lo = Math.max(e0, e1), sh = Math.min(e0, e1) || lo, txt = String(f.label).toUpperCase();
             let ang = Math.atan2(lg[1][1] - lg[0][1], lg[1][0] - lg[0][0]) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
-            const fz = Math.min(fsE * 0.55, sh * 0.35, lo * 0.85 / (txt.length * 0.62)); if (fz < 0.55) return '';
+            const fz = Math.min(VB.w / 95, sh * 0.35, lo * 0.85 / (txt.length * 0.62)); if (fz < VB.w / 380) return '';   // sized to the screen, hidden only if too small to read
             return `<text transform="translate(${c[0]},${c[1]}) rotate(${ang})" font-size="${fz}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fz / 3}" letter-spacing="${fz / 14}" pointer-events="none">${esc(txt)}</text>`; })() : ''}</g>`; }
       if (on && MODE === 'edit' && PEND.feat === f && !(PEND.more || []).length) { const hs = Math.max(0.6, VB.w / 160);
         s += edgeLabels(P, f.type !== 'gate', fsE) + P.map((p, k) => `<rect data-fv="${k}" x="${p[0] - hs}" y="${p[1] - hs}" width="${hs * 2}" height="${hs * 2}" fill="${BG}" stroke="${HI}" stroke-width="${hs / 3}" style="cursor:crosshair"/>`).join('')
@@ -293,12 +296,13 @@
     });
     BAYS.forEach((b, i) => {
       const k = stateOf(b), [fill, st] = ST[k], a = agOf(b), on = SEL.has(b), dim = q && !hit(b);
-      const fs = Math.max(0.6, Math.min(1.25, b.w * 0.3)), name = '';
+      const fs = Math.max(0.6, Math.min(1.3, b.w * 0.32)), nm = a ? a.customer : b.state === 'reserved' ? b.reserved_for || 'Reserved' : '', nfs = Math.max(0.5, Math.min(fs * 0.68, b.l * 0.88 / (Math.max(1, nm.length) * 0.58))), mx = Math.max(3, Math.floor(b.l * 0.9 / (nfs * 0.58))), name = nm.length > mx ? nm.slice(0, mx - 1) + '…' : nm;
+      const nrm = (d) => ((d + 180) % 360 + 360) % 360 - 180, tr = Math.abs(nrm(b.rot + 90)) <= 90 ? 90 : -90;   // run along the bay and stay the right way up
       const tc = '#fff', vert = Math.abs(((b.rot % 180) + 180) % 180 - 90) > 45;   // text runs along the bay's length
       s += `<g data-bay="${i}" transform="translate(${b.x},${b.y}) rotate(${b.rot})" opacity="${dim ? 0.25 : 1}" style="cursor:pointer">
         <rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="${fill}" stroke="${on || (q && hit(b)) ? HI : st}" stroke-width="${on || (q && hit(b)) ? 0.5 : 0.18}"/>${k === 'out' ? `<rect x="${-b.w / 2}" y="${-b.l / 2}" width="${b.w}" height="${b.l}" fill="url(#pmhatch)" pointer-events="none"/>` : ''}
-        <g transform="rotate(${vert ? -90 : 0})"><text y="${name ? -fs * 0.35 : 0}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" font-weight="700" pointer-events="none">${esc(b.code)}</text>
-        ${name ? `<text y="${fs * 0.75}" font-size="${fs * 0.62}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" pointer-events="none">${esc(name.length > 18 ? name.slice(0, 17) + '…' : name)}</text>` : ''}</g></g>`;
+        <g transform="rotate(${tr})"><text y="${name ? -nfs * 0.55 : 0}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" font-weight="800" pointer-events="none">${esc(b.code)}</text>
+        ${name ? `<text y="${fs * 0.62}" font-size="${nfs}" text-anchor="middle" dominant-baseline="middle" fill="${tc}" opacity="0.92" pointer-events="none">${esc(name)}</text>` : ''}</g></g>`;
     });
     if (PEND && PEND.row) s += rowPreview();
     if (PEND && PEND.shape) { const S = PEND.shape, P = shapePts(S); if (P.length) { s += (S.kind === 'gate' || P.length < 3 ? `<polyline points="${P.map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.6"/>` : `<polygon points="${P.map((p) => p.join(',')).join(' ')}" fill="rgba(228,97,29,.15)" stroke="#E4611D" stroke-width="0.4"/>`) + edgeLabels(P, S.kind !== 'gate' && P.length > 2 && !S.free, fsE) + P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.5" fill="#E4611D"/>`).join(''); } }
@@ -425,9 +429,7 @@
       if (mv) { e.preventDefault(); if (tryBays(sel, () => sel.forEach((b) => { b.x += mv[0]; b.y += mv[1]; }))) dirty(false); else render(); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); delSel(); return; }
       const turn = e.key === 'r' || e.key === 'R' ? 90 : e.key === ']' ? 5 : e.key === '[' ? -5 : 0;
-      if (turn) { // turn the group about its centre
-        const cx = sel.reduce((t, b) => t + b.x, 0) / sel.length, cy = sel.reduce((t, b) => t + b.y, 0) / sel.length, a = turn * Math.PI / 180;
-        if (tryBays(sel, () => sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = r1(cx + x * Math.cos(a) - y * Math.sin(a)); b.y = r1(cy + x * Math.sin(a) + y * Math.cos(a)); b.rot = ((b.rot + turn) % 360 + 360) % 360; }))) dirty(false); else render(); }
+      if (turn) turnBays(sel, turn);
     };
   }
   function renumberAll() {
@@ -462,6 +464,11 @@
     const was = list.map((b) => [b, b.x, b.y, b.w, b.l, b.rot]); change(); snap(list);
     if (clash(list)) { was.forEach(([b, x, y, w, l, r]) => Object.assign(b, { x, y, w, l, rot: r })); if (!quiet) msg('Bays can’t overlap each other or a building – they can only sit flush.'); return false; }
     list.forEach((b) => (b._d = 1)); return true;
+  }
+  function turnBays(sel, turn) {
+    const cx = sel.reduce((t, b) => t + b.x, 0) / sel.length, cy = sel.reduce((t, b) => t + b.y, 0) / sel.length, a = turn * Math.PI / 180;
+    const ok = tryBays(sel, () => sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = Math.round((cx + x * Math.cos(a) - y * Math.sin(a)) * 100) / 100; b.y = Math.round((cy + x * Math.sin(a) + y * Math.cos(a)) * 100) / 100; b.rot = Math.round((((b.rot + turn) % 360 + 360) % 360) * 100) / 100; }), true);
+    if (ok) dirty(); else { msg(sel.length === 1 ? 'Can’t turn this bay – it would hit the bays next to it. To turn a whole row, Shift-drag a box round the row first, then turn it.' : 'Can’t turn these bays – they would hit something. Move them clear first.'); render(); }
   }
   function turnGroup(deg) { const g = [PEND.feat].concat(PEND.more || []), c = cent(g.reduce((a, x) => a.concat(x.pts), [])); g.forEach((x) => (x.pts = rotPts(x.pts, deg, c))); dirty(); }
   // shape being drawn: rectangle at any angle (3 clicks), any polygon, or a gate line (2 clicks)
