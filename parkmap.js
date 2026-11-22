@@ -350,7 +350,7 @@
     };
     $('ps_dup').onclick = () => { // copy beside the selection, flush, in the first space that's clear
       const a = sel[0].rot * Math.PI / 180, bx = [Math.cos(a), Math.sin(a)], span = sel.length > 1 ? Math.max(...sel.map((b) => (b.x - sel[0].x) * bx[0] + (b.y - sel[0].y) * bx[1])) - Math.min(...sel.map((b) => (b.x - sel[0].x) * bx[0] + (b.y - sel[0].y) * bx[1])) + sel[0].w : sel[0].w;
-      const nb = sel.map((b) => Object.assign({}, b, { id: null, agreement_id: null, state: 'open', code: uniqueCode(b.code), _d: 1 })); BAYS.push(...nb);
+      const nb = sel.map((b) => Object.assign({}, b, { id: null, agreement_id: null, state: 'open', code: '~tmp', _d: 1 })); nb.forEach((c) => { c.code = nextCode(isSmall(c.kind)); BAYS.push(c); });
       for (const k of [1, -1, 2, -2, 3, -3]) { nb.forEach((c, i) => { c.x = sel[i].x + bx[0] * span * k; c.y = sel[i].y + bx[1] * span * k; }); if (!clash(nb)) { SEL = new Set(nb); dirty(); return; } }
       BAYS = BAYS.filter((b) => !nb.includes(b)); msg('No clear space right beside these bays to copy into – drag them first.'); };
     $('ps_del').onclick = delSel;
@@ -362,6 +362,8 @@
     o.forEach((b, i) => { let c = px + (n0 + i); while (taken.has(c)) c += "'"; b.code = c; b._d = 1; });
   }
   const nextPrefix = () => { const used = new Set(BAYS.map((b) => (b.code.match(/^[A-Z]+/i) || [''])[0].toUpperCase())); for (const c of 'ABCDEFGHJKLMNPQRSTUVWXYZ') if (!used.has(c)) return c; return 'Z'; };
+  // lowest number not in use: full bays 1, 2, 3…, small bays S1, S2… (gaps left by deleted bays are reused first)
+  const nextCode = (small) => { const used = new Set(BAYS.filter((b) => (small ? /^S\d+$/.test(b.code) : /^\d+$/.test(b.code))).map((b) => +String(b.code).replace('S', ''))); let n = 1; while (used.has(n)) n++; return (small ? 'S' : '') + n; };
   const uniqueCode = (c) => { let n = c + "'"; while (BAYS.some((b) => b.code === n)) n += "'"; return n; };
   function delSel() { const sel = BAYS.filter((b) => SEL.has(b)); if (sel.some((b) => b.agreement_id) && !confirm('Some of these bays are let. Delete them anyway?')) return; sel.forEach((b) => b.id && DEL.push(b.id)); BAYS = BAYS.filter((b) => !SEL.has(b)); SEL.clear(); dirty(); }
   function dirty(redraw = true) { const was = DIRTY; DIRTY = true; if (!was || (TEST && redraw)) draw(); else { if (redraw) side(); render(); } }
@@ -493,8 +495,8 @@
         setTimeout(() => { const ans = prompt('The map measures this as ' + cur.toFixed(1) + ' m.\nType the real distance in metres to rescale the plan, or leave blank to just measure.', ''); const real = parseFloat(ans);
           if (real > 0 && cur > 0.1) rescale(real / cur, M.p0); PEND = null; render(); }, 30); return; }
       if (MODE === 'edit' && TOOL === 'one') { const g = ghost(p); if (!g.ok) { msg('Can’t put a bay there – it would overlap something or leave the yard.'); return; }
-        const small = g.b.kind === 'Small bay', nums = BAYS.filter((b) => (small ? /^S\d+$/.test(b.code) : /^\d+$/.test(b.code))).map((b) => +b.code.replace('S', '')), n = nums.length ? Math.max(...nums) + 1 : 1;
-        const nb = Object.assign(g.b, { id: null, site_id: SITE, code: (small ? 'S' : '') + n, state: 'open', agreement_id: null, _d: 1 }); BAYS.push(nb); if (!ONE.auto) ONE.rot = nb.rot;
+        const small = g.b.kind === 'Small bay';
+        const nb = Object.assign(g.b, { id: null, site_id: SITE, code: nextCode(small), state: 'open', agreement_id: null, _d: 1 }); BAYS.push(nb); if (!ONE.auto) ONE.rot = nb.rot;
         dirty(); msg((small ? 'Small' : 'Full') + ' bay ' + nb.code + ' added. Click again to add the next one.'); return; }
       if (MODE === 'edit' && TOOL === 'row') { if (!PEND || !PEND.row) PEND = { row: { p0: [r1(p[0]), r1(p[1])] } }; else { addRow(PEND.row.p0, [r1(p[0]), r1(p[1])]); PEND = null; } render(); return; }
       if (MODE === 'edit' && (FEAT[TOOL] || TOOL === 'gate')) { const q = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
@@ -652,9 +654,9 @@
   }
   function addRow(p0, p1) {
     const bs = rowLayout(p0, p1); if (!bs.length) return;
-    const small = ROWOPT.kind === 'Small bay', nums = BAYS.filter((b) => (small ? /^S\d+$/.test(b.code) : /^\d+$/.test(b.code))).map((b) => +b.code.replace('S', '')); let n = nums.length ? Math.max(...nums) + 1 : 1;
+    const small = ROWOPT.kind === 'Small bay';
     const nb = []; let skipped = 0;
-    bs.forEach((b) => { Object.assign(b, { id: null, site_id: SITE, kind: ROWOPT.kind, state: 'open', agreement_id: null, _d: 1 }); if (clash([b].concat(nb).slice(0, 1))) { skipped++; return; } b.code = (small ? 'S' : '') + n++; nb.push(b); BAYS.push(b); });
+    bs.forEach((b) => { Object.assign(b, { id: null, site_id: SITE, kind: ROWOPT.kind, state: 'open', agreement_id: null, _d: 1 }); if (clash([b].concat(nb).slice(0, 1))) { skipped++; return; } b.code = nextCode(small); nb.push(b); BAYS.push(b); });
     ROWOPT.prefix = ''; SEL = new Set(nb); TOOL = 'select'; dirty(); if (skipped) msg(skipped + ' bay(s) left out of the row because they would overlap existing bays or a building.');
   }
 
