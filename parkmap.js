@@ -106,7 +106,7 @@
       return;
     }
     // edit mode
-    p.innerHTML = `<h4>Tools</h4><div class="pm-tools">${[['select', 'Select / move'], ['row', 'Draw a row of bays'], ['building', 'Building'], ['nogo', 'No-parking area'], ['road', 'Roadway'], ['area', 'Labelled area'], ['gate', 'Gate'], ['boundary', 'Site boundary']].map(([k, t]) => `<button data-tool="${k}" class="${TOOL === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    p.innerHTML = `<h4>Tools</h4><div class="pm-tools">${[['select', 'Select / move'], ['row', 'Draw a row of bays'], ['building', 'Building'], ['nogo', 'No-parking area'], ['road', 'Roadway'], ['area', 'Labelled area'], ['gate', 'Gate'], ['boundary', 'Redraw boundary'], ['scale', 'Measure / set scale']].map(([k, t]) => `<button data-tool="${k}" class="${TOOL === k ? 'on' : ''}">${t}</button>`).join('')}</div>
       ${TOOL === 'row' ? `<div class="pm-tip">Click where the row starts, then where it ends. Bays fill the line at the width set below, facing to the left of the line (tick Flip for the other side).</div>
         <label>Bay type</label><select id="pe_kind">${Object.keys(KINDS).map((k) => `<option ${k === ROWOPT.kind ? 'selected' : ''}>${k}</option>`).join('')}</select>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pe_w" type="number" step="0.1" value="${ROWOPT.w}"></div><div><label>Length (m)</label><input id="pe_l" type="number" step="0.1" value="${ROWOPT.l}"></div></div>
@@ -114,7 +114,9 @@
         <label><input type="checkbox" id="pe_flip" ${ROWOPT.flip ? 'checked' : ''} style="width:auto"> Flip side</label>` : ''}
       ${['building', 'nogo', 'road', 'area'].includes(TOOL) ? '<div class="pm-tip">Drag on the map to draw the rectangle. Click it later (Select tool) to label, resize or delete.</div>' : ''}
       ${TOOL === 'gate' ? '<div class="pm-tip">Click on the map where the gate is.</div>' : ''}
-      ${TOOL === 'boundary' ? '<div class="pm-tip">Click each corner of the site in turn. Double-click to finish. This replaces the old boundary.</div>' : ''}
+      ${TOOL === 'boundary' ? '<div class="pm-tip">Click each corner of the site in turn. Double-click to finish. This replaces the old boundary. (To adjust the existing one, use Select and drag the numbered corners instead.)</div>' : ''}
+      ${TOOL === 'scale' ? '<div class="pm-tip">Click one end of something you know the length of, then the other end. You\'ll see what the map measures it as, and can type the real distance to rescale the whole plan (image, boundary and everything on it).</div>' : ''}
+      ${TOOL === 'select' && PLAN.boundary.length ? '<div class="small muted" style="margin-top:8px">Boundary: drag the numbered orange corners to move them. Double-click a corner to remove it; double-click the boundary line to add a corner there.</div>' : ''}
       ${TOOL === 'select' ? selPanel(sel) : ''}
       <h4>Site size</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><label>Width (m)</label><input id="pe_sw" type="number" value="${PLAN.width_m}"></div><div><label>Depth (m)</label><input id="pe_sh" type="number" value="${PLAN.height_m}"></div></div>
       ${PLAN.bg ? `<h4>Background image</h4><label>Show <input type="range" id="pe_op" min="0" max="1" step="0.05" value="${PLAN.bg.opacity ?? 0.6}"></label>` : ''}
@@ -179,7 +181,12 @@
       <rect x="-500" y="-500" width="${W + 1000}" height="${H + 1000}" fill="url(#pmgrid)" data-bg="1"/>`;
     if (PLAN.bg && PLAN.bg.url) s += `<image href="${esc(PLAN.bg.url)}" x="${PLAN.bg.x || 0}" y="${PLAN.bg.y || 0}" width="${PLAN.bg.w || W}" height="${PLAN.bg.h || H}" opacity="${PLAN.bg.opacity ?? 0.6}" preserveAspectRatio="none" pointer-events="none"/>`;
     s += `<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#CBD5E1" stroke-width="0.2" stroke-dasharray="1 1" pointer-events="none"/>`;
-    if (PLAN.boundary.length > 2) s += `<polygon points="${PLAN.boundary.map((p) => p.join(',')).join(' ')}" fill="rgba(255,255,255,.35)" stroke="#0B2A66" stroke-width="0.5" pointer-events="none"/>`;
+    if (PLAN.boundary.length > 2) s += `<polygon points="${PLAN.boundary.map((p) => p.join(',')).join(' ')}" fill="rgba(228,97,29,.08)" stroke="#E4611D" stroke-width="0.6" pointer-events="none"/>`;
+    if (MODE === 'edit' && PLAN.boundary.length > 1) {
+      const B = PLAN.boundary, hs = Math.max(0.8, VB.w / 110);
+      B.forEach((p, i) => { const q = B[(i + 1) % B.length]; s += `<line data-seg="${i}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="transparent" stroke-width="${hs * 1.6}" style="cursor:copy"/>`; });
+      s += '<g id="pm_bh"></g>';
+    }
     PLAN.features.forEach((f, i) => {
       if (f.type === 'gate') { s += `<g data-feat="${i}" style="cursor:${MODE === 'edit' ? 'move' : 'default'}"><circle cx="${f.x}" cy="${f.y}" r="1.6" fill="#E4611D" stroke="#fff" stroke-width="0.3"/><text x="${f.x}" y="${f.y - 2.3}" font-size="2" text-anchor="middle" fill="#B4470F" font-weight="700">${esc(f.label || 'Gate')}</text></g>`; return; }
       const [fill, st] = FEAT[f.type] || FEAT.area; const on = PEND && PEND.feat === f;
@@ -198,6 +205,10 @@
     if (PEND && PEND.row) s += rowPreview();
     if (PEND && PEND.rect) { const r = PEND.rect; s += `<rect x="${Math.min(r.x0, r.x1)}" y="${Math.min(r.y0, r.y1)}" width="${Math.abs(r.x1 - r.x0)}" height="${Math.abs(r.y1 - r.y0)}" fill="rgba(228,97,29,.12)" stroke="#E4611D" stroke-width="0.3" stroke-dasharray="1 0.6" pointer-events="none"/>`; }
     if (PEND && PEND.poly) s += `<polyline points="${PEND.poly.concat(PEND.hover ? [PEND.hover] : []).map((p) => p.join(',')).join(' ')}" fill="none" stroke="#E4611D" stroke-width="0.4" pointer-events="none"/>`;
+    if (MODE === 'edit' && PLAN.boundary.length > 1) { const hs = Math.max(0.8, VB.w / 110);
+      s += PLAN.boundary.map((p, i) => `<g data-bv="${i}" style="cursor:move"><circle cx="${p[0]}" cy="${p[1]}" r="${hs}" fill="#0B2A66" stroke="#E4611D" stroke-width="${hs / 4}"/><text x="${p[0]}" y="${p[1]}" font-size="${hs * 1.1}" fill="#fff" text-anchor="middle" dominant-baseline="central" font-weight="700" pointer-events="none">${i + 1}</text></g>`).join(''); }
+    if (PEND && PEND.meas) { const M = PEND.meas, b = M.p1 || M.hover; if (b) { const d = Math.hypot(b[0] - M.p0[0], b[1] - M.p0[1]); s += `<line x1="${M.p0[0]}" y1="${M.p0[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#E4611D" stroke-width="${VB.w / 300}" stroke-dasharray="${VB.w / 120} ${VB.w / 200}"/><text x="${(M.p0[0] + b[0]) / 2}" y="${(M.p0[1] + b[1]) / 2 - VB.w / 100}" font-size="${VB.w / 55}" fill="#B4470F" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="${VB.w / 400}">${d.toFixed(1)} m</text>`; }
+      s += `<circle cx="${M.p0[0]}" cy="${M.p0[1]}" r="${VB.w / 250}" fill="#E4611D"/>`; }
     // scale bar
     const sb = VB.w > 120 ? 20 : VB.w > 50 ? 10 : 5, sx = VB.x + VB.w - sb - VB.w * 0.03, sy = VB.y + VB.h - VB.h * 0.04;
     s += `<g pointer-events="none"><line x1="${sx}" y1="${sy}" x2="${sx + sb}" y2="${sy}" stroke="#0B2A66" stroke-width="${VB.w / 400}"/><text x="${sx + sb / 2}" y="${sy - VB.h * 0.012}" font-size="${VB.w / 70}" text-anchor="middle" fill="#0B2A66">${sb} m</text></g>`;
@@ -229,6 +240,13 @@
       patchBays(list, { agreement_id: ag, state: 'open' }); };
     svg.onpointerdown = (e) => {
       const p = pt(e), bg = e.target.closest('[data-bay]'), fg = e.target.closest('[data-feat]');
+      const bv = e.target.closest('[data-bv]');
+      if (MODE === 'edit' && bv && (TOOL === 'select' || TOOL === 'boundary') && !(PEND && PEND.poly)) { drag = { kind: 'bv', i: +bv.dataset.bv }; svg.setPointerCapture(e.pointerId); return; }
+      if (MODE === 'edit' && TOOL === 'scale') { const q = [p[0], p[1]];
+        if (!PEND || !PEND.meas) { PEND = { meas: { p0: q } }; render(); return; }
+        const M = PEND.meas, cur = Math.hypot(q[0] - M.p0[0], q[1] - M.p0[1]); M.p1 = q; render();
+        setTimeout(() => { const ans = prompt('The map measures this as ' + cur.toFixed(1) + ' m.\nType the real distance in metres to rescale the plan, or leave blank to just measure.', ''); const real = parseFloat(ans);
+          if (real > 0 && cur > 0.1) rescale(real / cur, M.p0); PEND = null; render(); }, 30); return; }
       if (MODE === 'edit' && TOOL === 'row') { if (!PEND || !PEND.row) PEND = { row: { p0: [r1(p[0]), r1(p[1])] } }; else { addRow(PEND.row.p0, [r1(p[0]), r1(p[1])]); PEND = null; } render(); return; }
       if (MODE === 'edit' && FEAT[TOOL]) { PEND = { rect: { x0: r1(p[0]), y0: r1(p[1]), x1: r1(p[0]), y1: r1(p[1]) } }; svg.setPointerCapture(e.pointerId); return; }
       if (MODE === 'edit' && TOOL === 'gate') { PLAN.features.push({ type: 'gate', x: r1(p[0]), y: r1(p[1]), label: 'Gate' }); PEND = { feat: PLAN.features[PLAN.features.length - 1] }; TOOL = 'select'; dirty(); return; }
@@ -246,9 +264,11 @@
     svg.onpointermove = (e) => {
       const p = pt(e);
       if (PEND && PEND.row && !drag) { PEND.row.p1 = [r1(p[0]), r1(p[1])]; render(); return; }
+      if (PEND && PEND.meas && !PEND.meas.p1) { PEND.meas.hover = [p[0], p[1]]; render(); return; }
       if (PEND && PEND.poly) { PEND.hover = [r1(p[0]), r1(p[1])]; render(); return; }
       if (PEND && PEND.rect) { PEND.rect.x1 = PEND.box ? p[0] : r1(p[0]); PEND.rect.y1 = PEND.box ? p[1] : r1(p[1]); render(); return; }
       if (!drag) return;
+      if (drag.kind === 'bv') { PLAN.boundary[drag.i] = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; drag.moved = 1; render(); return; }
       if (drag.kind === 'pan') { const r = svg.getBoundingClientRect(), k = VB.w / r.width; VB.x = drag.vb.x - (e.clientX - drag.cx) * k; VB.y = drag.vb.y - (e.clientY - drag.cy) * k; render(); return; }
       const dx = r1(p[0] - drag.p[0]), dy = r1(p[1] - drag.p[1]); if (!dx && !dy) return; drag.moved = 1;
       if (drag.kind === 'bays') drag.start.forEach(([b, x, y]) => { b.x = x + dx; b.y = y + dy; b._d = 1; });
@@ -262,7 +282,11 @@
         else { PEND = null; render(); } }
       if (drag && drag.moved && drag.kind !== 'pan') dirty(); drag = null;
     };
-    svg.ondblclick = () => { if (PEND && PEND.poly && PEND.poly.length > 2) { const pts = PEND.poly.slice(0, -1).length > 2 ? PEND.poly.slice(0, -1) : PEND.poly; PLAN.boundary = pts; PEND = null; TOOL = 'select'; dirty(); } };
+    svg.ondblclick = (e) => {
+      if (MODE === 'edit' && !(PEND && PEND.poly)) { const bv = e.target.closest('[data-bv]'), sg = e.target.closest('[data-seg]');
+        if (bv && PLAN.boundary.length > 3) { PLAN.boundary.splice(+bv.dataset.bv, 1); dirty(); return; }
+        if (sg) { const p = pt(e); PLAN.boundary.splice(+sg.dataset.seg + 1, 0, [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]); dirty(); return; } }
+      if (PEND && PEND.poly && PEND.poly.length > 2) { const pts = PEND.poly.slice(0, -1).length > 2 ? PEND.poly.slice(0, -1) : PEND.poly; PLAN.boundary = pts; PEND = null; TOOL = 'select'; dirty(); } };
     document.onkeydown = (e) => {
       if (!$('pm_svg') || MODE !== 'edit' || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
       const sel = BAYS.filter((b) => SEL.has(b));
@@ -277,6 +301,16 @@
         const cx = sel.reduce((t, b) => t + b.x, 0) / sel.length, cy = sel.reduce((t, b) => t + b.y, 0) / sel.length, a = turn * Math.PI / 180;
         sel.forEach((b) => { const x = b.x - cx, y = b.y - cy; b.x = r1(cx + x * Math.cos(a) - y * Math.sin(a)); b.y = r1(cy + x * Math.sin(a) + y * Math.cos(a)); b.rot = ((b.rot + turn) % 360 + 360) % 360; b._d = 1; }); dirty(false); }
     };
+  }
+  // scale the whole plan about a point: image, boundary, features and bay positions (bay sizes stay real)
+  function rescale(f, c) {
+    const S = (p) => [Math.round((c[0] + (p[0] - c[0]) * f) * 100) / 100, Math.round((c[1] + (p[1] - c[1]) * f) * 100) / 100];
+    if (PLAN.bg) { const [x, y] = S([PLAN.bg.x || 0, PLAN.bg.y || 0]); PLAN.bg.x = x; PLAN.bg.y = y; PLAN.bg.w = (PLAN.bg.w || PLAN.width_m) * f; PLAN.bg.h = (PLAN.bg.h || PLAN.height_m) * f; PLAN.bg.mpp = PLAN.bg.mpp ? PLAN.bg.mpp * f : null; }
+    PLAN.boundary = PLAN.boundary.map(S);
+    PLAN.features.forEach((ft) => { const [x, y] = S([ft.x, ft.y]); ft.x = x; ft.y = y; if (ft.w) { ft.w *= f; ft.h *= f; } });
+    BAYS.forEach((b) => { const [x, y] = S([b.x, b.y]); b.x = x; b.y = y; b._d = 1; });
+    PLAN.width_m = Math.round(PLAN.width_m * f); PLAN.height_m = Math.round(PLAN.height_m * f); VB = null;
+    dirty(); msg('Rescaled ×' + f.toFixed(3) + '. Check another known length with Measure, then Save layout.');
   }
   function addRow(p0, p1) {
     const bs = rowLayout(p0, p1); if (!bs.length) return;
