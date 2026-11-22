@@ -113,6 +113,7 @@
       `<div class="pm-top"><label>Site <select id="pm_site">${SITES.map((s) => `<option value="${s.id}" ${s.id === SITE ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
        <div class="pm-seg">${['view', 'edit'].map((m) => `<button data-mode="${m}" class="${MODE === m ? 'on' : ''}">${m === 'view' ? 'Manage bays' : 'Edit layout'}</button>`).join('')}</div>
        ${PLAN.bg && PLAN.bg.url ? `<label class="small" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="pm_sat" ${SAT ? 'checked' : ''}> Satellite photo</label>` : ''}
+       ${MODE === 'edit' ? '<button class="mini" id="pm_renum" title="Number the rows clockwise from the gate: full bays 1, 2, 3…, small bays S1, S2…">Renumber all</button>' : ''}
        <input id="pm_hl" placeholder="Find customer or bay…" value="${esc(HL)}" style="width:200px">
        <span class="pm-stat">${BAYS.length} bays · <b style="color:#16A34A">${cnt('free')} free</b> · ${cnt('let')} let · ${cnt('notice')} on notice · ${cnt('held')} held for enquiries · ${cnt('reserved')} reserved · ${cnt('out')} out of use${freeVal ? ' · free bays worth ' + gbp(freeVal) + '/week at list rate' : ''}</span>
        ${DIRTY ? `<button class="pri2" id="pm_save">${TEST ? 'Save test layout' : 'Save layout'}</button><button id="pm_undo">Discard changes</button>` : ''}<span id="pm_msg" class="small muted"></span></div>
@@ -151,6 +152,7 @@
       $('pt_apply').onclick = applyLive; $('pt_clear').onclick = clearYard;
     }
     if ($('pm_sat')) $('pm_sat').onchange = (e) => { SAT = e.target.checked; side(); render(); };
+    if ($('pm_renum')) $('pm_renum').onclick = () => { if (confirm('Renumber every bay?\n\nRows are numbered in order going clockwise from the gate – full bays 1, 2, 3…, small bays S1, S2…. Tenants stay in their bays.' + (TEST ? '' : '\nPress Save layout afterwards to keep it.'))) renumberAll(); };
     $('pm_hl').oninput = (e) => { HL = e.target.value; render(); };
     if ($('pm_save')) $('pm_save').onclick = save;
     if ($('pm_undo')) $('pm_undo').onclick = async () => { await load(); draw(); };
@@ -575,13 +577,29 @@
       if (turn) turnBays(sel, turn);
     };
   }
+  // sensible numbering: find the rows, take the rows clockwise from the gate, number along each row in the same direction
   function renumberAll() {
-    const all = BAYS.reduce((a, b) => a.concat([[b.x, b.y]]), []), c = all.length ? cent(all) : [0, 0], g = PLAN.features.find((f) => f.type === 'gate'), g0 = g ? cent(g.pts) : [c[0], c[1] - 1];
-    const a0 = Math.atan2(g0[1] - c[1], g0[0] - c[0]), ang = (b) => ((Math.atan2(b.y - c[1], b.x - c[0]) - a0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-    const ord = BAYS.slice().sort((p, q) => ang(p) - ang(q)); let nf = 1, ns = 1;
-    ord.forEach((b) => { b.code = '~' + (b.id || Math.random()); });
-    ord.forEach((b) => { b.code = b.kind === 'Small bay' ? 'S' + ns++ : String(nf++); b._d = 1; }); dirty();
+    if (!BAYS.length) return;
+    const B = PLAN.boundary, c = B.length > 2 ? cent(B) : cent(BAYS.map((b) => [b.x, b.y])), g = PLAN.features.find((f) => f.type === 'gate'), g0 = g ? cent(g.pts) : [c[0], c[1] - 1];
+    const a0 = Math.atan2(g0[1] - c[1], g0[0] - c[0]), ang = (p) => ((Math.atan2(p[1] - c[1], p[0] - c[0]) - a0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    const par = BAYS.map((_, i) => i), find = (i) => (par[i] === i ? i : (par[i] = find(par[i])));
+    BAYS.forEach((p, i) => { const a = p.rot * Math.PI / 180, ax = [-Math.sin(a), Math.cos(a)], bx = [Math.cos(a), Math.sin(a)];
+      BAYS.forEach((q, j) => { if (j <= i) return; const dr = Math.abs((((p.rot - q.rot) % 180) + 180) % 180); if (dr > 2 && dr < 178) return;
+        const d = [q.x - p.x, q.y - p.y], sv = Math.abs(d[0] * bx[0] + d[1] * bx[1]), tv = Math.abs(d[0] * ax[0] + d[1] * ax[1]);
+        if (tv < 2.5 && sv <= (p.w + q.w) / 2 + 1.6) par[find(i)] = find(j); }); });
+    const rows = {}; BAYS.forEach((b, i) => (rows[find(i)] = rows[find(i)] || []).push(b));
+    const list = Object.values(rows).map((r) => { const a = r[0].rot * Math.PI / 180, bx = [Math.cos(a), Math.sin(a)];
+      r.sort((p, q) => (p.x * bx[0] + p.y * bx[1]) - (q.x * bx[0] + q.y * bx[1]));
+      if (r.length > 1 && ang([r[0].x, r[0].y]) > ang([r[r.length - 1].x, r[r.length - 1].y]) && ang([r[0].x, r[0].y]) - ang([r[r.length - 1].x, r[r.length - 1].y]) < Math.PI) r.reverse();   // run clockwise
+      const m = cent(r.map((b) => [b.x, b.y])), edge = Math.min(...r.map((b) => Math.min(...bayPts(b).map((q) => (B.length > 2 ? fenceD(q) : 0)))));
+      return { r, a: ang(m), d: Math.hypot(m[0] - c[0], m[1] - c[1]), inner: edge > 4 }; });
+    // rows against the fence first, clockwise from the gate; then rows standing in the middle of the yard
+    list.sort((p, q) => (p.inner !== q.inner ? (p.inner ? 1 : -1) : Math.abs(p.a - q.a) < 0.12 ? q.d - p.d : p.a - q.a));
+    BAYS.forEach((b) => (b.code = '~' + Math.random()));
+    let nf = 1, ns = 1; list.forEach(({ r }) => r.forEach((b) => { b.code = isSmall(b.kind) ? 'S' + ns++ : String(nf++); b._d = 1; }));
+    dirty(); msg('Renumbered ' + list.length + ' rows: full bays 1–' + (nf - 1) + (ns > 1 ? ', small bays S1–S' + (ns - 1) : '') + ', clockwise from the gate. Save to keep it.');
   }
+
   // bays are solid: they may touch but not overlap each other or a building
   const bayPts = (b) => { const a = b.rot * Math.PI / 180, ax = [-Math.sin(a), Math.cos(a)], bx = [Math.cos(a), Math.sin(a)];
     return [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(([s, t]) => [b.x + ax[0] * s * b.l / 2 + bx[0] * t * b.w / 2, b.y + ax[1] * s * b.l / 2 + bx[1] * t * b.w / 2]); };
