@@ -13,25 +13,53 @@
   const sg = (v) => (v == null || isNaN(v) ? '' : (v >= 0 ? '+' : '−') + gk(Math.abs(v)).replace('−', ''));
   const pc = (v, d = 0) => (v == null || isNaN(v) ? '–' : (v * 100).toFixed(d) + '%');
   const NAVY = '#164698', DARK = '#0B2A66', OR = '#E4611D', GRN = '#16A34A', RED = '#DC2626', MUT = '#94A3B8', SOFT = '#9DB4E0';
-  let YM = ymAdd(new Date().toISOString().slice(0, 7), -1);
+  // financial year runs 1 May – 30 April; FY27 = May 2026 – Apr 2027
+  const fyOf = (ym) => (+ym.slice(5, 7) >= 5 ? +ym.slice(0, 4) : +ym.slice(0, 4) - 1);
+  const fyL = (fy) => 'FY' + String(fy + 1).slice(2);
+  const qOf = (ym) => Math.floor(((+ym.slice(5, 7) - 5 + 12) % 12) / 3) + 1;
+  const QN = ['May–Jul', 'Aug–Oct', 'Nov–Jan', 'Feb–Apr'];
+  const CUR = new Date().toISOString().slice(0, 7), LAST = ymAdd(CUR, -1);
+  let KIND = 'month', KEY = LAST;
+  // a period: its months (only completed ones), the equal period before it, and labels
+  function period(kind, key) {
+    if (kind === 'month') return { kind, months: [key], prev: [ymAdd(key, -1)], end: key, label: lab(key), short: sl(key), prevName: sl(ymAdd(key, -1)) };
+    const [fy, q] = String(key).split('-').map(Number), start = kind === 'qtr' ? ymAdd(fy + '-05', (q - 1) * 3) : fy + '-05', len = kind === 'qtr' ? 3 : 12;
+    const all = Array.from({ length: len }, (_, i) => ymAdd(start, i)), months = all.filter((m) => m <= LAST), part = months.length < len;
+    const end = months[months.length - 1] || start, prev = months.map((m) => ymAdd(m, -len));
+    const name = kind === 'qtr' ? 'Q' + q + ' ' + fyL(fy) : fyL(fy), span = sl(all[0]) + ' ' + all[0].slice(0, 4) + ' – ' + sl(all[len - 1]) + ' ' + all[len - 1].slice(0, 4);
+    return { kind, months, all, prev, end, part, label: name + ' (' + span + ')' + (part ? ' – to ' + lab(end) : ''), short: name, prevName: kind === 'qtr' ? (q === 1 ? 'Q4 ' + fyL(fy - 1) : 'Q' + (q - 1) + ' ' + fyL(fy)) : fyL(fy - 1) + (part ? ' same months' : '') };
+  }
+  function options(kind) {
+    if (kind === 'month') return Array.from({ length: 12 }, (_, i) => ymAdd(CUR, -i)).map((m) => [m, lab(m)]);
+    const fy = fyOf(CUR);
+    if (kind === 'year') return [fy, fy - 1, fy - 2].map((y) => [String(y), fyL(y) + ' (May ' + y + ' – Apr ' + (y + 1) + ')' + (y === fy ? ' – year to date' : '')]);
+    const out = []; for (let y = fy; y >= fy - 1; y--) for (let q = 4; q >= 1; q--) { const st = ymAdd(y + '-05', (q - 1) * 3); if (st <= LAST) out.push([y + '-' + q, 'Q' + q + ' ' + fyL(y) + ' · ' + QN[q - 1] + (ymAdd(st, 2) > LAST ? ' – to date' : '')]); }
+    return out;
+  }
 
   X.routes['p-boardpack'] = async function (el) {
     el.innerHTML = X.head('Board pack', '') + '<div class="empty">Checking the month…</div>';
-    const cur = new Date().toISOString().slice(0, 7), months = Array.from({ length: 12 }, (_, i) => ymAdd(cur, -i));
-    let me = null; try { me = X.monthEnd ? await X.monthEnd.get(YM) : null; } catch (e) { me = null; }
+    const opts = options(KIND); if (!opts.some(([k]) => k === KEY)) KEY = KIND === 'month' ? LAST : opts[0][0];
+    const per = period(KIND, KEY);
+    let me = null; try { me = X.monthEnd ? await X.monthEnd.get(per.end) : null; } catch (e) { me = null; }
     const missing = me ? [['pl', 'management accounts'], ['mcs', 'MCS hire reports'], ['cash', 'cash actuals'], ['fac', 'facility balance'], ['hp', 'HP balance'], ['bank', 'bank balance']].filter(([k]) => !me.auto[k]).map(([, t]) => t) : [];
-    el.innerHTML = X.head('Board pack', 'Builds the month’s board deck from what’s in the portal. You add the commentary.') +
-      `<div class="card"><div class="form" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap"><label>Month <select id="bp_m">${months.map((m) => `<option value="${m}" ${m === YM ? 'selected' : ''}>${lab(m)}</option>`).join('')}</select></label>
+    const what = KIND === 'month' ? '11 slides: cover · month at a glance · profit and loss · cash and funding · fleet and utilisation · revenue forecast · pipeline · customers · sales stock · parking · strategy and decisions.'
+      : '7 slides, headline view only: cover · ' + (KIND === 'qtr' ? 'quarter' : 'year') + ' at a glance (against budget and the ' + (KIND === 'qtr' ? 'previous quarter' : 'previous year') + ') · profit and loss · cash and funding · fleet and customers · growth and outlook (pipeline, sales, parking, forecast) · strategy and decisions.';
+    el.innerHTML = X.head('Board pack', 'Builds the board deck from what’s in the portal. You add the commentary. Financial year runs May to April.') +
+      `<div class="card"><div class="form" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+        <label>Pack <select id="bp_k">${[['month', 'Monthly'], ['qtr', 'Quarterly'], ['year', 'Annual']].map(([k, t]) => `<option value="${k}" ${k === KIND ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label>Period <select id="bp_m">${opts.map(([k, t]) => `<option value="${k}" ${k === KEY ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
         <button class="pri2" id="bp_go">Build board pack</button><span id="bp_msg" class="small muted"></span></div>
-        <div class="hint" style="margin-top:12px">${me ? (me.done ? `<b style="color:${GRN}">${esc(lab(YM))} is closed off and ready.</b>` : `<b style="color:${OR}">Month end isn’t finished for ${esc(lab(YM))}.</b> ${missing.length ? 'Missing: ' + esc(missing.join(', ')) + '. ' : ''}You can still build the pack – gaps show as “–”. <a href="#/p-monthend">Open Month end</a>`) : ''}</div>
-        <div class="hint">The deck opens in a new window. Anything with a dotted underline can be typed over (commentary, decisions, actions). Then use <b>Print → Save as PDF</b>, landscape, no margins.</div>
-        <div class="hint">Slides: cover · month at a glance · profit and loss · cash and funding · fleet and utilisation · revenue forecast · pipeline · customers · sales stock · parking · strategy and decisions.</div></div>`;
-    $('bp_m').onchange = (e) => { YM = e.target.value; X.routes['p-boardpack'](el); };
+        <div class="hint" style="margin-top:12px">${me ? (me.done ? `<b style="color:${GRN}">${esc(lab(per.end))} is closed off and ready.</b>` : `<b style="color:${OR}">Month end isn’t finished for ${esc(lab(per.end))}.</b> ${missing.length ? 'Missing: ' + esc(missing.join(', ')) + '. ' : ''}You can still build the pack – gaps show as “–”. <a href="#/p-monthend">Open Month end</a>`) : ''}</div>
+        <div class="hint">${esc(what)}</div>
+        <div class="hint">The deck opens in a new window. Anything with a dotted underline can be typed over (commentary, decisions, actions). Then use <b>Print → Save as PDF</b>, landscape, no margins.</div></div>`;
+    $('bp_k').onchange = (e) => { KIND = e.target.value; KEY = null; X.routes['p-boardpack'](el); };
+    $('bp_m').onchange = (e) => { KEY = e.target.value; X.routes['p-boardpack'](el); };
     $('bp_go').onclick = async () => {
       const w = window.open('', '_blank'); if (!w) { $('bp_msg').textContent = 'Allow pop-ups for this site, then try again.'; return; }
       w.document.write('<p style="font-family:sans-serif;padding:40px">Building the board pack…</p>');
       $('bp_msg').textContent = 'Building…';
-      try { const html = await build(YM); w.document.open(); w.document.write(html); w.document.close(); $('bp_msg').textContent = 'Opened in a new window.'; }
+      try { const html = await build(per); w.document.open(); w.document.write(html); w.document.close(); $('bp_msg').textContent = 'Opened in a new window.'; }
       catch (e) { console.error(e); w.document.body.innerHTML = '<p style="font-family:sans-serif;padding:40px">Could not build: ' + esc(e.message) + '</p>'; $('bp_msg').textContent = 'Could not build: ' + e.message; }
     };
   };
@@ -59,7 +87,8 @@
   const ed = (txt, ph) => `<div class="ed" contenteditable="true" data-ph="${esc(ph || 'Type here…')}">${txt ? esc(txt).replace(/\n/g, '<br>') : ''}</div>`;
 
   // ---------- gather everything ----------
-  async function build(ym) {
+  async function build(per) {
+    const ym = per.end;
     const safe = (p) => Promise.resolve().then(p).catch((e) => { console.warn(e); return null; });
     const [P, cfM, me, hm, fac] = await Promise.all([
       safe(() => X.ma && X.ma.data()), safe(() => X.cf && X.cf.load()), safe(() => X.monthEnd && X.monthEnd.get(ym)),
@@ -67,18 +96,18 @@
     await Promise.all([safe(() => X.pipeline && X.pipeline.load()), safe(() => X.crm && X.crm.load()), safe(() => X.salesStock && X.salesStock.load()), safe(() => X.forecast && X.forecast.load())]);
     if (X.parking) await safe(() => X.parking.load());
     const R = cfM && X.cf ? safe(() => X.cf.compute(cfM)) : null, cfRows = (await R) || [];
-    const ctx = { ym, P, cfRows, cfM, me, hm: hm || [], fac: fac || [] };
-    const slides = [cover, glance, pl, cash, fleet, forecast, pipeline, customers, sales, parking, strategy].map((f, i) => { try { return f(ctx, i + 1); } catch (e) { console.error(e); return frame('Could not build this slide', `<div class="mut">${esc(e.message)}</div>`, i + 1, ctx); } });
-    return page(slides.join(''), ym);
+    const ctx = { ym, per, label: per.label, P, cfRows, cfM, me, hm: hm || [], fac: fac || [] };
+    const slides = (per.kind === 'month' ? [cover, glance, pl, cash, fleet, forecast, pipeline, customers, sales, parking, strategy] : [cover, glanceP, plP, cashP, fleetP, outlookP, strategy]).map((f, i) => { try { return f(ctx, i + 1); } catch (e) { console.error(e); return frame('Could not build this slide', `<div class="mut">${esc(e.message)}</div>`, i + 1, ctx); } });
+    return page(slides.join(''), per.label);
   }
-  const frame = (title, body, n, ctx, sub) => `<section class="slide"><header><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><img src="${new URL('assets/compton-logo.png', location.href).href}" alt=""></header><main>${body}</main><footer><span>Compton Tankers · Board meeting · ${esc(lab(ctx.ym))}</span><span>Confidential – directors only</span><span>${n}</span></footer></section>`;
+  const frame = (title, body, n, ctx, sub) => `<section class="slide"><header><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><img src="${new URL('assets/compton-logo.png', location.href).href}" alt=""></header><main>${body}</main><footer><span>Compton Tankers · Board meeting · ${esc(ctx.label)}</span><span>Confidential – directors only</span><span>${n}</span></footer></section>`;
 
   // month index helpers for the management accounts model (ms are integers year*12+month-1)
   const miOf = (ym) => +ym.slice(0, 4) * 12 + +ym.slice(5, 7) - 1;
   function maMonth(P, ym) { if (!P || !P.ms) return null; const k = P.ms.find((m) => m === miOf(ym)) ?? P.ms.find((m) => String(m) === ym); return k == null ? null : k; }
 
   function cover(c) {
-    return `<section class="slide cover"><div class="cv"><img src="${new URL('assets/compton-logo-white.png', location.href).href}" alt="Compton Tankers"><h1>Board meeting</h1><h2>Management information · ${esc(lab(c.ym))}</h2>
+    return `<section class="slide cover"><div class="cv"><img src="${new URL('assets/compton-logo-white.png', location.href).href}" alt="Compton Tankers"><h1>Board meeting</h1><h2>${c.per.kind === 'month' ? 'Management information' : c.per.kind === 'qtr' ? 'Quarterly review' : 'Annual review'} · ${esc(c.label)}</h2>
       <div class="ag">${ed('1. Health & safety – JC\n2. Finance – FC\n3. Business development & customers – PM\n4. Strategy – all', 'Agenda')}</div>
       <div class="cvf">Tanker Rent UK Ltd, trading as Compton Tankers · prepared ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div></div></section>`;
   }
@@ -188,13 +217,92 @@
       <div class="box sm">${ed('', 'Parking notes – Leighton Buzzard development, Ellesmere Port progress')}</div></div></div>`, n, c);
   }
 
+  // ================= quarterly and annual packs: headline view only =================
+  const sumH = (c, ms, f) => ms.reduce((t, m) => t + (+((c.hm.find((h) => h.month === m) || {})[f]) || 0), 0);
+  const utilH = (c, ms) => { const ch = sumH(c, ms, 'chargeable_days'); return ch ? Math.min(1, sumH(c, ms, 'on_hire_days') / ch) : null; };
+  const hasH = (c, ms) => ms.some((m) => c.hm.find((h) => h.month === m));
+  function plSum(c, ms) {   // actual and budget over the months that have actuals; null if none
+    const P = c.P; if (!P || !P.ms) return null;
+    const ks = ms.map((m) => miOf(m)).filter((k) => P.ms.includes(k) && P.ytd.includes(k)); if (!ks.length) return null;
+    const S = (w, f) => ks.reduce((t, k) => t + (w === 'a' ? P.A(k) : P.B(k))[f], 0), o = { n: ks.length, a: {}, b: {} };
+    ['income', 'cos', 'gp', 'overhead', 'net'].forEach((f) => { o.a[f] = S('a', f); o.b[f] = S('b', f); }); return o;
+  }
+  const chg = (a, b, money = true) => (a == null || b == null || !b && !a ? '' : (money ? sg(a - b) : '') + (b ? ' (' + (a >= b ? '+' : '−') + Math.abs((a - b) / Math.abs(b) * 100).toFixed(0) + '%)' : ''));
+  const cfAt = (c, ym) => { const r = c.cfRows.find((x) => String(x.k).slice(0, 7) === ym); return r ? (r.closed ? r.closeA : r.eff) : null; };
+  const facAt = (c, ym) => { const f = c.fac.find((x) => String(x.month).slice(0, 7) === ym), me = c.me && c.me.row && String(c.me.row.month).slice(0, 7) === ym ? c.me.row : null;
+    return { drawn: me && me.facility_drawn != null ? +me.facility_drawn : f && f.outstanding != null ? +f.outstanding : null, total: f ? +f.total : null }; };
+  const wonIn = (ms) => { const Pp = X.pipeline; if (!Pp) return []; return (Pp.data() || []).filter((d) => d.won_at && ms.includes(String(d.won_at).slice(0, 7))); };
+  const lostIn = (ms) => { const Pp = X.pipeline; if (!Pp) return []; return (Pp.data() || []).filter((d) => d.lost_at && ms.includes(String(d.lost_at).slice(0, 7))); };
+  const word = (c) => (c.per.kind === 'qtr' ? 'quarter' : 'year');
+
+  function glanceP(c, n) {
+    const p = c.per, t = sumH(c, p.months, 'turnover'), tp = sumH(c, p.prev, 'turnover'), L = plSum(c, p.months), u = utilH(c, p.months), up = utilH(c, p.prev);
+    const close = cfAt(c, p.end), buf = c.cfM && c.cfM.s ? +c.cfM.s.min_buffer : null, f = facAt(c, p.end), won = wonIn(p.months);
+    return frame((p.kind === 'qtr' ? 'Quarter' : 'Year') + ' at a glance', `<div class="tiles6">
+      ${tile('Turnover (MCS)', gk(t), hasH(c, p.prev) ? chg(t, tp) + ' on ' + esc(p.prevName) : '')}
+      ${tile('Net profit', gk(L && L.a.net), L ? sg(L.a.net - L.b.net) + ' v budget ' + gk(L.b.net) + (L.n < p.months.length ? ' (' + L.n + ' months in)' : '') : 'accounts not loaded', L ? (L.a.net >= L.b.net ? GRN : RED) : '')}
+      ${tile('Closing cash', gk(close), 'at ' + esc(lab(p.end)) + (buf != null && close != null ? ' · headroom over buffer ' + gk(close - buf) : ''), close != null && buf != null && close < buf ? RED : '')}
+      ${tile('Facility headroom', gk(f.total != null && f.drawn != null ? f.total - f.drawn : null), f.drawn != null ? gk(f.drawn) + ' drawn of ' + gk(f.total) : 'facility balance not entered')}
+      ${tile('Time utilisation', pc(u, 1), up != null && u != null ? (u >= up ? '+' : '−') + (Math.abs(u - up) * 100).toFixed(1) + ' pts on ' + esc(p.prevName) : '')}
+      ${tile('Deals won', won.length, won.length ? gk(won.reduce((x, d) => x + X.pipeline.pm(d), 0)) + ' a month of new hire' : 'in the ' + word(c))}</div>
+      <div class="box"><h3>Commentary</h3>${ed('', 'The ' + word(c) + ' in a few lines – what went well, what didn’t, what the board needs to decide.')}</div>`, n, c);
+  }
+
+  function plP(c, n) {
+    const p = c.per, P = c.P, L = plSum(c, p.months), Lp = plSum(c, p.prev);
+    if (!L) return frame('Profit and loss', '<div class="mut">Management accounts not loaded for this period.</div>', n, c);
+    const row = (l, f, cost) => { const a = L.a[f], b = L.b[f], pa = Lp ? Lp.a[f] : null, good = (x, y) => (cost ? x <= y : x >= y);
+      return [`<b>${l}</b>`, g0(a), g0(b), `<span style="color:${good(a, b) ? GRN : RED}">${sg(cost ? b - a : a - b)}</span>`, g0(pa), pa == null ? '–' : `<span style="color:${good(a, pa) ? GRN : RED}">${sg(a - pa)}</span>`]; };
+    const ms = p.all, inFy = P.ms.includes(miOf(p.end)), top = p.kind === 'year' && inFy ? (P.lines || []).filter((x) => Math.abs(x.f) > 500).sort((a, b) => Math.abs(b.f) - Math.abs(a.f)).slice(0, 5) : [];
+    return frame('Profit and loss – ' + p.short, `<div class="g2"><div>${table(['', p.short, 'Budget', 'Var', p.prevName, 'Change'], [row('Income', 'income'), row('Cost of sales', 'cos', 1), row('Gross profit', 'gp'), row('Overheads', 'overhead', 1), row('Net profit', 'net')], { n: [1, 2, 3, 4, 5] })}
+      <div class="mini2">Gross margin ${L.a.income ? pc(L.a.gp / L.a.income, 1) : '–'} (budget ${L.b.income ? pc(L.b.gp / L.b.income, 1) : '–'}).${inFy ? ` Full-year outlook <b>${g0(P.out('net'))}</b> against a budget of ${g0(P.fB('net'))} (${sg(P.out('net') - P.fB('net'))}).` : ''}</div>
+      ${top.length ? '<h3>Biggest variances, year to date</h3>' + table(['Line', 'Actual', 'Budget', 'Effect on profit'], top.map((x) => [esc(x.l.label), g0(x.a), g0(x.b), `<span style="color:${x.f >= 0 ? GRN : RED}">${sg(x.f)}</span>`]), { n: [1, 2, 3] }) : ''}</div>
+      <div><h3>Net profit by month</h3>${bars(ms.map(sl), [{ vals: ms.map((m) => { const k = miOf(m); return P.ms.includes(k) && P.ytd.includes(k) ? P.A(k).net : null; }), color: NAVY }], { line: { vals: ms.map((m) => (P.ms.includes(miOf(m)) ? P.B(miOf(m)).net : null)), color: MUT, dash: 1 }, h: 250 })}${legend([[NAVY, 'Actual'], [MUT, 'Budget', 1]])}
+      <div class="box sm">${ed('', 'Notes on the P&L (disposals, one-offs, timing)')}</div></div></div>`, n, c);
+  }
+
+  function cashP(c, n) {
+    const p = c.per, buf = c.cfM && c.cfM.s ? +c.cfM.s.min_buffer : null, win = p.months.concat([1, 2, 3].map((i) => ymAdd(p.end, i)));
+    const vals = win.map((m) => cfAt(c, m)), act = p.months.map((m) => cfAt(c, m)).filter((v) => v != null), low = act.length ? Math.min(...act) : null;
+    const f = facAt(c, p.end), fs = p.months.map((m) => facAt(c, m)), me = c.me && c.me.row;
+    return frame('Cash and funding', `<div class="tiles4">${tile('Closing cash', gk(cfAt(c, p.end)), 'at ' + esc(lab(p.end)))}${tile('Lowest month-end cash', gk(low), 'in the ' + word(c) + (buf != null ? ' · buffer ' + gk(buf) : ''), low != null && buf != null && low < buf ? RED : '')}${tile('Facility drawn', gk(f.drawn), f.total ? 'limit ' + gk(f.total) + ' · headroom ' + gk(f.drawn != null ? f.total - f.drawn : null) : '')}${tile('HP outstanding', gk(me && me.hp_balance), 'at ' + esc(lab(p.end)))}</div>
+      <div class="g2"><div><h3>Month-end cash, then the next 3 months forecast</h3>${bars(win.map(sl), [{ vals, color: NAVY, cf: (j) => (j < p.months.length ? NAVY : SOFT) }], { hline: buf, h: 240 })}${legend([[NAVY, 'Actual'], [SOFT, 'Forecast'], [RED, 'Minimum buffer', 1]])}</div>
+      <div><h3>Facility drawn</h3>${fs.some((x) => x.drawn != null) ? bars(p.months.map(sl), [{ vals: fs.map((x) => x.drawn), color: OR }], { line: { vals: fs.map((x) => x.total), color: MUT, dash: 1 }, h: 240 }) + legend([[OR, 'Drawn'], [MUT, 'Facility limit', 1]]) : '<div class="mut">Enter facility balances on Month end.</div>'}</div></div>`, n, c);
+  }
+
+  function fleetP(c, n) {
+    const p = c.per, r = sumH(c, p.months, 'hire_revenue'), rp = sumH(c, p.prev, 'hire_revenue'), u = utilH(c, p.months), h = c.hm.find((x) => x.month === p.end), h0 = c.hm.find((x) => x.month === ymAdd(p.months[0], -1));
+    let top = [], tot = 0, n3 = 0, cnt = 0;
+    if (X.crm) { const cs = X.crm.customers().map((x) => ({ name: x.name, v: p.months.reduce((t, m) => t + (x.rev[m] || 0), 0), pv: p.prev.reduce((t, m) => t + (x.rev[m] || 0), 0) })).filter((x) => x.v || x.pv);
+      tot = cs.reduce((t, x) => t + x.v, 0); cnt = cs.filter((x) => x.v).length; top = cs.sort((a, b) => b.v - a.v).slice(0, 8); n3 = top.slice(0, 3).reduce((t, x) => t + x.v, 0); }
+    return frame('Fleet and customers', `<div class="tiles4">${tile('Hire revenue', gk(r), hasH(c, p.prev) ? chg(r, rp) + ' on ' + esc(p.prevName) : '')}${tile('Time utilisation', pc(u, 1), 'average for the ' + word(c))}${tile('Fleet on hire', h ? (h.units_on_hire || 0) + ' / ' + (h.units || 0) : '–', h && h0 && h0.units ? 'fleet ' + ((h.units || 0) - (h0.units || 0) >= 0 ? '+' : '−') + Math.abs((h.units || 0) - (h0.units || 0)) + ' units over the ' + word(c) : 'at ' + esc(lab(p.end)))}${tile('Customers billed', cnt || '–', tot ? 'top 3 = ' + pc(n3 / tot) + ' of hire revenue' : '', tot && n3 / tot > .5 ? OR : '')}</div>
+      <div class="g2"><div><h3>Hire revenue and utilisation by month</h3>${bars(p.all.map(sl), [{ vals: p.all.map((m) => { const x = c.hm.find((y) => y.month === m); return x ? +x.hire_revenue : null; }), color: NAVY }], { h: 230 })}
+      <div class="lg">${p.months.map((m) => `<span>${sl(m)} ${pc(utilH(c, [m]))}</span>`).join('')}</div></div>
+      <div><h3>Top customers – ${esc(p.short)}</h3>${table(['Customer', 'Hire revenue', 'Share', 'v ' + p.prevName], top.map((x) => [esc(x.name), g0(x.v), tot ? pc(x.v / tot) : '', x.pv ? `<span style="color:${x.v >= x.pv ? GRN : RED}">${sg(x.v - x.pv)}</span>` : '<span class="mut">new</span>']), { n: [1, 2, 3] })}</div></div>`, n, c);
+  }
+
+  function outlookP(c, n) {
+    const p = c.per, Pp = X.pipeline, won = wonIn(p.months), lost = lostIn(p.months), open = Pp ? (Pp.data() || []).filter((d) => Pp.OPEN.includes(d.stage)) : [];
+    const reasons = {}; lost.forEach((d) => { const r = d.lost_reason || 'Not given'; reasons[r] = (reasons[r] || 0) + 1; });
+    const salesT = sumH(c, p.months, 'sales_turnover'), S = X.salesStock, held = S ? S.held().map((x) => S.val(x)) : [], sum = (k) => held.reduce((t, x) => t + (x[k] || 0), 0);
+    const K = X.parking, parkRev = K ? p.months.reduce((t, m) => t + K.monthRevenue(m), 0) : null, occ = K ? K.occupancy(null) : null;
+    let fc = null; if (X.forecast) { const f = X.forecast.build().rows.filter((r) => r.fut).slice(0, 12), wb = f.filter((r) => r.budget != null), T = (k, rs = f) => rs.reduce((t, r) => t + (r[k] || 0), 0); fc = { f, tot: T('auto'), con: T('con'), vb: wb.length ? T('auto', wb) - T('budget', wb) : null, nb: wb.length }; }
+    const li = (a) => '<ul class="ul">' + a.map((x) => `<li>${x}</li>`).join('') + '</ul>';
+    return frame('Growth and outlook', `<div class="g4">
+      <div class="box"><h3>Pipeline</h3>${li([`<b>${won.length}</b> won · <b>${lost.length}</b> lost in the ${word(c)}` + (won.length + lost.length ? ' (win rate ' + pc(won.length / (won.length + lost.length)) + ')' : ''), 'New hire won: <b>' + gk(won.reduce((t, d) => t + Pp.pm(d), 0)) + '</b> a month', 'Open now: <b>' + open.length + '</b> deals, weighted <b>' + gk(open.reduce((t, d) => t + Pp.wpm(d), 0)) + '</b> a month', Object.keys(reasons).length ? 'Main reason lost: ' + esc(Object.entries(reasons).sort((a, b) => b[1] - a[1])[0][0]) : 'No losses recorded'])}</div>
+      <div class="box"><h3>Sales and dealership</h3>${li(['Sales turnover in the ' + word(c) + ': <b>' + gk(salesT) + '</b> (MCS)', 'Units for sale now: <b>' + held.length + '</b>, asking <b>' + gk(sum('ask')) + '</b>', 'Cash they would release: <b>' + gk(sum('cash')) + '</b> after HP', 'Over 90 days in stock: <b>' + held.filter((x) => x.days > 90).length + '</b>'])}</div>
+      <div class="box"><h3>Parking</h3>${li(['Revenue in the ' + word(c) + ': <b>' + gk(parkRev) + '</b>', occ ? 'Occupancy now: <b>' + (occ.pct == null ? '–' : pc(occ.pct / 100)) + '</b> (' + occ.used + ' of ' + occ.cap + ' spaces)' : '', ed('', 'Site development notes')])}</div>
+      <div class="box"><h3>Revenue – next 12 months</h3>${fc ? li(['Portal forecast <b>' + gk(fc.tot) + '</b>', 'Under contract <b>' + (fc.tot ? pc(fc.con / fc.tot) : '–') + '</b>', fc.vb == null ? 'No budget loaded ahead' : '<span style="color:' + (fc.vb >= 0 ? GRN : RED) + '">' + sg(fc.vb) + '</span> against budget for the ' + fc.nb + ' months budgeted']) : '<div class="mut">Forecast not available.</div>'}</div></div>
+      ${fc ? '<h3>Revenue forecast by month</h3>' + bars(fc.f.map((r) => sl(r.m)), [{ vals: fc.f.map((r) => r.con), color: NAVY }, { vals: fc.f.map((r) => r.other || 0), color: SOFT }, { vals: fc.f.map((r) => r.pipe), color: OR }, { vals: fc.f.map((r) => r.park + r.sales), color: GRN }], { stack: 1, line: { vals: fc.f.map((r) => r.budget), color: DARK, dash: 1 }, w: 1180, h: 170 }) + legend([[NAVY, 'Contracted hire'], [SOFT, 'Other hire'], [OR, 'Weighted pipeline'], [GRN, 'Parking and sales'], [DARK, 'Budget', 1]]) : ''}`, n, c);
+  }
+
   function strategy(c, n) {
     return frame('Strategy and decisions', `<div class="g2"><div class="box"><h3>Decisions needed from the board</h3>${ed('', '1. …\n2. …')}</div><div class="box"><h3>Strategy – where we are</h3>${ed('Grow steadily with careful risk management, keep generating cash.\nGrow the dealership (sales) and parking.\nNew hire deals use cash first – balance growth against headroom.', '')}</div></div>
       <div class="box"><h3>Actions</h3>${table(['Action', 'Owner', 'By'], [[ed('', 'Action'), ed('', 'Who'), ed('', 'When')], [ed('', 'Action'), ed('', 'Who'), ed('', 'When')], [ed('', 'Action'), ed('', 'Who'), ed('', 'When')]])}</div>`, n, c);
   }
 
-  function page(body, ym) {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Compton Tankers – Board pack ${esc(lab(ym))}</title>
+  function page(body, label) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Compton Tankers – Board pack ${esc(label)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 @page{size:1280px 720px;margin:0}*{box-sizing:border-box}body{margin:0;background:#E9EDF5;font-family:Poppins,Arial,sans-serif;color:#1E293B;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -205,7 +313,7 @@ main{flex:1;padding:16px 48px;overflow:hidden}footer{display:flex;justify-conten
 h3{margin:12px 0 6px;font-size:14px;color:${DARK};font-weight:600}.mut{color:#94A3B8}
 .tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.tiles4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:6px}
 .tile{background:#F4F7FC;border-left:4px solid ${NAVY};border-radius:6px;padding:12px 14px}.tl{font-size:12px;color:#64748B}.tv{font-size:28px;font-weight:700;color:${DARK};line-height:1.25}.ts{font-size:11.5px;color:#475569}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:28px}.g2w{display:grid;grid-template-columns:1.7fr 1fr;gap:28px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:28px}.g2w{display:grid;grid-template-columns:1.7fr 1fr;gap:28px}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.g4 .box{margin-top:0}.ul{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55}
 .t{width:100%;border-collapse:collapse;font-size:12.5px}.t th{text-align:left;color:#64748B;font-weight:500;border-bottom:2px solid #E5E9F2;padding:5px 6px}.t td{border-bottom:1px solid #EEF1F6;padding:5px 6px;vertical-align:top}.n{text-align:right;white-space:nowrap}
 .box{background:#F8FAFD;border:1px solid #E5E9F2;border-radius:8px;padding:10px 14px;margin-top:14px}.box.sm{margin-top:10px}.mini2{font-size:12.5px;margin:10px 0;color:#334155}
 .ed{min-height:24px;font-size:14px;line-height:1.5;border-bottom:1px dotted ${MUT};outline:none;white-space:normal}.ed:empty:before{content:attr(data-ph);color:#A0AEC0;white-space:pre-line}.t .ed{font-size:12.5px}
@@ -213,6 +321,6 @@ h3{margin:12px 0 6px;font-size:14px;color:${DARK};font-weight:600}.mut{color:#94
 .cover{background:linear-gradient(135deg,${DARK},${NAVY});color:#fff}.cv{padding:70px 90px;height:100%;display:flex;flex-direction:column}.cv img{height:70px;align-self:flex-start}.cv h1{font-size:64px;margin:60px 0 0;font-weight:700}.cv h2{font-size:24px;font-weight:400;margin:8px 0 0;color:#FFD9C6;border-left:5px solid ${OR};padding-left:14px}
 .cv .ag{margin-top:40px;max-width:640px}.cv .ed{color:#fff;font-size:17px;border-bottom-color:rgba(255,255,255,.4)}.cvf{margin-top:auto;font-size:12px;opacity:.75}
 @media print{body{background:#fff}.bar{display:none}.slide{margin:0;box-shadow:none}.ed{border-bottom:0}.ed:empty:before{content:''}}
-</style></head><body><div class="bar"><b>Board pack · ${esc(lab(ym))}</b><span>Type over anything with a dotted underline, then print. Choose “Save as PDF”, no margins.</span><button onclick="window.print()">Print / save as PDF</button></div>${body}</body></html>`;
+</style></head><body><div class="bar"><b>Board pack · ${esc(label)}</b><span>Type over anything with a dotted underline, then print. Choose “Save as PDF”, no margins.</span><button onclick="window.print()">Print / save as PDF</button></div>${body}</body></html>`;
   }
 })();
