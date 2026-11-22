@@ -42,7 +42,8 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
 .pill.g{background:#e3f4eb;color:var(--good)}.pill.a{background:#fbf0d9;color:var(--amber)}.pill.r{background:#fbe5e3;color:var(--bad)}.pill.b{background:#e4ecfa;color:var(--blue)}
 .empty{padding:22px;border:2px dashed var(--line);border-radius:12px;color:var(--mut);background:#fff;margin-bottom:16px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:1100px){.row{grid-template-columns:1fr}}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}.small{font-size:12px}.muted{color:var(--mut)}@media(max-width:1100px){.row{grid-template-columns:1fr}}
 svg text{font-family:Barlow,sans-serif}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin:6px 0}.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
 iframe.emb{width:100%;border:0;height:calc(100vh - 20px);margin:-24px -28px;width:calc(100% + 56px);background:var(--bg)}
@@ -87,6 +88,7 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <a href="#/p-hp" data-r="p-hp">HP</a>
 <a href="#/p-accounts" data-r="p-accounts">Management accounts</a>
 <a href="#/p-orders" data-r="p-orders">New purchases</a>
+<a href="#/p-pipeline" data-r="p-pipeline">Pipeline &amp; quotes</a>
 <a href="#/analyser" data-r="analyser">Deal analyser</a>
 <a href="#/p-fa" data-r="p-fa">Fixed assets</a>
 <a href="#/p-stock" data-r="p-stock">Stock &amp; inspections</a>
@@ -388,4 +390,5 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="finance.js?v=3"></script>
 <script src="disposals.js?v=3"></script>
 <script src="orders.js?v=18"></script>
+<script src="pipeline.js?v=1"></script>
 <script src="ma.js?v=13"></script><script src="assets.js?v=6"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=5"></script><script src="pages.js?v=4"></script><script src="users.js?v=1"></script><script>(function(){var t=document.getElementById("clsT"),b=document.getElementById("clsB");function set(o){b.style.display=o?"block":"none";t.textContent=(o?"▾ ":"▸ ")+"Classic pages"}t.onclick=function(){set(b.style.display==="none")};function chk(){var h=location.hash.replace(/^#\/?/,"");if(b.querySelector("a[data-r=\""+h+"\"]"))set(true)}chk();addEventListener("hashchange",chk)})();</script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
