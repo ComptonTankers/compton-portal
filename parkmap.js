@@ -60,7 +60,7 @@
       <div class="pm-wrap"><div class="pm-side" id="pm_side"></div>
        <div class="pm-mapbox"><svg id="pm_svg" class="pm-svg"></svg>
         <div class="pm-pop" id="pm_pop"></div><div class="pm-zoom"><button id="pm_zi">+</button><button id="pm_zo">−</button><button id="pm_fit" title="Fit">⤢</button></div>
-        <div class="pm-legend">${Object.entries(ST).map(([k, [f, s, t]]) => `<span><i style="background:${f};border-color:${s}"></i>${t}</span>`).join('')}</div></div></div>
+        <div class="pm-legend">${Object.entries(ST).map(([k, [f, s, t]]) => `<span><i style="background:${f};border-color:${s}"></i>${t}</span>`).join('')}<span><i style="background:#22C55E;border-color:#22C55E;height:4px;width:16px;vertical-align:2px"></i>Gate</span></div></div></div>
       <style>
        .pm-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.pm-stat{font-size:13px;color:#475569}
        .pm-seg{display:inline-flex;border:1px solid #CBD5E1;border-radius:8px;overflow:hidden}.pm-seg button{border:0;background:#fff;padding:7px 12px;cursor:pointer;font:inherit}.pm-seg button.on{background:#164698;color:#fff}
@@ -274,9 +274,12 @@
     const fsE = Math.max(0.7, VB.w / 95);
     PLAN.features.forEach((f, i) => {
       const P = f.pts, on = PEND && (PEND.feat === f || (PEND.more || []).includes(f)), cur = MODE === 'edit' ? 'move' : 'default';
-      if (f.type === 'gate') { const c = cent(P);
-        s += `<g data-feat="${i}" style="cursor:${cur}"><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="transparent" stroke-width="3"/><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="#E4611D" stroke-width="${on ? 1.3 : 0.9}" stroke-linecap="round"/>
-          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.7" fill="#fff"/>`).join('')}<text x="${c[0]}" y="${c[1]}" dy="${fsE * 1.1}" font-size="${fsE * 0.6}" text-anchor="middle" fill="${DIM}" font-weight="700" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 3}" pointer-events="none">${esc(f.label || 'Gate')} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
+      if (f.type === 'gate') { const c = cent(P), GR = '#22C55E', gl = dist(P[0], P[1]) || 1, gd = [(P[1][0] - P[0][0]) / gl, (P[1][1] - P[0][1]) / gl], all = PLAN.boundary.length > 2 ? cent(PLAN.boundary) : c;
+        let nn = [-gd[1], gd[0]]; if ((all[0] - c[0]) * nn[0] + (all[1] - c[1]) * nn[1] < 0) nn = [-nn[0], -nn[1]];   // arrow points into the yard
+        const al = Math.max(3, Math.min(6, gl * 0.6)), ah = al * 0.35, tip = [c[0] + nn[0] * (al + 1), c[1] + nn[1] * (al + 1)], bs = [c[0] + nn[0] * 1, c[1] + nn[1] * 1];
+        s += `<g data-feat="${i}" style="cursor:${cur}"><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="transparent" stroke-width="4"/><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="${BG}" stroke-width="${on ? 2.6 : 2.2}" stroke-linecap="round"/><line x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[1][0]}" y2="${P[1][1]}" stroke="${on ? HI : GR}" stroke-width="${on ? 1.8 : 1.5}" stroke-linecap="round"/>
+          <path d="M${bs[0]} ${bs[1]} L${tip[0] - nn[0] * ah} ${tip[1] - nn[1] * ah}" stroke="${GR}" stroke-width="0.7" fill="none"/><path d="M${tip[0]} ${tip[1]} L${tip[0] - nn[0] * ah + gd[0] * ah * 0.8} ${tip[1] - nn[1] * ah + gd[1] * ah * 0.8} L${tip[0] - nn[0] * ah - gd[0] * ah * 0.8} ${tip[1] - nn[1] * ah - gd[1] * ah * 0.8} Z" fill="${GR}"/>
+          ${P.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="0.9" fill="#fff" stroke="${GR}" stroke-width="0.35"/>`).join('')}<text x="${c[0] - nn[0] * 2.2}" y="${c[1] - nn[1] * 2.2}" font-size="${Math.max(1.2, fsE * 0.75)}" text-anchor="middle" dominant-baseline="middle" fill="${GR}" font-weight="800" letter-spacing="0.1" paint-order="stroke" stroke="${BG}" stroke-width="${fsE / 2.5}" pointer-events="none">${esc(String(f.label || 'Gate').toUpperCase())} · ${dist(P[0], P[1]).toFixed(1)} m</text></g>`;
       } else { const [fill, st] = FEAT[f.type] || FEAT.area, c = cent(P), pts = P.map((p) => p.join(',')).join(' ');
         s += `<g data-feat="${i}" style="cursor:${cur}"><polygon points="${pts}" fill="${fill}" stroke="${on ? HI : st}" stroke-width="${on ? 0.5 : 0.25}" stroke-dasharray="${f.type === 'road' ? '1.2 0.8' : ''}"/>${f.type === 'nogo' || f.type === 'building' ? `<polygon points="${pts}" fill="url(#${f.type === 'nogo' ? 'pmhatchR' : 'pmhatchW'})" pointer-events="none"/>` : ''}
           ${f.label ? (() => { // label fits inside the shape and runs along its longer side
