@@ -42,7 +42,7 @@
     const cashNeed = open.filter((d) => d.new_kit !== false).reduce((t, d) => t + (+d.upfront_cash || 0) * prob(d) / 100, 0);
     const shown = FILTER === 'open' ? open : FILTER === 'all' ? P : P.filter((d) => d.stage === FILTER);
     // weighted monthly revenue by start month, next 12 months
-    const now = new Date(), months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() + i, 1); return d.toISOString().slice(0, 7); });
+    const now = new Date(), months = Array.from({ length: 12 }, (_, i) => { const t = now.getFullYear() * 12 + now.getMonth() + i; return Math.floor(t / 12) + '-' + String(t % 12 + 1).padStart(2, '0'); });
     const byM = months.map((m) => ({ m, v: open.filter((d) => d.start_date && d.start_date.slice(0, 7) <= m).reduce((t, d) => t + wpm(d), 0) }));
     const noStart = open.filter((d) => !d.start_date).length;
     const lostWhy = {}; P.filter((d) => d.stage === 'Lost').forEach((d) => { const k = d.lost_reason || 'No reason given'; lostWhy[k] = (lostWhy[k] || 0) + 1; });

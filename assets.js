@@ -40,7 +40,11 @@
         cost, nbv, resid, profit: dep == null ? null : life - dep - intr, dep, intr };
     });
     META = { month: d.fleet.length ? d.fleet[0].month : null };
+    HELP = { hpFor, faFor, norm };
   }
+  let HELP = null;
+  /* shared with Sales stock & opportunity: per-unit rows plus HP and book-value lookups by unit */
+  X.assetData = async () => { await build(); return { rows: ROWS, hpFor: HELP.hpFor, faFor: HELP.faFor, norm, nbvOf: (a) => (a ? X.fa.nbvAt(a, NOW) : null) }; };
 
   const COLS = [['unit', 'Unit', 0], ['st', 'Status', 0], ['cust', 'Customer', 0], ['crate', 'Contract £/mo', 1], ['life', 'Lifetime earnings', 1], ['profit', 'Lifetime profit', 1], ['fyUtil', 'Util (on record)', 1],
     ['owed', 'HP remaining', 1], ['settle', 'Est. settlement', 1], ['nbv', 'Book value', 1], ['resid', 'Residual', 1]];
