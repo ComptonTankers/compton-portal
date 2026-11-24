@@ -85,7 +85,11 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <div id="gate"><div class="box"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:64px;display:block;margin:0 0 14px"><p>Staff portal – please sign in</p>
 <label for="em">Email</label><input id="em" type="email" autocomplete="username">
 <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
-<button class="pri" id="go" type="button">Sign in</button><div class="err" id="err" role="alert"></div></div></div>
+<button class="pri" id="go" type="button">Sign in</button><div class="err" id="err" role="alert"></div></div>
+<div class="box" id="setpw" style="display:none"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:64px;display:block;margin:0 0 14px"><p>Welcome – choose a password for <b id="sp_em"></b></p>
+<label for="sp1">New password (at least 8 characters)</label><input id="sp1" type="password" autocomplete="new-password">
+<label for="sp2">Type it again</label><input id="sp2" type="password" autocomplete="new-password">
+<button class="pri" id="sp_go" type="button">Set password and sign in</button><div class="err" id="sp_err" role="alert"></div></div></div>
 <div id="app">
 <div class="mb"><button id="menu" type="button">Menu</button><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:30px;background:#fff;border-radius:6px;padding:3px 8px"></div>
 <aside id="side"><div class="brand"><a href="#/home" data-r="" style="background:#fff;padding:10px 12px;margin:0;display:block"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:46px;display:block"></a></div>
@@ -410,8 +414,23 @@ $('go').onclick=async()=>{$('err').textContent='';try{await authCall('password',
 $('pw').addEventListener('keydown',e=>{if(e.key==='Enter')$('go').click()});
 $('out').onclick=()=>{store.clear();D=null;location.hash='';location.reload()};
 $('menu').onclick=()=>$('side').classList.toggle('open');
-addEventListener('hashchange',()=>{if($('app').style.display==='block')route()});
-if(document.readyState==='complete')start();else addEventListener('load',start);
+addEventListener('hashchange',()=>{if($('app').style.display==='block'&&!location.hash.startsWith('#/setpw'))route()});
+/* set-password link from Admin > Users: #/setpw?t=<token>&k=<type>&e=<email> */
+function setpw(){const q=new URLSearchParams(location.hash.split('?')[1]||''),t=q.get('t'),k=q.get('k')||'recovery';
+ $('app').style.display='none';$('gate').style.display='flex';$('gate').querySelector('.box').style.display='none';$('setpw').style.display='block';$('sp_em').textContent=q.get('e')||'your account';
+ $('sp2').addEventListener('keydown',e=>{if(e.key==='Enter')$('sp_go').click()});
+ $('sp_go').onclick=async()=>{const p1=$('sp1').value,p2=$('sp2').value;$('sp_err').textContent='';
+  if(p1.length<8){$('sp_err').textContent='Use at least 8 characters.';return}if(p1!==p2){$('sp_err').textContent='The two passwords don’t match.';return}
+  $('sp_go').disabled=true;
+  try{let r=await fetch(base+'/auth/v1/verify',{method:'POST',headers:{apikey:cfg.anonKey,'Content-Type':'application/json'},body:JSON.stringify({type:k,token_hash:t})});let j=await r.json().catch(()=>({}));
+   if(!r.ok||!j.access_token)throw new Error('This link has expired or has already been used – ask Paul for a new one.');
+   store.set({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600)-60});
+   r=await fetch(base+'/auth/v1/user',{method:'PUT',headers:{apikey:cfg.anonKey,Authorization:'Bearer '+j.access_token,'Content-Type':'application/json'},body:JSON.stringify({password:p1})});j=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(j.msg||j.error_description||'Could not set the password');
+   history.replaceState(null,'',location.pathname+'#/home');$('setpw').style.display='none';$('gate').querySelector('.box').style.display='';start()}
+  catch(e){$('sp_err').textContent=e.message;$('sp_go').disabled=false}}}
+const boot=()=>location.hash.startsWith('#/setpw')?setpw():start();
+if(document.readyState==='complete')boot();else addEventListener('load',boot);
 })();
 </script>
 <script src="cashflow.js?v=10"></script>
@@ -433,7 +452,7 @@ if(document.readyState==='complete')start();else addEventListener('load',start);
 <script src="forecast.js?v=1"></script>
 <script src="monthend.js?v=1"></script>
 <script src="boardpack.js?v=3"></script>
-<script src="ma.js?v=13"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=5"></script><script src="users.js?v=1"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
+<script src="ma.js?v=13"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=5"></script><script src="users.js?v=2"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
 var KEY='ct.nav.open',side=document.getElementById('side'),open;try{open=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){open=null}if(!Array.isArray(open))open=['sales'];
 function save(){try{localStorage.setItem(KEY,JSON.stringify(open))}catch(e){}}
 function paint(){side.querySelectorAll('.ng').forEach(function(g){g.classList.toggle('open',open.indexOf(g.dataset.g)>=0)})}

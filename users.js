@@ -10,6 +10,8 @@
     if (!r.ok) throw new Error(j.error || 'Request failed (' + r.status + ')');
     return j;
   }
+  const linkMsg = (email, link) => `Sign-in link for <b>${esc(email)}</b> – copy it and send it to them. It works once and expires in about an hour.
+    <div style="display:flex;gap:8px;margin-top:8px"><input id="u-linkbox" readonly value="${esc(link)}" style="flex:1;padding:6px;font-size:13px" onclick="this.select()"><button class="btn" type="button" onclick="var i=document.getElementById('u-linkbox');i.select();(navigator.clipboard?navigator.clipboard.writeText(i.value):Promise.reject()).then(()=>{this.textContent='Copied ✓'}).catch(()=>{document.execCommand('copy');this.textContent='Copied ✓'})">Copy link</button></div>`;
   const d = (x) => (x ? new Date(x).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'never');
   const opts = (sel) => Object.keys(ROLES).map((k) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(ROLES[k])}</option>`).join('');
   X.routes['p-users'] = async function (el) {
@@ -20,29 +22,30 @@
     const msg = el._msg || ''; el._msg = '';
     const rows = data.users.map((u) => `<tr data-id="${u.id}"><td>${esc(u.name || '–')}</td><td>${esc(u.email)}</td>
       <td>${u.has_access ? `<select class="u-role" ${u.id === data.me ? 'disabled' : ''}>${opts(u.role)}</select>` : '<span style="color:#b3261e">No access</span> <button class="u-grant">Give access</button>'}</td>
-      <td>${d(u.last_sign_in_at)}</td>
-      <td style="white-space:nowrap">${u.id === data.me ? '(you)' : '<button class="u-reset">New password</button> <button class="u-rm">Remove</button>'}</td></tr>`).join('');
+      <td>${u.last_sign_in_at ? d(u.last_sign_in_at) : '<span class="muted">not yet signed in</span>'}</td>
+      <td style="white-space:nowrap">${u.id === data.me ? '(you)' : '<button class="u-link">Sign-in link</button> <button class="u-reset">New password</button> <button class="u-rm">Remove</button>'}</td></tr>`).join('');
     el.innerHTML = X.head('Users', 'Who can sign in to this portal') + (msg ? `<div class="card" style="border-left:4px solid #1b7f4b">${msg}</div>` : '') +
       `<div class="card"><h3 style="margin-top:0">Add a user</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
         <label>Name<br><input id="u-name" style="padding:6px;min-width:160px"></label>
         <label>Email<br><input id="u-email" type="email" style="padding:6px;min-width:240px"></label>
         <label>Access<br><select id="u-newrole" style="padding:6px">${opts('staff')}</select></label>
-        <label>How<br><select id="u-mode" style="padding:6px"><option value="password">Create now with a temporary password</option><option value="invite">Email them an invite link</option></select></label>
+        <label>How<br><select id="u-mode" style="padding:6px"><option value="link">Create a sign-in link to copy and send</option><option value="password">Create now with a temporary password</option><option value="invite">Email them an invite link (email not set up yet)</option></select></label>
         <button id="u-add" class="btn">Add user</button></div>
-      <div class="hint" style="margin-top:6px">A temporary password is shown once on screen for you to pass on; they should change it after signing in. Invite emails need Supabase email set up and can be rate-limited.</div></div>
+      <div class="hint" style="margin-top:6px">A sign-in link is shown once for you to copy into an email, Teams or WhatsApp. They open it and choose their own password. Each link works once and expires (about an hour), so send it straight away – if it runs out, press “Sign-in link” next to their name for a fresh one. Invite emails won’t arrive until the portal’s email sending is set up.</div></div>
       <div class="card"><table class="pv-tbl"><thead><tr><th>Name</th><th>Email</th><th>Access</th><th>Last sign-in</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       <div class="hint" style="margin-top:6px">Roles are recorded now. Restricting the accountant to selected pages is not switched on yet – everyone with access sees every page.</div></div>`;
     const refresh = (m) => { el._msg = m || ''; X.routes['p-users'](el); };
     const guard = async (btn, fn) => { btn.disabled = true; try { await fn(); } catch (e) { alert(e.message); btn.disabled = false; } };
     el.querySelector('#u-add').onclick = (ev) => guard(ev.target, async () => {
       const r = await call({ action: 'create', name: el.querySelector('#u-name').value, email: el.querySelector('#u-email').value, role: el.querySelector('#u-newrole').value, mode: el.querySelector('#u-mode').value, redirectTo: location.origin + location.pathname });
-      refresh(r.password ? `<b>${esc(r.email)}</b> created. Temporary password (shown once): <code style="font-size:15px;user-select:all">${esc(r.password)}</code>` : `Invite sent to <b>${esc(r.email)}</b>.`);
+      refresh(r.link ? linkMsg(r.email, r.link) : r.password ? `<b>${esc(r.email)}</b> created. Temporary password (shown once): <code style="font-size:15px;user-select:all">${esc(r.password)}</code>` : `Invite sent to <b>${esc(r.email)}</b>.`);
     });
     el.querySelectorAll('tr[data-id]').forEach((tr) => {
       const id = tr.dataset.id, q = (s) => tr.querySelector(s);
       if (q('.u-role')) q('.u-role').onchange = (ev) => guard(ev.target, async () => { await call({ action: 'setRole', id, role: ev.target.value }); refresh('Access updated.'); });
       if (q('.u-grant')) q('.u-grant').onclick = (ev) => guard(ev.target, async () => { await call({ action: 'grant', id, role: 'staff' }); refresh('Access granted.'); });
+      if (q('.u-link')) q('.u-link').onclick = (ev) => guard(ev.target, async () => { const r = await call({ action: 'link', id, redirectTo: location.origin + location.pathname }); refresh(linkMsg(r.email, r.link)); });
       if (q('.u-reset')) q('.u-reset').onclick = (ev) => { if (!confirm('Set a new temporary password for this user?')) return; guard(ev.target, async () => { const r = await call({ action: 'resetPassword', id }); refresh(`New temporary password (shown once): <code style="font-size:15px;user-select:all">${esc(r.password)}</code>`); }); };
       if (q('.u-rm')) q('.u-rm').onclick = (ev) => { if (!confirm('Remove this user\'s access to the portal?')) return; const del = confirm('Also delete their login completely? OK = delete login, Cancel = just remove portal access.'); guard(ev.target, async () => { await call({ action: 'remove', id, deleteLogin: del }); refresh(del ? 'User deleted.' : 'Access removed.'); }); };
     });
