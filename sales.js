@@ -6,19 +6,20 @@
   const X = window.CT; if (!X || !X.routes) return;
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
-  const HELD = (s) => !['sold', 'moved_to_hire'].includes(s.status);
+  const HELD = (s) => !['sold', 'moved_to_hire', 'written_off'].includes(s.status);
   const TYPEMAP = [[/petroleum.*rigid|fuel.*rigid/i, 'rigid_fuel'], [/petroleum|aviation/i, 'artic_petroleum'], [/bitumen/i, 'artic_bitumen'], [/combination/i, 'rigid_combi'], [/waste.*artic/i, 'artic_waste'], [/waste|gully/i, 'rigid_waste'], [/tractor/i, 'tractor_unit']];
   const stockType = (t) => (TYPEMAP.find(([re]) => re.test(t || '')) || [null, 'artic_petroleum'])[1];
   const ym = (d) => (d ? String(d).slice(0, 7) : '');
   const mlab = (m) => new Date(m + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-  let ST = [], A = null, CF = [], CFM = [], S = { opp: 'idle', sort: 'cash' };
+  let ST = [], A = null, CF = [], CFM = [], FAS = [], S = { opp: 'idle', sort: 'cash' };
 
   async function load() {
+    try { if (X.fa) { await X.fa.load(); FAS = X.fa.get().assets.filter((a) => a.active); } } catch (e) { FAS = []; }
     [ST, A, CF, CFM] = await Promise.all([all('stock', 'created_at.desc'), X.assetData(), api("cf_entries?select=month,line,forecast&line=in.(asset_sales,hp_settlement)").catch(() => []), api('cf_months?select=month&order=month').catch(() => [])]);
   }
   // value of one stock unit: book value, HP settlement, cash released and profit on sale
   function val(s) {
-    const k = A.norm(s.reg), fa = A.faFor(k), hp = A.hpFor(k);
+    const fl = s.fa_id ? FAS.find((x) => x.id === s.fa_id) : null, k = A.norm(fl ? fl.ref : s.reg), fa = s.source === 'purchased' ? null : A.faFor(k), hp = s.source === 'purchased' ? null : A.hpFor(k);
     const nbv = fa ? A.nbvOf(fa) : null, settle = s.hp_settle_override != null ? +s.hp_settle_override : hp ? hp.settle : 0;
     const ask = s.asking_price != null ? +s.asking_price : null, basis = nbv != null ? nbv : s.cost != null ? +s.cost : null;
     const days = Math.max(0, Math.round((Date.now() - new Date(s.created_at)) / 864e5));
@@ -60,8 +61,8 @@
         { l: 'Average days in stock', v: held.length ? Math.round(sum('days') / held.length) : '–', s: held.filter((r) => r.days > 90).length + ' over 90 days' },
         { l: 'Sold this financial year', v: soldFY.length, s: gbp(soldFY.reduce((t, s) => t + (+s.sale_price || +s.asking_price || 0), 0)) + ' sales' }]) +
       `<div class="card"><h3>Units for sale</h3><div class="hint">Book value from the fixed asset register; HP settlement estimated from the HP schedule (type your own over it if you have a settlement figure). Set the month you expect to sell so the cash and profit feed the forecasts.</div>
-      <div class="box2"><table><thead><tr><th>Unit</th><th>Status</th><th class="n">Days in stock</th><th class="n">Asking £</th><th class="n">Book value</th><th class="n">Profit on sale</th><th class="n">HP settlement</th><th class="n">Cash released</th><th>Expected sale</th><th class="n">Enquiries</th></tr></thead><tbody>
-      ${held.length ? held.map((r) => `<tr><td><b>${esc(r.s.reg)}</b><div class="small muted">${esc(r.s.vehicle_type || '')}</div></td><td>${esc((r.s.status || '').replace(/_/g, ' '))}</td>
+      <div class="box2"><table><thead><tr><th>Unit</th><th>Bought as</th><th>Status</th><th class="n">Days in stock</th><th class="n">Asking £</th><th class="n">Book value</th><th class="n">Profit on sale</th><th class="n">HP settlement</th><th class="n">Cash released</th><th>Expected sale</th><th class="n">Enquiries</th><th></th></tr></thead><tbody>
+      ${held.length ? held.map((r) => `<tr><td><b>${esc(r.s.reg)}</b><div class="small muted">${esc(r.s.vehicle_type || '')}</div></td><td class="small"><select data-src="${r.s.id}"><option value="purchased" ${r.s.source !== 'ex_fleet' ? 'selected' : ''}>Bought for resale</option><option value="ex_fleet" ${r.s.source === 'ex_fleet' ? 'selected' : ''}>Ex-fleet</option></select>${r.s.source === 'ex_fleet' ? `<br><input data-faref="${r.s.id}" list="sl_fal" value="${esc((FAS.find((x) => x.id === r.s.fa_id) || {}).ref || '')}" placeholder="Asset register ref" style="width:110px;margin-top:3px">` : ''}</td><td>${esc((r.s.status || '').replace(/_/g, ' '))}</td>
         <td class="n" style="${r.days > 90 ? 'color:#b3261e;font-weight:600' : ''}">${r.days}</td>
         <td class="n"><input data-ask="${r.s.id}" type="number" step="100" value="${r.ask ?? ''}" style="width:100px;text-align:right"></td>
         <td class="n">${r.nbv != null ? gbp(r.nbv) : r.s.cost != null ? `<span title="Not in the fixed asset register – using cost">${gbp(+r.s.cost)}*</span>` : '<span class="muted">–</span>'}</td>
@@ -69,8 +70,8 @@
         <td class="n"><input data-settle="${r.s.id}" type="number" step="100" value="${r.s.hp_settle_override ?? ''}" placeholder="${r.hpKnown ? Math.round(r.settle) : 'none'}" style="width:100px;text-align:right" title="Leave blank to use the estimate from the HP schedule"></td>
         <td class="n"><b>${r.cash != null ? gbp(r.cash) : '–'}</b></td>
         <td><input data-sale="${r.s.id}" type="month" value="${ym(r.s.expected_sale)}"></td>
-        <td class="n"><button class="mini" data-enq="${r.s.id}" data-d="-1">−</button> ${r.s.enquiries || 0} <button class="mini" data-enq="${r.s.id}" data-d="1">+</button></td></tr>`).join('') : '<tr><td colspan="10" class="empty">No units for sale.</td></tr>'}
-      </tbody></table></div><div class="small muted" style="margin-top:6px">* not in the fixed asset register, so cost is used instead of book value.</div><span id="sl_msg" class="small"></span></div>
+        <td class="n"><button class="mini" data-enq="${r.s.id}" data-d="-1">−</button> ${r.s.enquiries || 0} <button class="mini" data-enq="${r.s.id}" data-d="1">+</button></td><td style="white-space:nowrap"><a class="mini" href="#/p-quotes?stock=${r.s.id}" style="text-decoration:none">Quote</a> <button class="mini" data-wo="${r.s.id}">Scrap / write off</button></td></tr>`).join('') : '<tr><td colspan="12" class="empty">No units for sale.</td></tr>'}
+      </tbody></table></div><datalist id="sl_fal">${FAS.filter((a) => !a.disposed_date).map((a) => `<option value="${esc(a.ref)}">${esc(a.description || '')}</option>`).join('')}</datalist><div class="small muted" style="margin-top:6px">* bought for resale (not on the fixed asset register), so cost is used instead of book value. <b>Ex-fleet</b> units are on the fixed asset register: selling or scrapping them here records the disposal there too.</div><span id="sl_msg" class="small"></span></div>
 
       <div class="card"><h3>Effect on cash and profit</h3><div class="hint">From the expected sale month of each priced unit. Cash in includes VAT (paid over at the next VAT return). ${unsched ? `<b>${unsched}</b> priced unit${unsched > 1 ? 's have' : ' has'} no sale month in the next 6 months and ${unsched > 1 ? 'are' : 'is'} left out.` : ''}</div>
       <div class="box2"><table><thead><tr><th>Month</th><th class="n">Units</th><th class="n">Sales ex VAT</th><th class="n">Cash in inc VAT</th><th class="n">HP settlements</th><th class="n">Net cash</th><th class="n">Profit on disposal</th><th class="n">Cashflow forecast now: sales / HP settlements</th></tr></thead><tbody>
@@ -101,11 +102,25 @@
     el.querySelectorAll('[data-sale]').forEach((i) => i.onchange = async () => { try { await patch('stock', i.dataset.sale, { expected_sale: i.value ? i.value + '-01' : null }); await redraw(); } catch (e) { say('sl_msg', 'Could not save: ' + e.message); } });
     el.querySelectorAll('[data-enq]').forEach((b) => b.onclick = async () => { const s = ST.find((x) => x.id == b.dataset.enq); try { await patch('stock', s.id, { enquiries: Math.max(0, (s.enquiries || 0) + +b.dataset.d) }); await redraw(); } catch (e) { say('sl_msg', 'Could not save: ' + e.message); } });
     el.querySelectorAll('[data-est]').forEach((i) => i.onchange = async () => { try { await patch('fa_assets', i.dataset.est, { est_market_value: i.value === '' ? null : +i.value }); await redraw(); } catch (e) { say('op_msg', 'Could not save: ' + e.message); } });
+    el.querySelectorAll('[data-src]').forEach((i) => i.onchange = async () => { const s = ST.find((x) => x.id == i.dataset.src), fa = i.value === 'ex_fleet' ? FAS.find((a) => A.norm(a.ref) === A.norm(s.reg)) : null;
+      try { await patch('stock', s.id, { source: i.value, fa_id: i.value === 'ex_fleet' ? (fa ? fa.id : s.fa_id) : null }); await redraw(); } catch (e) { say('sl_msg', 'Could not save: ' + e.message); } });
+    el.querySelectorAll('[data-faref]').forEach((i) => i.onchange = async () => { const fa = FAS.find((a) => A.norm(a.ref) === A.norm(i.value));
+      if (i.value && !fa) { say('sl_msg', i.value + ' is not on the fixed asset register.'); return; }
+      try { await patch('stock', i.dataset.faref, { fa_id: fa ? fa.id : null }); await redraw(); } catch (e) { say('sl_msg', 'Could not save: ' + e.message); } });
+    el.querySelectorAll('[data-wo]').forEach((b) => b.onclick = () => { const s = ST.find((x) => x.id == b.dataset.wo), fa = s.fa_id ? FAS.find((x) => x.id === s.fa_id) : null; if (!X.dispose) return;
+      const bg = X.dispose.dialog('Scrap / write off ' + esc(s.reg), `<div class="note">${s.source === 'ex_fleet' ? 'Ex-fleet unit' + (fa ? ' – the disposal is recorded on the fixed asset register (' + esc(fa.ref) + ') and it comes off the fleet register.' : ' – <b>not linked to the asset register yet</b>, so only the stock record changes.') : 'Bought for resale – only the stock record changes.'}</div>
+        <label>Date</label><input id="wo_dt" type="date" value="${new Date().toISOString().slice(0, 10)}"><label>How</label><select id="wo_mt"><option>Scrapped</option><option>Written off</option><option>Stolen / insurance</option></select>
+        <label>Scrap value / insurance received £ (ex VAT, if any)</label><input id="wo_pr" type="number" step="0.01" placeholder="0"><label>Reason</label><input id="wo_rs" placeholder="e.g. beyond economic repair">`, 'Record it', async () => {
+        const q = (id) => bg.querySelector('#' + id).value.trim(), dt = q('wo_dt'), pr = q('wo_pr') === '' ? null : +q('wo_pr'), mt = q('wo_mt'); if (!dt) throw new Error('Choose a date');
+        await patch('stock', s.id, { status: 'written_off', sold_at: dt, sale_price: pr, write_off_reason: (mt + (q('wo_rs') ? ' – ' + q('wo_rs') : '')) });
+        if (fa && !fa.disposed_date) await X.dispose.record(fa, { date: dt, method: mt, proceeds: pr, notes: q('wo_rs') });
+        if (pr) await X.dispose.addCf('asset_sales', dt.slice(0, 7), Math.round(pr * 1.2 * 100) / 100);
+        await redraw(); say('sl_msg', s.reg + ' recorded as ' + mt.toLowerCase() + '.', 1); }); });
     $('op_f').onchange = (e) => { S.opp = e.target.value; draw(el); };
     $('op_s').onchange = (e) => { S.sort = e.target.value; draw(el); };
     el.querySelectorAll('[data-tostock]').forEach((b) => b.onclick = async () => {
       const r = opp.find((x) => x.unit === b.dataset.tostock); if (!r || !confirm('Add ' + r.unit + ' to sales stock at ' + gbp(r.v) + '? It will need an inspection before it can be advertised.')) return;
-      try { await api('stock', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reg: r.unit, vehicle_type: stockType(r.type), status: 'awaiting_inspection', cost: Math.round(r.nbv), asking_price: r.est != null ? r.est : null, notes: 'Added from Sales opportunity', advert: { avail: 'sale', cond: 'Used' } }) });
+      try { await api('stock', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reg: r.unit, source: 'ex_fleet', fa_id: r.faId || null, vehicle_type: stockType(r.type), status: 'awaiting_inspection', cost: Math.round(r.nbv), asking_price: r.est != null ? r.est : null, notes: 'Added from Sales opportunity', advert: { avail: 'sale', cond: 'Used' } }) });
         await redraw(); say('op_msg', r.unit + ' added to sales stock ✓ – create its inspection link in Stock & inspections', 1); } catch (e) { say('op_msg', 'Could not add: ' + e.message); } });
     $('sl_tocf').onclick = async () => {
       const rows = byM.filter((r) => r.n && r.inCF), skipped = byM.filter((r) => r.n && !r.inCF);

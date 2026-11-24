@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const TYPES = [['artic_petroleum', 'Artic – petroleum tanker'], ['artic_bitumen', 'Artic – bitumen tanker'], ['artic_waste', 'Artic – waste tanker'], ['tractor_unit', 'Tractor unit'], ['rigid_fuel', 'Rigid – fuel tanker'], ['rigid_waste', 'Rigid – waste tanker'], ['rigid_combi', 'Rigid – combination tanker (jetvac)']];
   const TLAB = Object.fromEntries(TYPES);
-  const STAT = { awaiting_inspection: ['Awaiting inspection', 'a'], inspected: ['Inspected', 'b'], for_sale: ['For sale', 'g'], reserved: ['Reserved', 'a'], sold: ['Sold', 'r'], moved_to_hire: ['Moved to hire fleet', 'b'] };
+  const STAT = { awaiting_inspection: ['Awaiting inspection', 'a'], inspected: ['Inspected', 'b'], for_sale: ['For sale', 'g'], reserved: ['Reserved', 'a'], sold: ['Sold', 'r'], moved_to_hire: ['Moved to hire fleet', 'b'], written_off: ['Scrapped / written off', 'r'] };
   const JS = { assigned: ['Link sent', 'a'], in_progress: ['In progress', 'b'], submitted: ['Submitted', 'g'], reviewed: ['Reviewed', 'g'], cancelled: ['Cancelled', 'r'] };
   let ST = [], JOBS = {};
   const base = () => location.origin + location.pathname.replace(/[^/]*$/, '');
@@ -25,7 +25,7 @@
   }
 
   function draw(el, open) {
-    const held = ST.filter((s) => !['sold', 'moved_to_hire'].includes(s.status));
+    const held = ST.filter((s) => !['sold', 'moved_to_hire', 'written_off'].includes(s.status));
     const cost = held.reduce((t, s) => t + (+s.cost || 0), 0), ask = held.reduce((t, s) => t + (+s.asking_price || 0), 0);
     const await_ = ST.filter((s) => s.status === 'awaiting_inspection').length, ready = ST.filter((s) => s.status === 'for_sale').length;
     const toReview = ST.filter((s) => JOBS[s.id] && JOBS[s.id].status === 'submitted').length;
