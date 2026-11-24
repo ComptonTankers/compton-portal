@@ -110,7 +110,12 @@
       try { await api(u ? 'assets?id=eq.' + u.id : 'assets', { method: u ? 'PATCH' : 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); await done(); }
       catch (e) { $('fu_msg').textContent = 'Could not save: ' + e.message; } };
     if ($('fu_rm')) $('fu_rm').onclick = async () => { if (con(u) && !confirm(u.unit + ' is on hire to ' + con(u).customer + '. Remove it from the fleet anyway?')) return;
-      await api('assets?id=eq.' + u.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ active: false, removed_reason: $('fu_why').value, removed_at: $('fu_when').value || null, updated_at: new Date().toISOString() }) }); await done(); };
+      await api('assets?id=eq.' + u.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ active: false, removed_reason: $('fu_why').value, removed_at: $('fu_when').value || null, updated_at: new Date().toISOString() }) });
+      // sold or scrapped: record it on the fixed asset register too
+      const why = $('fu_why').value, when = $('fu_when').value || new Date().toISOString().slice(0, 10);
+      if (X.dispose && X.fa && /Sold|Scrapped/.test(why)) { try { await X.fa.load(); const fa = X.fa.get().assets.find((a) => a.active && !a.disposed_date && norm(a.ref) === norm(u.fa_ref || u.unit));
+        if (fa) { await done(); X.dispose.open(fa, done, { date: when, method: why === 'Sold' ? 'Sold' : 'Scrapped' }); return; } } catch (e) {} }
+      await done(); };
     if ($('fu_restore')) $('fu_restore').onclick = async () => { await api('assets?id=eq.' + u.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ active: true, removed_reason: null, removed_at: null, updated_at: new Date().toISOString() }) }); await done(); };
     $('fu_unit').focus();
   }

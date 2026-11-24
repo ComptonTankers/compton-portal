@@ -350,11 +350,7 @@
     const redraw = () => faDraw(el, d);
     const refresh = async () => { await faLoad(); faDraw(el, await X.loadFinance()); };
     const pvEst = (a) => { const rt = a.interest_rate != null ? +a.interest_rate / (+a.interest_rate > 1 ? 100 : 1) : 0.08, r = Math.pow(1 + rt, 1 / 12) - 1; return d.sch.filter((x) => x.agreement_id === a.id && x.m >= NOW).reduce((t, x) => t + x.amount / Math.pow(1 + r, Math.max(0, x.m - NOW)), 0); };
-    el.querySelectorAll('[data-sold]').forEach((b) => b.onclick = () => {
-      const a = FA.assets.find((x) => x.id == b.dataset.sold), k = norm(a.ref);
-      const agreements = [...new Set(d.ass.filter((x) => { const u = norm(x.unit); return u === k || (k.length >= 4 && u.startsWith(k)); }).map((x) => x.agreement_id))].map((id) => d.agr.find((g) => g.id === id)).filter((g) => g && g.active).map((g) => { const as = d.ass.filter((x) => x.agreement_id === g.id), tot = as.reduce((t, x) => t + (+x.share || 1), 0) || 1, mine = as.filter((x) => norm(x.unit) === k || (k.length >= 4 && norm(x.unit).startsWith(k))).reduce((t, x) => t + (+x.share || 1), 0); return { a: g, est: pvEst(g) * (as.length > 1 ? mine / tot : 1), shared: as.length > 1 }; });
-      X.dispose.sold(a, { nbv: sched(a) ? nbvAt(a, NOW) : 0, agreements }, refresh);
-    });
+    el.querySelectorAll('[data-sold]').forEach((b) => b.onclick = () => X.dispose.open(FA.assets.find((x) => x.id == b.dataset.sold), refresh));
     el.querySelectorAll('[data-unsell]').forEach((b) => b.onclick = () => { if (confirm('Put this asset back as not sold?')) X.dispose.unsell(FA.assets.find((x) => x.id == b.dataset.unsell), refresh); });
     el.querySelectorAll('[data-id]').forEach((inp) => inp.addEventListener('change', async () => {
       const f = inp.dataset.f; let v = inp.value;

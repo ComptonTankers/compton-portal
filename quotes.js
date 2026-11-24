@@ -12,7 +12,7 @@
   const INTRO = 'Thank you for your enquiry. We are pleased to quote as follows.';
   const TERMS = 'All prices exclude VAT.\nHire rates are per unit, per week, for the minimum hire term shown, invoiced monthly in arrears; payment is due 30 days from the end of the month of invoice.\nDelivery, collection, damage and insurance are as set out in our standard terms and conditions of hire.\nThis quote is subject to availability and credit approval, and is valid until the date shown.';
   const CHARGES = ['Delivery', 'Collection', 'Clean / de-gas on return', 'Inspection / certification'];
-  let Q = [], P = [], DEALS = [], STOCK = [], CUST = [], HA = [], ORD = [], CUR = null, EL = null, FILTER = 'open';
+  let Q = [], P = [], DEALS = [], STOCK = [], CUST = [], HA = [], ORD = [], FAX = [], CUR = null, EL = null, FILTER = 'open';
 
   async function load() {
     if (X.fleetReg) await X.fleetReg.load();
@@ -20,6 +20,7 @@
     [Q, P, DEALS, STOCK, crm, con] = await Promise.all([all('quotes', 'id.desc'), all('pipeline', 'id.desc'), all('fleet_deals', 'updated_at.desc').catch(() => []),
       api("stock?select=id,reg,vehicle_type,status,asking_price,stock_ref&status=not.in.(sold,moved_to_hire)").catch(() => []), all('crm_customers', 'name.asc').catch(() => []), api('contracts?select=customer&active=is.true').catch(() => [])]);
     HA = await api('hire_agreements?select=id,ref,quote_id,status').catch(() => []);
+    try { if (X.fa) { await X.fa.load(); FAX = X.fa.get().assets.filter((a) => a.active); } } catch (e) { FAX = []; }
     ORD = await api('asset_orders?select=id,description,category,fleet_type,qty,unit_price,delivery_date,status,weekly_rate,term_months&order=delivery_date.asc').catch(() => []);
     ORD = ORD.filter((o) => !/deliver|cancel|received|complete/i.test(o.status || ''));
     CUST = [...new Set([...crm.map((c) => c.name), ...con.map((c) => c.customer), ...P.map((p) => p.customer)].filter(Boolean).map((s) => s.trim()))].sort();
@@ -42,6 +43,7 @@
     try { await load(); } catch (e) { el.innerHTML = X.head('Quotes', '') + `<div class="card"><div class="hint">Could not load: ${esc(e.message)}</div></div>`; return; }
     const prm = new URLSearchParams(location.hash.split('?')[1] || '');
     if (prm.get('q')) { CUR = JSON.parse(JSON.stringify(Q.find((x) => x.id === +prm.get('q')) || null)); }
+    else if (prm.get('sell')) { const a = FAX.find((x) => x.id === +prm.get('sell')); CUR = a ? fresh({ lines: [faLine(a)], source: 'fixed asset', intro: SALE_INTRO }) : null; }
     else if (prm.get('deal')) { const d = P.find((x) => x.id === +prm.get('deal')), ex = latest().find((x) => x.pipeline_id === +prm.get('deal'));
       CUR = ex ? JSON.parse(JSON.stringify(ex)) : d ? fresh({ pipeline_id: d.id, ref: d.ref, customer: d.customer, contact_name: d.contact_name, contact_email: d.contact_email, contact_phone: d.contact_phone,
         lines: d.kit ? [{ type: 'hire', desc: d.kit, qty: d.qty || 1, rate: d.weekly_rate, per: 'week', term: d.term_months || '' }] : [], fleet_deal_id: d.fleet_deal_id ? +d.fleet_deal_id : null, source: 'pipeline' }) : null; }
@@ -59,7 +61,7 @@
         { l: 'Open quotes – hire / month', v: gbp(open.reduce((t, q) => t + totals(q).monthly, 0)), s: 'at full value, ex VAT' },
         { l: 'Accepted this month', v: acc.filter((q) => String(q.accepted_at || '').slice(0, 7) === m).length, s: gbp(acc.filter((q) => String(q.accepted_at || '').slice(0, 7) === m).reduce((t, q) => t + totals(q).monthly, 0)) + '/month' },
         { l: 'Win rate', v: acc.length + dec.length ? Math.round(acc.length / (acc.length + dec.length) * 100) + '%' : '–', s: acc.length + ' accepted · ' + dec.length + ' declined' }]) +
-      `<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><button class="pri2" id="qn_new">+ New quote</button><button id="qn_an">From the deal analyser</button><button id="qn_st">Sale from dealership stock</button>
+      `<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><button class="pri2" id="qn_new">+ New quote</button><button id="qn_an">From the deal analyser</button><button id="qn_fa">Sell a fleet asset</button><button id="qn_st">Sale from dealership stock</button>
         <span style="margin-left:auto" class="small">Show <select id="qn_f">${[['open', 'Open (draft and sent)'], ['Accepted', 'Accepted'], ['Declined', 'Declined'], ['all', 'All']].map(([k, t]) => `<option value="${k}" ${k === FILTER ? 'selected' : ''}>${t}</option>`).join('')}</select></span></div><div id="qn_pick"></div>
       <table><thead><tr><th>Quote</th><th>Customer</th><th>What</th><th class="n">£/week</th><th class="n">£/month</th><th class="n">One-off / sale</th><th>Status</th><th>Valid until</th><th>Pipeline</th></tr></thead><tbody>
       ${rows.map((q) => { const t = totals(q), exp = q.status === 'Sent' && q.valid_until && q.valid_until < today();
@@ -70,6 +72,7 @@
     $('qn_f').onchange = (e) => { FILTER = e.target.value; list(); };
     $('qn_new').onclick = () => { CUR = fresh(); editor(); };
     $('qn_an').onclick = () => pickDeal($('qn_pick'), (line, deal) => { CUR = fresh({ customer: (deal.customer || '').trim(), lines: line, source: 'analyser', fleet_deal_id: deal.id }); editor(); });
+    $('qn_fa').onclick = () => pickFA($('qn_pick'), (line) => { CUR = fresh({ lines: [line], source: 'fixed asset', intro: SALE_INTRO }); editor(); });
     $('qn_st').onclick = () => pickStock($('qn_pick'), (line) => { CUR = fresh({ lines: [line], source: 'dealership' }); editor(); });
     EL.querySelectorAll('[data-open]').forEach((r) => (r.onclick = () => { CUR = JSON.parse(JSON.stringify(Q.find((x) => x.id === +r.dataset.open))); editor(); }));
   }
@@ -93,6 +96,21 @@
   function pickOrder(box, cb) {
     box.innerHTML = `<div class="box2" style="padding:10px;margin-bottom:10px"><b>Pick kit that’s on order</b><table style="margin-top:6px"><tbody>${ORD.map((o) => `<tr><td><b>${esc(o.description || '')}</b><div class="small muted">${esc(o.category || o.fleet_type || '')}</div></td><td>${o.qty || 1} on order</td><td>expected ${esc(mon(o.delivery_date) || 'TBC')}</td><td class="n">${o.weekly_rate ? gbp(o.weekly_rate) + '/wk planned' : ''}</td><td><button class="mini" data-od="${o.id}">Use</button></td></tr>`).join('') || '<tr><td class="muted">Nothing on order – use “Hire – other / not in the fleet”.</td></tr>'}</tbody></table></div>`;
     box.querySelectorAll('[data-od]').forEach((b) => (b.onclick = () => cb(orderLine(ORD.find((x) => x.id === +b.dataset.od))))); }
+  // selling a unit off the fixed asset register: accepting the quote records the disposal
+  const SALE_INTRO = 'Thank you for your interest. We are pleased to offer the following equipment for sale, subject to the terms below.';
+  const bvToday = (a) => (X.fa && X.fa.sched(a) ? X.fa.nbvToday(a) : null);
+  function faLine(a) { const FR = X.fleetReg, u = FR && FR.units ? (FR.units().find((x) => FR.norm(x.fa_ref || x.unit) === FR.norm(a.ref)) || null) : null, d = u ? FR.fullDesc(u) : null;
+    return { type: 'sale', desc: (d && d.title ? d.title : a.description || 'Asset') + ' – ' + a.ref, fa_id: a.id, qty: 1, rate: '', per: 'each', notes: [d && d.year ? 'Year ' + d.year : '', d && d.chassis ? 'Chassis ' + d.chassis : '', d && d.tank ? 'Tank serial ' + d.tank : '', 'Sold as seen'].filter(Boolean).join(' · ') }; }
+  function pickFA(box, cb) {
+    const on = (a) => { const FR = X.fleetReg; if (!FR || !FR.units) return null; const u = FR.units().find((x) => FR.norm(x.fa_ref || x.unit) === FR.norm(a.ref)); return u && FR.con(u) ? FR.con(u).customer : null; };
+    const list = FAX.filter((a) => !a.disposed_date);
+    box.innerHTML = `<div class="box2" style="padding:10px;margin-bottom:10px"><b>Pick an asset from the fixed asset register</b> <input id="fa_q" placeholder="Search ref or description" style="margin-left:8px"><div style="max-height:320px;overflow:auto;margin-top:6px"><table><thead><tr><th>Asset</th><th>Description</th><th class="n">Cost</th><th class="n">Book value today</th><th></th><th></th></tr></thead><tbody id="fa_rows"></tbody></table></div></div>`;
+    const draw = () => { const q = (box.querySelector('#fa_q').value || '').toLowerCase();
+      box.querySelector('#fa_rows').innerHTML = list.filter((a) => !q || (a.ref + ' ' + (a.description || '')).toLowerCase().includes(q)).map((a) => { const h = on(a), bv = bvToday(a);
+        return `<tr><td><b>${esc(a.ref)}</b></td><td>${esc(a.description || '')}</td><td class="n">${a.cost ? gbp(+a.cost) : '–'}</td><td class="n">${bv != null ? gbp(bv) : '–'}</td><td class="small" style="color:#B45309">${h ? 'on hire to ' + esc(h) : ''}</td><td><button class="mini" data-fa="${a.id}">Use</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="muted">Nothing matches.</td></tr>';
+      box.querySelectorAll('[data-fa]').forEach((b) => (b.onclick = () => cb(faLine(list.find((x) => x.id === +b.dataset.fa))))); };
+    box.querySelector('#fa_q').oninput = draw; draw();
+  }
   function pickStock(box, cb) {
     box.innerHTML = `<div class="box2" style="padding:10px;margin-bottom:10px"><b>Pick a unit from dealership stock</b><table style="margin-top:6px"><tbody>${STOCK.map((s) => `<tr><td>${esc(s.reg || s.stock_ref || '')}</td><td>${esc(s.vehicle_type || '')}</td><td class="n">${s.asking_price ? gbp(s.asking_price) : '<span class="muted">no price</span>'}</td><td><button class="mini" data-sk="${s.id}">Use</button></td></tr>`).join('') || '<tr><td class="muted">No stock for sale.</td></tr>'}</tbody></table></div>`;
     box.querySelectorAll('[data-sk]').forEach((b) => (b.onclick = () => cb(stockLine(STOCK.find((x) => x.id === +b.dataset.sk)))));
@@ -112,7 +130,7 @@
         <div class="card"><h3>Quote</h3><div class="form" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label>Date${inp('quote_date', '', 'date')}</label><label>Valid until${inp('valid_until', '', 'date')}</label>
         <label style="grid-column:span 2">Opening line${inp('intro')}</label></div></div></div>
       <div class="card"><h3>What we’re quoting</h3>
-        ${locked ? '' : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="mini pri2" id="qa_fleet">+ Hire from the fleet</button><button class="mini" id="qa_an">+ New kit from the deal analyser</button><button class="mini" id="qa_st">+ Sale from dealership stock</button>${CHARGES.map((c) => `<button class="mini" data-chg="${esc(c)}">+ ${esc(c)}</button>`).join('')}<button class="mini" id="qa_ord">+ Hire – kit on order</button><button class="mini" id="qa_fh">+ Hire – other / not in the fleet</button><button class="mini" id="qa_free">+ Other line</button></div><div id="qa_pick"></div>`}
+        ${locked ? '' : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="mini pri2" id="qa_fleet">+ Hire from the fleet</button><button class="mini" id="qa_an">+ New kit from the deal analyser</button><button class="mini" id="qa_fa">+ Sale – fleet asset</button><button class="mini" id="qa_st">+ Sale from dealership stock</button>${CHARGES.map((c) => `<button class="mini" data-chg="${esc(c)}">+ ${esc(c)}</button>`).join('')}<button class="mini" id="qa_ord">+ Hire – kit on order</button><button class="mini" id="qa_fh">+ Hire – other / not in the fleet</button><button class="mini" id="qa_free">+ Other line</button></div><div id="qa_pick"></div>`}
         <table><thead><tr><th>Type</th><th>Description</th><th class="n">Qty</th><th class="n">Rate £</th><th>Per</th><th class="n">Min term (months)</th><th class="n">Total</th><th></th></tr></thead><tbody id="qe_lines"></tbody></table>
         <div id="qe_tot" style="margin-top:10px"></div></div>
       <div class="card"><h3>Terms</h3><textarea id="qe_terms" rows="5" style="width:100%" ${locked ? 'disabled' : ''}>${esc(q.terms || '')}</textarea></div>
@@ -128,7 +146,7 @@
     const dis = locked ? 'disabled' : '';
     tb.innerHTML = q.lines.map((l, i) => { const tot = l.type === 'hire' || l.per === 'week' ? (+l.qty || 0) * (+l.rate || 0) * 52 / 12 : (+l.qty || 0) * (+l.rate || 0);
       return `<tr><td class="small">${l.type === 'hire' ? 'Hire' : l.type === 'sale' ? 'Sale' : 'Charge'}</td>
-        <td><input data-l="${i}" data-k="desc" value="${esc(l.desc || '')}" style="width:100%" ${dis}>${l.units && l.units.length ? `<div class="small muted">Units: ${esc(l.units.join(', '))}</div>` : ''}<input data-l="${i}" data-k="notes" value="${esc(l.notes || '')}" placeholder="Note on the quote (optional)" class="small" style="width:100%;margin-top:3px" ${dis}></td>
+        <td><input data-l="${i}" data-k="desc" value="${esc(l.desc || '')}" style="width:100%" ${dis}>${l.units && l.units.length ? `<div class="small muted">Units: ${esc(l.units.join(', '))}</div>` : ''}${l.fa_id ? (() => { const a = FAX.find((x) => x.id === l.fa_id), bv = a ? bvToday(a) : null, pr = (+l.qty || 1) * (+l.rate || 0); return a ? `<div class="small" style="color:#64748B">Internal only – book value today ${bv != null ? gbp(bv) : 'n/a'}${bv != null && l.rate !== '' ? ` · ${pr - bv >= 0 ? 'profit' : 'loss'} on disposal <b style="color:${pr - bv >= 0 ? '#15803D' : '#B91C1C'}">${gbp(Math.abs(pr - bv))}</b>` : ''}${a.disposed_date ? ' · already disposed ' + new Date(a.disposed_date).toLocaleDateString('en-GB') : ''}</div>` : ''; })() : ''}<input data-l="${i}" data-k="notes" value="${esc(l.notes || '')}" placeholder="Note on the quote (optional)" class="small" style="width:100%;margin-top:3px" ${dis}></td>
         <td class="n"><input data-l="${i}" data-k="qty" type="number" min="1" value="${l.qty ?? 1}" style="width:60px" ${dis}></td><td class="n"><input data-l="${i}" data-k="rate" type="number" step="0.01" value="${l.rate ?? ''}" style="width:100px" ${dis}></td>
         <td>${l.type === 'hire' ? 'week' : l.type === 'sale' ? 'each' : `<select data-l="${i}" data-k="per" ${dis}><option value="each" ${l.per !== 'week' ? 'selected' : ''}>each</option><option value="week" ${l.per === 'week' ? 'selected' : ''}>week</option></select>`}</td>
         <td class="n">${l.type === 'hire' ? `<input data-l="${i}" data-k="term" type="number" min="0" value="${l.term ?? ''}" style="width:60px" ${dis}>` : ''}</td>
@@ -167,6 +185,7 @@
     if (!locked) {
       $('qa_fleet').onclick = () => fleetPicker($('qa_pick'));
       $('qa_an').onclick = () => pickDeal($('qa_pick'), (ls, d) => { CUR.lines.push(...ls); CUR.source = CUR.source === 'blank' ? 'analyser' : CUR.source; CUR.fleet_deal_id = d.id; if (!CUR.customer && d.customer) { CUR.customer = d.customer.trim(); $('qe_customer').value = CUR.customer; } $('qa_pick').innerHTML = ''; lines(); });
+      $('qa_fa').onclick = () => pickFA($('qa_pick'), (l) => { CUR.lines.push(l); $('qa_pick').innerHTML = ''; lines(); });
       $('qa_st').onclick = () => pickStock($('qa_pick'), (l) => { CUR.lines.push(l); $('qa_pick').innerHTML = ''; lines(); });
       EL.querySelectorAll('[data-chg]').forEach((b) => (b.onclick = () => { CUR.lines.push({ type: 'charge', desc: b.dataset.chg, qty: 1, rate: '', per: 'each' }); lines(); }));
       $('qa_ord').onclick = () => pickOrder($('qa_pick'), (l) => { CUR.lines.push(l); $('qa_pick').innerHTML = ''; lines(); });
@@ -177,7 +196,7 @@
     $('qe_pdf').onclick = async () => { if (!locked) { read(); if (!(await save())) return; } pdf(CUR);
       if (CUR.status === 'Draft') { await setStatus('Sent', { sent_at: new Date().toISOString() }, { stage: 'Quoted', next_action: 'Follow up quote ' + CUR.ref + ' v' + CUR.version, next_action_date: addDays(today(), 5) }); msg('Marked as sent – follow-up set in the pipeline for ' + new Date(addDays(today(), 5)).toLocaleDateString('en-GB') + '.'); } };
     if ($('qe_acc')) $('qe_acc').onclick = async () => { const who = prompt('Who accepted it? (name, and PO number if they gave one)', CUR.contact_name || ''); if (who === null) return; read(); if (!(await save())) return;
-      await setStatus('Accepted', { accepted_at: new Date().toISOString(), accepted_by: who || null }, { stage: 'Agreed', next_action: 'Raise hire agreement / order for ' + CUR.ref, next_action_date: today() }); if ((CUR.lines || []).some((l) => l.type === 'hire')) raisePanel(); else msg('Accepted – pipeline moved to Agreed.'); };
+      await setStatus('Accepted', { accepted_at: new Date().toISOString(), accepted_by: who || null }, { stage: 'Agreed', next_action: 'Raise hire agreement / order for ' + CUR.ref, next_action_date: today() }); afterAccept(); };
     if ($('qe_ha')) $('qe_ha').onclick = raisePanel;
     if ($('qe_dec')) $('qe_dec').onclick = async () => { const why = prompt('Why did they decline? (e.g. price, timing, went elsewhere)'); if (why === null) return; read(); if (!(await save())) return;
       await setStatus('Declined', {}, { stage: 'Lost', lost_reason: why || 'Not given' }); msg('Declined – pipeline deal marked Lost.'); };
@@ -189,6 +208,14 @@
     if ($('qe_del')) $('qe_del').onclick = async () => { if (!confirm('Delete this draft?')) return; await api('quotes?id=eq.' + CUR.id, { method: 'DELETE' }); await load(); CUR = null; list(); };
   }
   const msg = (t) => { const m = $('qe_msg'); if (m) m.textContent = t; };
+  // accepted: record the disposal of every fixed asset on the quote, then offer the hire agreement
+  function afterAccept() {
+    const q = CUR, fl = (q.lines || []).filter((l) => l.fa_id), hire = (q.lines || []).some((l) => l.type === 'hire');
+    const next = () => { if (hire) raisePanel(); else msg('Accepted – pipeline moved to Agreed' + (fl.length ? ' and the disposal recorded on the fixed asset register.' : '.')); };
+    const step = (i) => { if (i >= fl.length || !X.dispose) return next(); const l = fl[i], a = FAX.find((x) => x.id === l.fa_id); if (!a || a.disposed_date) return step(i + 1);
+      X.dispose.open(a, () => step(i + 1), { date: today(), method: 'Sold', buyer: q.customer, proceeds: (+l.qty || 1) * (+l.rate || 0), quote_id: q.id }); };
+    step(0);
+  }
   // accepted → raise the hire agreement and book the named units from the start date
   function raisePanel() {
     const named = (CUR.lines || []).filter((l) => l.type === 'hire').flatMap((l) => l.units || []), m = $('qe_msg'); if (!m) return;
