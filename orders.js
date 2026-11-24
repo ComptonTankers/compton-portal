@@ -10,7 +10,7 @@
   let WHATIF = false;   // page only: also show potential orders
   let ORD = [], POL = [];
   const live = (o, w) => o.status === 'Ordered' || o.status === 'Delivered' || (w && o.status === 'Potential');
-  const pol = (c) => POL.find((p) => String(p.category).toLowerCase() === String(c || '').toLowerCase()) || { life_years: 8, residual_pct: 10 };
+  const pol = (c) => POL.find((p) => String(p.category).toLowerCase() === String(c || '').toLowerCase()) || { life_years: 12, residual_pct: 0 };
 
   // Finance for one order line: amount financed, monthly payment, and month-by-month figures.
   function calc(o) {

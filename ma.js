@@ -36,7 +36,7 @@
   function sched(a) {
     const anch = a.cost && a.nbv_open != null && a.nbv_open_date;
     if (!a.cost || (!a.purchase_date && !anch)) return null;
-    const p = FA.pol[a.description] || FA.pol[a.category] || { life_years: 5, residual_pct: 0 };
+    const p = FA.pol[a.description] || FA.pol[a.category] || { life_years: 12, residual_pct: 0 };
     const method = p.method === 'reducing' ? 'reducing' : 'straight', rate = Math.min(0.99, Math.max(0, (+p.rate_pct || 0) / 100));
     const life = num(a.life_years) != null ? +a.life_years : +p.life_years, res = num(a.residual_pct) != null ? +a.residual_pct : +p.residual_pct;
     const Lf = Math.max(1, Math.round(life * 12)), cost = +a.cost, floor = cost * res / 100, mc = cost * (1 - res / 100) / Lf, disp = a.disposed_date ? mon(a.disposed_date) : null;
@@ -52,7 +52,10 @@
   const nbvAt = (a, m) => { const q = sched(a); if (!q) return 0; if (q.disp != null && m >= q.disp) return 0; return q.f(nAt(q, m)); };
   const depMonth = (m) => FA ? FA.assets.filter((a) => a.active).reduce((t, a) => t + chargeAt(a, m), 0) : 0;
 
-  X.fa = { load: faLoad, sched: (a) => sched(a), nbvAt: (a, m) => nbvAt(a, m), get: () => FA, chargeAt: (a, m) => chargeAt(a, m), accAt: (a, m) => accAt(a, m), depMonth: (m) => depMonth(m) };
+  // book value today: last month-end value less the part of this month's charge used so far (by day)
+  const nbvToday = (a) => { const d = new Date(), m = d.getFullYear() * 12 + d.getMonth(), days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const q = sched(a); if (!q) return 0; if (q.disp != null && m >= q.disp) return 0; return nbvAt(a, m - 1) - chargeAt(a, m) * (d.getDate() / days); };
+  X.fa = { load: faLoad, nbvToday: (a) => nbvToday(a), sched: (a) => sched(a), nbvAt: (a, m) => nbvAt(a, m), get: () => FA, chargeAt: (a, m) => chargeAt(a, m), accAt: (a, m) => accAt(a, m), depMonth: (m) => depMonth(m) };
 
   /* ===================== management accounts + budget ===================== */
   let MA = null;

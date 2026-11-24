@@ -9,6 +9,7 @@
   const add = (s, n) => iso(new Date(s).getTime() + n * DAY);
   const fd = (s) => (s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '');
   const C = { hire: '#164698', booked: '#7C3AED', shop: '#D97706', sale: '#94A3B8', free: '#16A34A' };
+  const HU = () => FR.units().filter((u) => !FR.forHire || FR.forHire(u));
   let FR, QUOTES = [], CUSTS = [], F = { cat: '', show: 'all', q: '', weeks: 26 }, EL;
 
   async function load() {
@@ -40,7 +41,7 @@
   };
 
   function draw() {
-    const U = FR.units(), st = U.map((u) => [u, nowState(u)]), n = (k) => st.filter(([, s]) => s === k).length;
+    const U = HU(), st = U.map((u) => [u, nowState(u)]), n = (k) => st.filter(([, s]) => s === k).length;
     const in30 = add(today(), 30), in60 = add(today(), 60);
     const bookedSoon = FR.allBookings().filter((b) => b.status === 'Booked' && b.start_date <= in30 && (!b.end_date || b.end_date >= today()));
     const offHire = FR.contracts().filter((c) => c.end_date && !c.rolling && c.end_date >= today() && c.end_date <= in60);
@@ -77,7 +78,7 @@
 
   function finder() {
     const cid = +$('fa_c').value, a = $('fa_from').value || today(), b = $('fa_to').value || null;
-    const units = FR.units().filter((u) => u.category_id === cid), free = units.filter((u) => u.status !== 'For sale' && freeBetween(u, a, b));
+    const units = HU().filter((u) => u.category_id === cid), free = units.filter((u) => u.status !== 'For sale' && freeBetween(u, a, b));
     const later = units.filter((u) => !free.includes(u) && u.status !== 'For sale').map((u) => { const f = freeFrom(u); if (f && f <= a) { const nx = spans(u).filter((s) => s.from > a).sort((x, y) => (x.from < y.from ? -1 : 1))[0]; return [u, f, nx ? add(nx.from, -1) : null]; } return [u, f > a ? f : null]; }).filter(([, f]) => f).sort((x, y) => (x[1] < y[1] ? -1 : 1));
     $('fa_res').innerHTML = `<div class="small" style="margin-bottom:6px"><b>${free.length}</b> of ${units.length} free from ${fd(a)}${b ? ' to ' + fd(b) : ' (open-ended)'}.</div>` +
       (free.length ? free.map((u) => `<label style="display:inline-block;margin:3px 10px 3px 0"><input type="checkbox" data-fu="${esc(u.unit)}"> <b>${esc(u.unit)}</b> <span class="small muted">${esc([u.description, u.year, u.condition].filter(Boolean).join(' · '))}</span></label>`).join('') +
@@ -90,7 +91,7 @@
     const W = F.weeks, start = (() => { const d = new Date(today()); return add(today(), -((d.getUTCDay() + 6) % 7)); })(), end = add(start, W * 7), span = W * 7 * DAY;
     const pct = (s) => Math.max(0, Math.min(100, (new Date(s).getTime() - new Date(start).getTime()) / span * 100));
     const q = F.q.toLowerCase(), in60 = add(today(), 60);
-    const rows = FR.units().filter((u) => (!F.cat || String(u.category_id) === F.cat)).map((u) => ({ u, sp: spans(u), now: nowState(u) }))
+    const rows = HU().filter((u) => (!F.cat || String(u.category_id) === F.cat)).map((u) => ({ u, sp: spans(u), now: nowState(u) }))
       .filter(({ u, sp, now }) => (F.show === 'all' || (F.show === 'soon' ? now !== 'free' && now !== 'sale' && (() => { const f = freeFrom(u); return f && f <= in60; })() : F.show === 'shop' ? ['shop', 'sale'].includes(now) : now === F.show))
         && (!q || (u.unit + ' ' + sp.map((s) => s.label).join(' ')).toLowerCase().includes(q)))
       .sort((a, b) => (FR.cat(a.u.category_id).name || '').localeCompare(FR.cat(b.u.category_id).name || '') || a.u.unit.localeCompare(b.u.unit, undefined, { numeric: true }));
@@ -110,7 +111,7 @@
             return `<div class="avbar" data-u="${esc(u.unit)}" data-i="${i}" title="${tip}" style="position:absolute;top:3px;bottom:3px;left:${l}%;width:${Math.max(0.6, r - l)}%;background:${C[s.kind]};${!s.to && s.kind === 'hire' ? `background:linear-gradient(90deg,${C.hire} 85%,${C.hire}55)` : ''};border-radius:4px;color:#fff;font-size:11px;padding:2px 5px;overflow:hidden;white-space:nowrap;cursor:pointer">${esc(s.label)}</div>`; }).join('')}
           </div></div>`; }).join('') || '<div class="muted" style="padding:10px">No units match.</div>'}</div>`;
     $('pl_box').querySelectorAll('.avrow').forEach((r) => (r.onclick = (e) => { if (e.target.closest('.avbar')) return; const b = r.getBoundingClientRect(), d = add(start, Math.floor((e.clientX - b.left) / b.width * W * 7)); bookForm({ units: [r.dataset.unit], start_date: d < today() ? today() : d }); }));
-    $('pl_box').querySelectorAll('.avbar').forEach((b) => (b.onclick = () => { const u = FR.units().find((x) => x.unit === b.dataset.u), s = spans(u)[+b.dataset.i]; if (s.b) bookForm(s.b); else if (s.c) showContract(u, s.c); }));
+    $('pl_box').querySelectorAll('.avbar').forEach((b) => (b.onclick = () => { const u = HU().find((x) => x.unit === b.dataset.u), s = spans(u)[+b.dataset.i]; if (s.b) bookForm(s.b); else if (s.c) showContract(u, s.c); }));
   }
 
   function showContract(u, c) {
@@ -134,7 +135,7 @@
     $('pl_form').scrollIntoView({ behavior: 'smooth', block: 'center' });
     $('bk_q').onchange = () => { const q = QUOTES.find((x) => x.id === +$('bk_q').value); if (q && !$('bk_cust').value) $('bk_cust').value = q.customer; };
     const check = () => { const a = $('bk_from').value, z = $('bk_to').value || null;
-      const clash = units.filter((un) => { const u = FR.units().find((x) => x.unit === un); return u && spans(u).some((s) => !(s.b && s.b.id === b.id) && overlaps(s, a, z)); });
+      const clash = units.filter((un) => { const u = HU().find((x) => x.unit === un); return u && spans(u).some((s) => !(s.b && s.b.id === b.id) && overlaps(s, a, z)); });
       $('bk_warn').textContent = clash.length ? 'Clashes with something already on ' + clash.join(', ') + ' over those dates – check the timeline.' : ''; return clash; };
     $('bk_from').onchange = $('bk_to').onchange = check; check();
     $('bk_x').onclick = () => ($('pl_form').innerHTML = '');
