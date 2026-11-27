@@ -6,7 +6,7 @@
   const X = window.CT; if (!X || !X.routes) return;
   const { api, all, gbp, esc } = X;
   const $ = (id) => document.getElementById(id);
-  const HELD = (s) => !['sold', 'moved_to_hire', 'written_off'].includes(s.status);
+  const HELD = (s) => !['sold', 'moved_to_hire', 'written_off'].includes(s.status) && !(s.advert && s.advert.avail === 'hire');   // hire-only arrivals are not for sale
   const TYPEMAP = [[/petroleum.*rigid|fuel.*rigid/i, 'rigid_fuel'], [/petroleum|aviation/i, 'artic_petroleum'], [/bitumen/i, 'artic_bitumen'], [/combination/i, 'rigid_combi'], [/waste.*artic/i, 'artic_waste'], [/waste|gully/i, 'rigid_waste'], [/tractor/i, 'tractor_unit']];
   const stockType = (t) => (TYPEMAP.find(([re]) => re.test(t || '')) || [null, 'artic_petroleum'])[1];
   const ym = (d) => (d ? String(d).slice(0, 7) : '');

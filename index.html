@@ -95,34 +95,36 @@ table.cf td.b2{color:var(--bad)}table.cf tr.note td{font-size:12px;color:var(--m
 <aside id="side"><div class="brand"><a href="#/home" data-r="" style="background:#fff;padding:10px 12px;margin:0;display:block"><img src="assets/compton-logo.png" alt="Compton Tankers" style="height:46px;display:block"></a></div>
 <a href="#/home" data-r="home">Overview</a>
 <input id="navq" class="navq" placeholder="Find a page…" autocomplete="off">
-<div class="ng" data-g="fleet"><button type="button" class="nh">Fleet &amp; hire<span class="nc">6</span></button><div class="nb">
+<div class="ng" data-g="hire"><button type="button" class="nh">Hire<span class="nc">5</span></button><div class="nb">
 <a href="#/p-availability" data-r="p-availability">Availability</a>
 <a href="#/p-register" data-r="p-register">Fleet register</a>
-<a href="#/p-fleet" data-r="p-fleet">Fleet performance</a>
-<a href="#/p-stock" data-r="p-stock">Stock &amp; inspections</a>
-<a href="#/p-assets" data-r="p-assets">Asset summary</a>
-<a href="#/p-orders" data-r="p-orders">Kit on order</a>
-</div></div>
-<div class="ng" data-g="sales"><button type="button" class="nh">Sales &amp; customers<span class="nc">6</span></button><div class="nb">
-<a href="#/p-quotes" data-r="p-quotes">Quotes</a>
 <a href="#/p-agreements" data-r="p-agreements">Hire agreements</a>
-<a href="#/p-pipeline" data-r="p-pipeline">Pipeline</a>
-<a href="#/p-crm" data-r="p-crm">Customers</a>
-<a href="#/analyser" data-r="analyser">Deal analyser</a>
+<a href="#/p-fleet" data-r="p-fleet">Fleet performance</a>
+<a href="#/p-assets" data-r="p-assets">Asset summary</a>
+</div></div>
+<div class="ng" data-g="sales"><button type="button" class="nh">Sales<span class="nc">2</span></button><div class="nb">
 <a href="#/p-sales" data-r="p-sales">Dealership stock</a>
+<a href="#/p-stock" data-r="p-stock">Stock &amp; inspections</a>
 </div></div>
 <div class="ng" data-g="parking"><button type="button" class="nh">Parking<span class="nc">3</span></button><div class="nb">
 <a href="#/p-parking" data-r="p-parking">Parking customers</a>
 <a href="#/p-parkmap" data-r="p-parkmap">Yard map</a>
 <a href="#/p-parktest" data-r="p-parktest">Layout planner</a>
 </div></div>
-<div class="ng" data-g="finance"><button type="button" class="nh">Finance<span class="nc">7</span></button><div class="nb">
+<div class="ng" data-g="deals"><button type="button" class="nh">Customers &amp; deals<span class="nc">4</span></button><div class="nb">
+<a href="#/p-quotes" data-r="p-quotes">Quotes</a>
+<a href="#/p-pipeline" data-r="p-pipeline">Pipeline</a>
+<a href="#/p-crm" data-r="p-crm">Customers</a>
+<a href="#/analyser" data-r="analyser">Deal analyser</a>
+</div></div>
+<div class="ng" data-g="finance"><button type="button" class="nh">Finance<span class="nc">8</span></button><div class="nb">
 <a href="#/p-cash" data-r="p-cash">Cash</a>
 <a href="#/p-hp" data-r="p-hp">HP</a>
 <a href="#/hpvc" data-r="hpvc">HP vs contracts</a>
 <a href="#/p-accounts" data-r="p-accounts">Management accounts</a>
 <a href="#/p-forecast" data-r="p-forecast">Revenue forecast</a>
 <a href="#/p-fa" data-r="p-fa">Fixed assets</a>
+<a href="#/p-orders" data-r="p-orders">Procurement (kit on order)</a>
 <a href="#/p-spend" data-r="p-spend">Spend</a>
 </div></div>
 <div class="ng" data-g="reporting"><button type="button" class="nh">Reporting<span class="nc">1</span></button><div class="nb">
@@ -439,9 +441,10 @@ if(document.readyState==='complete')boot();else addEventListener('load',boot);
 <script src="home.js?v=13"></script>
 <script src="finance.js?v=3"></script>
 <script src="disposals.js?v=5"></script>
-<script src="orders.js?v=19"></script>
+<script src="procurement.js?v=1"></script>
+<script src="orders.js?v=20"></script>
 <script src="pipeline.js?v=3"></script>
-<script src="sales.js?v=3"></script>
+<script src="sales.js?v=4"></script>
 <script src="crm.js?v=1"></script>
 <script src="parking.js?v=4"></script>
 <script src="parkmap.js?v=16"></script>
@@ -452,8 +455,8 @@ if(document.readyState==='complete')boot();else addEventListener('load',boot);
 <script src="forecast.js?v=1"></script>
 <script src="monthend.js?v=1"></script>
 <script src="boardpack.js?v=3"></script>
-<script src="ma.js?v=15"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=8"></script><script src="users.js?v=2"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
-var KEY='ct.nav.open',side=document.getElementById('side'),open;try{open=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){open=null}if(!Array.isArray(open))open=['sales'];
+<script src="ma.js?v=15"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=9"></script><script src="users.js?v=2"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
+var KEY='ct.nav.open',side=document.getElementById('side'),open;try{open=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){open=null}if(!Array.isArray(open))open=['hire','sales'];
 function save(){try{localStorage.setItem(KEY,JSON.stringify(open))}catch(e){}}
 function paint(){side.querySelectorAll('.ng').forEach(function(g){g.classList.toggle('open',open.indexOf(g.dataset.g)>=0)})}
 side.querySelectorAll('.nh').forEach(function(h){h.onclick=function(){var g=h.parentNode.dataset.g,i=open.indexOf(g);if(i>=0)open.splice(i,1);else open.push(g);save();paint()}});

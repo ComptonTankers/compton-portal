@@ -30,13 +30,16 @@
     const inPay = k >= 1 && k <= c.last;
     if (inPay) { for (let i = 1; i <= k; i++) { int = bal * c.r; bal -= c.pmt - int; } }
     const lag = Math.max(0, +o.start_lag || 0), rev = k >= lag ? (+o.qty || 1) * (+o.weekly_rate || 0) * 52 / 12 * ((+o.utilisation_pct || 0) / 100) : 0;
-    return { vat: k === 0 ? c.vat : 0, rev, int: inPay ? int : 0, dep: k >= 0 ? c.depMonth : 0, pay: (inPay || (c.adv && k === 0)) ? c.pmt : 0, deposit: k === 0 ? c.dep : 0, buy: k === 0 ? c.gross : 0 };
+    const capShare = Math.max(0, 1 - (+o._cap || 0) / Math.max(1, +o.qty || 1));
+    return { vat: k === 0 ? c.vat : 0, rev, int: inPay ? int : 0, dep: k >= 0 ? c.depMonth * capShare : 0, pay: (inPay || (c.adv && k === 0)) ? c.pmt : 0, deposit: k === 0 ? c.dep : 0, buy: k === 0 ? c.gross : 0 };
   }
   const sumAt = (m, f, w) => ORD.reduce((t, o) => t + at(o, m, w)[f], 0);
   const wi = () => WHATIF;
 
   X.orders = {
-    load: async () => { [ORD, POL] = await Promise.all([all('asset_orders', 'delivery_date.asc.nullslast'), all('fa_policies', 'category.asc')]); return ORD; },
+    load: async () => { let RC = []; [ORD, POL, RC] = await Promise.all([all('asset_orders', 'delivery_date.asc.nullslast'), all('fa_policies', 'category.asc'), api('asset_receipts?select=order_id,treatment').catch(() => [])]);
+      // units that have arrived and been capitalised depreciate on the fixed asset register, not here
+      ORD.forEach((o) => { o._cap = RC.filter((r) => r.order_id === o.id && r.treatment === 'Capitalise').length; }); return ORD; },
     impact: (m) => ({ int: sumAt(m, 'int'), dep: sumAt(m, 'dep'), rev: sumAt(m, 'rev') }),
     off: false, pot: false,
     cash: (k) => { if (X.orders.off) return { inflow: 0, out: 0, vat: 0, rev: 0 }; const m = +k.slice(0, 4) * 12 + (+k.slice(5, 7) - 1), p = X.orders.pot, rev = sumAt(m, 'rev', p), vat = sumAt(m, 'vat', p); return { taxable: rev * 1.2, inflow: sumAt(m - 1, 'rev', p) * 1.2, out: sumAt(m, 'pay', p) + sumAt(m, 'deposit', p) + vat, vat, rev }; },
