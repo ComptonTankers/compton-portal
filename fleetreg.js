@@ -7,12 +7,14 @@
   const STATUS = ['Available', 'On hire', 'Workshop', 'Reserved', 'For sale', 'On order'];
   const REMOVE = ['Sold', 'Scrapped / disposed', 'Moved off fleet', 'Entered in error'];
   const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
-  let CATS = [], UNITS = [], CON = [], BK = [], TAB = 'units', F = { div: '', cat: '', status: '', q: '', removed: false }, EDIT = null;
+  let CATS = [], UNITS = [], CON = [], BK = [], STK = [], INSP = [], TAB = 'units', F = { div: '', cat: '', status: '', q: '', removed: false }, EDIT = null;
   const DIVS = ['Waste & industrial', 'Energy', 'Other assets'], DCOL = { 'Waste & industrial': '#E4611D', Energy: '#164698', 'Other assets': '#64748B' };
 
   async function load() {
     [CATS, UNITS, CON] = await Promise.all([all('asset_categories', 'sort.asc,name.asc'), all('assets', 'unit.asc'), api('contracts?select=id,unit,customer,monthly_rate,start_date,end_date,rolling,notice_days&active=is.true')]);
     try { BK = await api('hire_bookings?select=*&status=neq.Cancelled&order=start_date.asc'); } catch (e) { BK = []; }
+    // inspections live on stock records (Stock & inspections); link them to fleet units by fleet number or registration
+    try { [STK, INSP] = await Promise.all([api('stock?select=id,reg,status,fa_id'), api('jobs?select=id,stock_id,status,submitted_at,reviewed_at,photos:data->photos,cutouts:data->cutouts&status=in.(submitted,reviewed)&order=submitted_at.desc')]); } catch (e) { STK = []; INSP = []; }
   }
   const cat = (id) => CATS.find((c) => c.id === id) || {};
   const con = (u) => CON.find((c) => norm(c.unit) === norm(u.unit));
@@ -25,10 +27,14 @@
   const division = (u) => u.division || cat(u.category_id).division || 'Other assets';
   const forHire = (u) => cat(u.category_id).for_hire !== false;
   const serials = (u) => [['VIN', u.chassis_no], ['Tank', u.tank_serial], ['S/N', u.serial_no]].filter(([, x]) => x);
+  const regKey = (r) => norm(String(r || '').split(/\s+[-–]\s+/)[0]);
+  const inspFor = (u) => { const keys = [norm(u.unit), u.reg ? norm(u.reg) : null, u.fa_ref ? norm(u.fa_ref) : null].filter(Boolean);
+    const st = STK.filter((x) => keys.includes(regKey(x.reg))).map((x) => x.id); return INSP.find((j) => st.includes(j.stock_id)) || null; };
+  const photoCount = (j) => (Array.isArray(j.photos) ? j.photos.filter((x) => x && x.path).length : 0) + (Array.isArray(j.cutouts) ? j.cutouts.length : 0);
   // the full product description used on quotes and hire agreements
   const fullDesc = (u) => { const c = cat(u.category_id); return { title: u.description || c.name || u.unit, lines: [[u.make, u.model].filter(Boolean).join(' '), u.capacity, u.spec, c.spec].filter(Boolean),
     long: u.long_description || c.long_description || '', year: u.year, condition: u.condition, chassis: u.chassis_no, tank: u.tank_serial, reg: u.reg && u.reg !== u.unit ? u.reg : '', value: u.replacement_value, catDesc: c.description }; };
-  X.fleetReg = { DIVS, division, forHire, serials, load, cats: () => CATS, units: () => UNITS.filter((u) => u.active !== false), status, stdRate, cat, con, bookings, nextBk, onHireBk, allBookings: () => BK, contracts: () => CON, fullDesc, norm };
+  X.fleetReg = { inspFor, photoCount, DIVS, division, forHire, serials, load, cats: () => CATS, units: () => UNITS.filter((u) => u.active !== false), status, stdRate, cat, con, bookings, nextBk, onHireBk, allBookings: () => BK, contracts: () => CON, fullDesc, norm };
 
   X.routes['p-register'] = async function (el) {
     el.innerHTML = X.head('Fleet register', '') + '<div class="empty">Loading…</div>';
@@ -62,7 +68,8 @@
       <div class="small muted" style="margin-bottom:6px">${rows.length} units</div>
       <table><thead><tr><th>Unit</th><th>Division / category</th><th>Serial numbers</th><th>Status</th><th>Customer</th><th class="n">On-hire £/wk</th><th class="n">Standard £/wk</th><th></th></tr></thead><tbody>
       ${rows.map((u) => { const c = con(u), st = status(u);
-        return `<tr><td><b>${esc(u.unit)}</b>${u.reg && u.reg !== u.unit ? `<div class="small muted">${esc(u.reg)}</div>` : ''}${u.make || u.model ? `<div class="small muted">${esc([u.make, u.model, u.year].filter(Boolean).join(' '))}</div>` : ''}</td>
+        const ij = inspFor(u);
+        return `<tr><td><b>${esc(u.unit)}</b>${u.reg && u.reg !== u.unit ? `<div class="small muted">${esc(u.reg)}</div>` : ''}${ij ? `<div class="small"><a href="#/p-stock" style="color:#15803D" title="Inspection on Stock & inspections">✓ Inspected ${new Date(ij.reviewed_at || ij.submitted_at).toLocaleDateString('en-GB')} · ${photoCount(ij)} photos</a></div>` : ''}${u.make || u.model ? `<div class="small muted">${esc([u.make, u.model, u.year].filter(Boolean).join(' '))}</div>` : ''}</td>
           <td><span class="small" style="color:${DCOL[division(u)]};font-weight:600">${esc(division(u))}</span><br>${esc(cat(u.category_id).name || '–')}</td>
           <td class="small">${serials(u).map(([k, x]) => `<div><span class="muted">${k}</span> ${esc(x)}</div>`).join('') || '<span class="muted">none recorded</span>'}</td><td><span style="color:${st === 'On hire' ? '#164698' : st === 'Available' ? '#16A34A' : st === 'Removed' ? '#94A3B8' : st === 'Booked' ? '#7C3AED' : '#B45309'};font-weight:600">${esc(st)}</span>${u.removed_reason ? `<div class="small muted">${esc(u.removed_reason)} ${u.removed_at ? new Date(u.removed_at).toLocaleDateString('en-GB') : ''}</div>` : ''}</td>
           <td>${c ? esc(c.customer) : ''}</td><td class="n">${c ? gbp(c.monthly_rate * 12 / 52) : ''}</td><td class="n">${stdRate(u) != null ? gbp(stdRate(u)) : '<span class="muted">–</span>'}${u.location ? `<div class="small muted">${esc(u.location)}</div>` : ''}</td>
@@ -94,7 +101,7 @@
       <label>Chassis / VIN<input id="fu_chassis_no" value="${f('chassis_no')}"></label><label>Tank / barrel serial no.<input id="fu_tank_serial" value="${f('tank_serial')}"></label>
       <label>Other serial no. (pump, plant, equipment)<input id="fu_serial_no" value="${f('serial_no')}"></label>
       <label>Full replacement value £<input id="fu_replacement_value" type="number" step="1" value="${f('replacement_value')}"></label>
-      <label style="grid-column:span 4">Internal notes<input id="fu_notes" value="${f('notes')}"></label>${sheetFields('fu', v, true)}</div>
+      <label style="grid-column:span 4">Internal notes<input id="fu_notes" value="${f('notes')}"></label>${sheetFields('fu', v, true)}${u && inspFor(u) ? `<div style="grid-column:1/-1"><b>Photos from the inspection</b> <span class="small muted">– click one to use it as the product photo on quotes and hire agreements</span><div id="fu_ip" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">Loading…</div></div>` : ''}</div>
       ${u && con(u) ? `<div class="small muted" style="margin-top:6px">On hire to ${esc(con(u).customer)} – status shows “On hire” while the contract is live.</div>` : ''}
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="pri2" id="fu_save">Save</button><button id="fu_x">Cancel</button>
       ${u ? (removed ? '<button id="fu_restore">Put back on the fleet</button>' : `<span style="margin-left:auto" class="small">Remove from fleet: <select id="fu_why">${REMOVE.map((r) => `<option>${r}</option>`).join('')}</select> <input id="fu_when" type="date" value="${new Date().toISOString().slice(0, 10)}"> <button id="fu_rm" style="border-color:#DC2626;color:#B91C1C">Remove</button></span>`) : ''}
@@ -102,6 +109,15 @@
     $('fu_x').onclick = () => ($('fr_form').innerHTML = '');
     const done = async () => { await load(); draw(el); };
     wirePhoto('fu', 'unit-' + norm((v && v.unit) || 'new'));
+    if (u && inspFor(u) && $('fu_ip')) (async () => { const j = inspFor(u), cfg = window.SUPABASE_CONFIG, ss = await X.session();
+      const items = [...(j.cutouts || []).map((c) => ({ path: c.path, label: 'Cut-out ' + c.n })), ...(j.photos || []).filter((p) => p && p.path).map((p) => ({ path: p.path, label: p.label || '' }))].slice(0, 14);
+      const box = $('fu_ip'); box.innerHTML = '';
+      for (const it of items) { try { const r = await fetch(cfg.url + '/storage/v1/object/authenticated/inspections/' + it.path, { headers: { apikey: cfg.anonKey, Authorization: 'Bearer ' + ss.access_token } }); if (!r.ok) continue;
+        const b = await r.blob(), url = URL.createObjectURL(b), f = document.createElement('figure'); f.style.cssText = 'margin:0;width:120px;cursor:pointer;text-align:center';
+        f.innerHTML = `<img src="${url}" style="width:120px;height:84px;object-fit:cover;border-radius:6px;border:2px solid transparent"><figcaption class="small muted">${esc(it.label)}</figcaption>`;
+        f.onclick = async () => { f.querySelector('img').style.borderColor = '#F15C16'; $('fu_pv').textContent = 'Copying…'; try { const file = new File([b], (it.path.split('/').pop() || 'photo.jpg'), { type: b.type || 'image/jpeg' }); const pu = await uploadPhoto(file, 'unit-' + norm(u.unit)); $('fu_photo_url').value = pu; $('fu_pv').innerHTML = `<img src="${pu}" style="max-width:160px;border-radius:6px"> <span class="small" style="color:#15803D">Set – press Save</span>`; } catch (e) { $('fu_pv').textContent = e.message; } };
+        box.appendChild(f); } catch (e) {} }
+      if (!box.children.length) box.textContent = 'No photos could be loaded.'; })();
     $('fu_save').onclick = async () => {
       const g = (k) => $('fu_' + k).value.trim(), body = { unit: g('unit'), reg: g('reg') || null, category_id: +g('cat'), status: g('status'), make: g('make') || null, model: g('model') || null, year: g('year') ? +g('year') : null,
         capacity: g('capacity') || null, location: g('location') || null, weekly_rate: g('rate') === '' ? null : +g('rate'), notes: g('notes') || null, description: g('description') || null, spec: g('spec') || null, condition: g('condition') || null, chassis_no: g('chassis_no') || null, tank_serial: g('tank_serial') || null, serial_no: g('serial_no') || null, division: g('division') || null, replacement_value: g('replacement_value') === '' ? null : +g('replacement_value'), long_description: $('fu_long_description').value.trim() || null, spec_sections: (() => { const x = parseSpec($('fu_sheet').value); return x.length ? x : null; })(), photo_url: $('fu_photo_url').value || null, updated_at: new Date().toISOString() };
