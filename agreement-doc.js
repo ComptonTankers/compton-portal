@@ -87,7 +87,41 @@
       <div class="cta">Questions about this agreement? Call 01525 371 707 or email info@comptontankers.com</div></div>`;
   }
 
+  /* ---------- standard: the original Compton look, everything stacked full width ---------- */
+  function standard(a, o) {
+    const w = weekly(a), row = (k, v) => `<tr><th>${k}</th><td>${v || '–'}</td></tr>`;
+    return `<div class="hd"><img src="${o.base}assets/compton-logo.png" alt="Compton Tankers"><div class="r"><b class="tag">Tanker hire · Sales · Specialist workshops</b><br>Compton’s Yard, Grovebury Road, Leighton Buzzard LU7 4TS<br>T 01525 371 707 · E info@comptontankers.com · W www.comptontankers.com</div></div>
+      <h1>Hire agreement</h1><div class="sub">Agreement ${esc(a.ref || '(draft)')} · contract start ${fd(a.start_date)}</div>
+      <h2>Hirer</h2><table class="kv">${row('Company', '<b>' + esc(a.customer) + '</b>' + (a.company_no ? ' (No. ' + esc(a.company_no) + ')' : ''))}${row('Address', nl(a.customer_address || ''))}${row('Contact', esc([a.contact_name, a.contact_phone].filter(Boolean).join(' · ')))}${row('Email', esc(a.contact_email || ''))}${row('Invoices to', esc(a.invoice_email || a.contact_email || ''))}</table>
+      <h2>Owner</h2><table class="kv">${row('Company', '<b>Tanker Rent UK Ltd</b> (No. 04432719), trading as Compton Tankers')}${row('Address', 'Compton’s Yard, Grovebury Road, Leighton Buzzard, Bedfordshire LU7 4TS')}${row('Phone', '01525 371 707')}${row('Email', 'info@comptontankers.com')}</table>
+      <h2>1. Equipment details</h2>${(a.units || []).map((u) => `<table class="eq"><thead><tr><th>Asset type</th><th>Fleet number</th><th>Serial no.</th><th>Condition / year of manufacture</th><th>Full replacement value</th></tr></thead>
+        <tbody><tr><td>${esc([u.code, u.category].filter(Boolean).join(' – ') || '–')}</td><td><b>${esc(u.unit || 'TBC')}</b>${u.reg && u.reg !== u.unit ? '<br><span class="sm">' + esc(u.reg) + '</span>' : ''}</td><td>${[u.chassis_no ? 'VIN: ' + esc(u.chassis_no) : '', u.tank_serial ? 'Tank: ' + esc(u.tank_serial) : ''].filter(Boolean).join('<br>') || '–'}</td><td>${esc([u.condition, u.year].filter(Boolean).join(' / ')) || '–'}</td><td>${u.replacement_value ? gbp(u.replacement_value) : '–'}</td></tr>
+        <tr><td colspan="5" class="ks"><div class="ksh">Key specifications (compartments, volume, axles etc)</div>${(() => { const box = Array.isArray(u.spec_sections) && u.spec_sections.length; return esc(u.description || '') + (!box && u.description && u.spec ? '. ' : '') + (!box ? esc(u.spec || '') : ''); })()}
+          ${Array.isArray(u.spec_sections) && u.spec_sections.length ? `<div class="kb">${sections(u).map((x) => `<div><b>${esc(x.title)}</b><ul>${(x.items || []).filter(Boolean).map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('')}</div>` : ''}</td></tr>
+        <tr class="wr"><th colspan="2">Weekly rate (ex VAT)</th><td colspan="3"><b>${gbp(u.weekly_rate)}</b></td></tr></tbody></table>`).join('')}
+      <h2>2. Hire period</h2><table class="kv">${row('Hire type', esc(a.hire_type))}${row('Start date', fd(a.start_date))}${row('Minimum term', a.min_term_months ? a.min_term_months + ' months' : 'None')}${row('Initial term ends', a.initial_term_end ? fd(a.initial_term_end) : 'N/A')}${row('After the initial term', a.rolls === false ? 'The hire ends and the equipment is returned' : 'Continues until notice is given')}${row('Minimum return notice', a.notice_days ? a.notice_days + ' days in writing' : 'N/A')}${row('Delivery to', esc(a.delivery_location || 'N/A'))}${row('Collection / return location', esc(a.collection_location || YARD))}</table>
+      <h2>3. Rentals (ex VAT)</h2><table class="kv">${row('Contract weekly rate', '<b>' + gbp(w) + '</b>')}${row('Contract monthly rate', spot(a) ? 'N/A' : '<b>' + gbp(w * 52 / 12) + '</b> <span class="sm">(weekly × 52 ÷ 12)</span>')}${row('Deposit / security', gbp(a.deposit || 0))}${row('Delivery charge', gbp(a.delivery_charge || 0))}${row('Collection charge', gbp(a.collection_charge || 0))}${row('Payment terms', esc(a.payment_terms || ''))}</table>
+      <h2>4. Additional charges (ex VAT)</h2><table class="kv li">${rows(a.additional_charges)}</table>
+      <h2>5. Options and add-ons</h2><table class="kv li">${rows(a.options)}</table>
+      <h2>6. Special terms</h2><table class="kv li"><tr><td>The equipment may only be used in</td><td class="c">${esc(a.countries || 'United Kingdom')}</td></tr>${(a.special_terms || []).filter((r) => r.item).map((r) => `<tr><td>${esc(r.item)}</td><td class="c">${esc(r.charge || '')}</td></tr>`).join('')}</table>
+      <h2>7. Signatures</h2>${signBlock(a, 'sgs')}
+      <h2>8. Handover record (completed at delivery and return)</h2><table class="eq ho"><thead><tr><th>Fleet no.</th><th>Date and time out</th><th>Odometer / hours</th><th>Condition noted and photos taken</th><th>Signed</th></tr></thead><tbody>${(a.units || []).map((u) => `<tr><td><b>${esc(u.unit || 'TBC')}</b></td><td></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
+      <table class="eq ho" style="margin-top:8px"><thead><tr><th>Fleet no.</th><th>Date and time returned</th><th>Odometer / hours</th><th>Condition on return / damage</th><th>Received by</th></tr></thead><tbody>${(a.units || []).map((u) => `<tr><td><b>${esc(u.unit || 'TBC')}</b></td><td></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
+      <div class="ft">Compton Tankers is a trading name of Tanker Rent UK Limited. Registered in England and Wales, company number 04432719. Registered office: Comptons Yard, Grovebury Road, Leighton Buzzard, Bedfordshire LU7 4TS · ${esc(a.ref || '')}</div>`;
+  }
+
   const CSS = {
+    standard: `@page{size:A4;margin:14mm 16mm 16mm}body{font-family:Arial,Helvetica,sans-serif;color:#0B2A66;font-size:9.8pt;margin:0}
+      .hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #E4611D;padding-bottom:8px}.hd img{height:58px}.hd .r{text-align:right;font-size:8.6pt;line-height:1.45}.tag{color:#E4611D}
+      h1{font-size:18pt;color:#164698;margin:14px 0 2px}.sub{color:#6B7280;font-size:9pt;margin-bottom:4px}
+      h2{font-size:10.5pt;background:#164698;color:#fff;padding:6px 9px;margin:14px 0 0;border-radius:3px 3px 0 0;break-after:avoid;page-break-after:avoid}
+      table{width:100%;border-collapse:collapse}tr{page-break-inside:avoid}.kv th,.kv td{padding:6px 9px;border-bottom:1px solid #E3E7EE;vertical-align:top;text-align:left}.kv th{width:32%;color:#164698;font-weight:700}.kv.li td.c{text-align:right;width:30%}.sm{color:#6B7280;font-size:8.4pt}
+      .eq{border:1px solid #C9D2E0;page-break-inside:avoid;margin-bottom:8px}.eq thead th{background:#EEF3FB;color:#164698;font-size:8.6pt;padding:7px 6px;text-align:center;border:1px solid #C9D2E0}.eq td{padding:8px 6px;text-align:center;border:1px solid #C9D2E0;vertical-align:middle}
+      .eq td.ks{text-align:left;padding:10px 12px;line-height:1.5}.ksh{text-align:center;font-weight:700;color:#164698;margin-bottom:5px}.kb{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 14px;margin-top:8px}.kb ul{margin:2px 0 0;padding-left:16px}.kb li::marker{color:#E4611D}
+      .eq tr.wr th{background:#164698;color:#fff;text-align:center;padding:8px}.eq tr.wr td{font-size:11pt}.ho td{height:30px}
+      .sgs{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;page-break-inside:avoid}.sg{border:1.5px solid #164698;border-radius:6px;padding:8px 12px}.sgh{font-weight:700;margin-bottom:4px}.sgl{display:flex;gap:10px;align-items:flex-end;margin:7px 0}.sgl span{width:130px;color:#6B7280;font-size:8.5pt}.sgv{flex:1;border-bottom:1px solid #94A3B8;min-height:20px}.sgv.sig{min-height:56px}
+      .esig{font-size:8pt;color:#475569;margin-top:8px}.ft{margin-top:14px;font-size:7.5pt;color:#6B7280;border-top:1px solid #164698;padding-top:4px}.pb{page-break-before:always}
+      .th{color:#164698;font-size:14pt;border-bottom:3px solid #E4611D;padding-bottom:6px}.tc{column-count:2;column-gap:18px;font-size:7.3pt;line-height:1.35;text-align:justify;color:#333}.tc h4{color:#164698;font-size:8.5pt;margin:8px 0 3px;break-after:avoid}.tc p{margin:0 0 4px}`,
     classic: `@page{size:A4;margin:14mm 14mm 16mm}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:9.5pt;margin:0}
       .hdr{display:flex;justify-content:space-between;align-items:flex-start}.hdr img{height:62px}.hdr .ad{text-align:right;color:#1F4E9C;line-height:1.35;font-size:9pt}
       .ct{text-align:center;color:#1F4E9C;font-weight:400;font-size:15pt;margin:6px 0 8px}h3{font-size:10.5pt;margin:16px 0 6px}
@@ -115,10 +149,10 @@
 
   // full HTML document; o = { base, style:'pack'|'classic', print:true|false }
   W.CT.agreementDoc = function (a, o) {
-    o = Object.assign({ base: '', style: a.doc_style || 'pack', print: true }, o || {});
-    const st = o.style === 'classic' ? 'classic' : 'pack';
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Hire agreement ${esc(a.ref || '')} – ${esc(a.customer || '')}</title><style>${CSS[st]}@media screen{body{background:#eef1f5}.pg,.terms{background:#fff;margin:12px auto;max-width:210mm;box-shadow:0 2px 10px rgba(0,0,0,.08)}${st === 'classic' ? 'body{max-width:200mm;margin:14px auto;background:#fff;padding:14px}' : ''}}</style></head><body>
-      ${st === 'classic' ? classic(a, o) : pack(a, o)}${terms()}${o.print ? '<script>window.onload=function(){setTimeout(function(){window.print()},500)}<\/script>' : ''}</body></html>`;
+    o = Object.assign({ base: '', style: a.doc_style || 'standard', print: true }, o || {});
+    const st = ['classic', 'pack', 'standard'].includes(o.style) ? o.style : 'standard';
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Hire agreement ${esc(a.ref || '')} – ${esc(a.customer || '')}</title><style>${CSS[st]}@media screen{body{background:#eef1f5}.pg,.terms{background:#fff;margin:12px auto;max-width:210mm;box-shadow:0 2px 10px rgba(0,0,0,.08)}${st !== 'pack' ? 'body{max-width:200mm;margin:14px auto;background:#fff;padding:14px}' : ''}}</style></head><body>
+      ${st === 'classic' ? classic(a, o) : st === 'pack' ? pack(a, o) : standard(a, o)}${terms()}${o.print ? '<script>window.onload=function(){setTimeout(function(){window.print()},500)}<\/script>' : ''}</body></html>`;
   };
-  W.CT.agreementDocParts = { classic, pack, signBlock, terms, CSS, sections };
+  W.CT.agreementDocParts = { standard, classic, pack, signBlock, terms, CSS, sections };
 })();
