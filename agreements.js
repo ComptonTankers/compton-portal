@@ -24,8 +24,8 @@
   function unitSnap(unit, rate) {
     const u = FR() && FR().units().find((x) => FR().norm(x.unit) === FR().norm(unit)); if (!u) return { unit, description: '', weekly_rate: rate ?? '' };
     const d = FR().fullDesc(u), c = FR().cat(u.category_id);
-    return { unit: u.unit, reg: d.reg, category: c.name || '', description: d.title, spec: d.lines.join(' · '), year: u.year || '', condition: u.condition || '', chassis_no: u.chassis_no || '', tank_serial: u.tank_serial || '',
-      replacement_value: u.replacement_value ?? '', weekly_rate: rate ?? FR().stdRate(u) ?? '' };
+    return { unit: u.unit, reg: d.reg, category: c.name || '', code: c.code || '', description: d.title, spec: d.lines.join(' · '), year: u.year || '', condition: u.condition || '', chassis_no: u.chassis_no || '', tank_serial: u.tank_serial || '',
+      replacement_value: u.replacement_value ?? '', weekly_rate: rate ?? FR().stdRate(u) ?? '', photo_url: u.photo_url || c.photo_url || '', spec_sections: (u.spec_sections && u.spec_sections.length ? u.spec_sections : c.spec_sections) || null };
   }
 
   // ---- create from an accepted quote: agreement + a booking for each unit ----
@@ -83,14 +83,14 @@
     const a = CUR, locked = ['On hire', 'Ended', 'Cancelled'].includes(a.status), dis = locked ? 'disabled' : '';
     const inp = (k, t = 'text', ph = '') => `<input id="ag_${k}" type="${t}" value="${esc(a[k] ?? '')}" placeholder="${ph}" ${dis}>`;
     const units = FR() ? FR().units() : [];
-    EL.innerHTML = X.head(a.ref ? 'Hire agreement ' + a.ref : 'New hire agreement', 'Status: <b style="color:' + ST[a.status] + '">' + esc(a.status) + '</b>' + (a.signed_at ? ' · signed by ' + esc(a.signed_name || '') + ' on ' + new Date(a.signed_at).toLocaleDateString('en-GB') : '') + (a.notes ? ' · ' + esc(a.notes) : '')) +
+    EL.innerHTML = X.head(a.ref ? 'Hire agreement ' + a.ref : 'New hire agreement', 'Status: <b style="color:' + ST[a.status] + '">' + esc(a.status) + '</b>' + (a.status === 'Sent' && a.sign_token ? (a.viewed_at ? ' · opened by the customer ' + new Date(a.viewed_at).toLocaleString('en-GB') : ' · e-signature link sent, not opened yet') : '') + (a.signed_at ? ' · signed by ' + esc(a.signed_name || '') + ' on ' + new Date(a.signed_at).toLocaleDateString('en-GB') : '') + (a.notes ? ' · ' + esc(a.notes) : '')) +
       `<div style="margin-bottom:10px"><button id="ag_back">← All hire agreements</button></div>
       <div class="grid2"><div class="card"><h3>1. Hirer</h3><div class="form" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <label>Hirer (company)${inp('customer')}</label><label>Company no.${inp('company_no')}</label>
         <label style="grid-column:span 2">Registered / invoice address<textarea id="ag_customer_address" rows="3" ${dis}>${esc(a.customer_address || '')}</textarea></label>
         <label>Contact${inp('contact_name')}</label><label>Phone${inp('contact_phone')}</label><label>Contact email${inp('contact_email', 'email')}</label><label>Invoices to (email)${inp('invoice_email', 'email')}</label></div></div>
       <div class="card"><h3>2. Hire period</h3><div class="form" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <label>Hire type<select id="ag_hire_type" ${dis}>${['Monthly PCM', 'Weekly', 'Fixed term'].map((t) => `<option ${t === a.hire_type ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label>Hire type<select id="ag_hire_type" ${dis}>${['Monthly PCM', 'Spot Hire', 'Weekly', 'Fixed term'].map((t) => `<option ${t === a.hire_type ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         <label>Start date${inp('start_date', 'date')}</label><label>Minimum term (months)${inp('min_term_months', 'number')}</label><label>Initial term ends<input id="ag_end" disabled value="${a.initial_term_end ? fd(a.initial_term_end) : '–'}"></label>
         <label>After the initial term<select id="ag_rolls" ${dis}><option value="1" ${a.rolls !== false ? 'selected' : ''}>Rolls on until notice is given</option><option value="0" ${a.rolls === false ? 'selected' : ''}>Ends – unit comes back</option></select></label>
         <label>Return notice (days)${inp('notice_days', 'number', 'e.g. 28')}</label>
@@ -103,8 +103,10 @@
       <div class="card"><h3>7. Special terms</h3><div class="form" style="display:grid;gap:8px"><label>Equipment may only be used in${inp('countries')}</label><div id="ag_special"></div>${locked ? '' : '<button class="mini" id="ag_adds">+ Add a special term</button>'}</div></div></div>
       <div class="grid2"><div class="card"><h3>5. Additional charges</h3><div id="ag_charges"></div>${locked ? '' : '<button class="mini" id="ag_addc">+ Add a charge</button>'}</div><div class="card"><h3>6. Options and add-ons</h3><div id="ag_options"></div>${locked ? '' : '<button class="mini" id="ag_addo">+ Add an option</button>'}</div></div>
       <div class="card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${locked ? '' : '<button class="pri2" id="ag_save">Save</button>'}
-        <button id="ag_pdf">Agreement PDF${a.status === 'Draft' ? ' and mark as sent' : ''}</button>
-        ${a.id && ['Draft', 'Sent'].includes(a.status) ? '<button id="ag_sign" style="border-color:#7C3AED;color:#6D28D9">Customer has signed</button>' : ''}
+        <label class="small" style="display:flex;gap:6px;align-items:center">Look <select id="ag_style"><option value="pack" ${a.doc_style !== 'classic' ? 'selected' : ''}>Compton sales-pack style</option><option value="classic" ${a.doc_style === 'classic' ? 'selected' : ''}>MCS contract layout</option></select></label>
+        <button id="ag_pdf">${a.signed_at ? 'Unsigned copy (PDF)' : 'Agreement PDF'}</button>
+        ${a.id && ['Draft', 'Sent'].includes(a.status) ? '<button class="pri2" id="ag_esign">Send for e-signature</button><button id="ag_sign" style="border-color:#7C3AED;color:#6D28D9">Signed on paper</button>' : ''}
+        ${a.signed_at && a.signature ? '<button class="pri2" id="ag_signed">Signed copy (PDF)</button>' : ''}
         ${a.id && ['Signed', 'Sent', 'Draft'].includes(a.status) ? '<button id="ag_start" style="border-color:#16A34A;color:#15803D">Start hire – units out</button>' : ''}
         ${a.status === 'On hire' ? '<button id="ag_endh" style="border-color:#DC2626;color:#B91C1C">End hire – units back</button>' : ''}
         ${a.id && ['Draft', 'Sent', 'Signed'].includes(a.status) ? '<button id="ag_cancel" style="margin-left:auto">Cancel agreement</button>' : ''}
@@ -170,8 +172,20 @@
       $('ag_adds').onclick = () => { a.special_terms.push({ item: '', charge: '' }); drawList('ag_special', 'special_terms', locked); };
       $('ag_save').onclick = async () => { read(); if (await save()) msg('Saved – units booked on the availability planner.'); };
     }
-    $('ag_pdf').onclick = async () => { if (!locked) { read(); if (!(await save())) return; } pdf(CUR);
-      if (CUR.status === 'Draft') { await save({ status: 'Sent', sent_at: new Date().toISOString() }); msg('Marked as sent for signature.'); } };
+    $('ag_style').onchange = async () => { CUR.doc_style = $('ag_style').value; if (CUR.id) await api('hire_agreements?id=eq.' + CUR.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ doc_style: CUR.doc_style }) }); };
+    $('ag_pdf').onclick = async () => { if (!locked && !a.signed_at) { read(); if (!(await save())) return; } pdf(CUR); };
+    if ($('ag_signed')) $('ag_signed').onclick = () => pdf(CUR, true);
+    if ($('ag_esign')) $('ag_esign').onclick = async () => {
+      read(); if (!(CUR.units || []).length) { msg('Add the equipment first.'); return; }
+      if (!CUR.sign_token) CUR.sign_token = crypto.randomUUID();
+      const to = CUR.sent_to || CUR.contact_email || '';
+      if (!(await save({ sign_token: CUR.sign_token, status: 'Sent', sent_at: CUR.sent_at || new Date().toISOString(), sent_to: to || null, doc_style: CUR.doc_style || 'pack' }))) return;
+      const link = signUrl(CUR), subj = 'Hire agreement ' + CUR.ref + ' – ' + CUR.customer + ' – please sign', body = `Hello${CUR.contact_name ? ' ' + CUR.contact_name.split(' ')[0] : ''},\n\nPlease find your hire agreement ${CUR.ref} for ${(CUR.units || []).map((u) => u.unit || u.description).join(', ')}. You can read it and sign it online here:\n\n${link}\n\nIt takes a couple of minutes on a phone or computer. Any questions, call us on 01525 371 707.\n\nKind regards,\nCompton Tankers`;
+      $('ag_msg').innerHTML = `<div class="box2" style="padding:10px;margin-top:6px"><b>E-signature link for ${esc(CUR.customer)}</b> – send it to whoever signs for them. It works until they sign.
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="es_link" readonly value="${esc(link)}" style="flex:1;min-width:280px" onclick="this.select()"><button class="mini" id="es_copy">Copy link</button>
+        <a class="mini" style="text-decoration:none" href="mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}">Email it (opens Outlook)</a><a class="mini" style="text-decoration:none" target="_blank" href="${esc(link)}">Preview what they see</a></div></div>`;
+      $('es_copy').onclick = async () => { try { await navigator.clipboard.writeText(link); $('es_copy').textContent = 'Copied ✓'; } catch (e) { $('es_link').select(); } };
+    };
     if ($('ag_sign')) $('ag_sign').onclick = () => {
       $('ag_msg').innerHTML = `<span class="form" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:end"><label>Signed by<input id="sg_n" value="${esc(a.contact_name || '')}"></label><label>Position<input id="sg_p"></label><label>PO no.<input id="sg_po"></label><label>Date<input id="sg_d" type="date" value="${today()}"></label><button class="pri2" id="sg_go">Record signature</button></span>`;
       $('sg_go').onclick = async () => { read(); if (await save({ status: 'Signed', signed_name: $('sg_n').value.trim() || null, signed_position: $('sg_p').value.trim() || null, signed_po: $('sg_po').value.trim() || null, signed_at: new Date($('sg_d').value || today()).toISOString() })) msg('Signed – start the hire when the units go out.'); }; };
@@ -201,42 +215,11 @@
     if ($('ag_cancel')) $('ag_cancel').onclick = async () => { if (!confirm('Cancel this hire agreement and release its bookings?')) return; CUR.status = 'Cancelled'; await save({ status: 'Cancelled' }); };
   }
 
-  // ---- branded agreement (print window → save as PDF) ----
-  async function pdf(a) {
+  // ---- the agreement document (agreement-doc.js) in a print window → save as PDF ----
+  function pdf(a, signedCopy) {
     const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, ''), w = window.open('', '_blank'); if (!w) { alert('Allow pop-ups for the portal to open the agreement.'); return; }
-    const wk = weekly(a), row = (k, v) => `<tr><th>${k}</th><td>${v || '–'}</td></tr>`, list = (L) => (L || []).filter((r) => r.item).map((r) => `<tr><td>${esc(r.item)}</td><td class="n">${esc(r.charge || '')}</td></tr>`).join('');
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Hire agreement ${esc(a.ref || '')} – ${esc(a.customer)}</title><style>
-      @page{size:A4;margin:14mm 16mm 18mm}body{font-family:Arial,sans-serif;color:#0B2A66;font-size:9.8pt;margin:0}
-      .hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #E4611D;padding-bottom:8px}.hd img{height:58px}.hd .r{text-align:right;font-size:8.6pt;line-height:1.45}
-      h1{font-size:18pt;color:#164698;margin:16px 0 2px}.sub{color:#6B7280;font-size:9pt;margin-bottom:10px}
-      h2{font-size:10.5pt;background:#164698;color:#fff;padding:5px 8px;margin:14px 0 0;border-radius:3px 3px 0 0}
-      table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1px solid #E3E7EE;vertical-align:top;text-align:left}th{width:38%;color:#164698;font-weight:600}.n{text-align:right}
-      .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;page-break-inside:avoid;break-inside:avoid}tr{page-break-inside:avoid}.sig{page-break-inside:avoid;break-inside:avoid}.eq th{background:#EEF3FB;width:auto;font-size:8.6pt}.eq td{font-size:9pt}.sm{color:#6B7280;font-size:8.2pt}
-      .tot{display:flex;justify-content:flex-end;margin-top:6px}.tot div{border:1px solid #164698;padding:6px 12px;text-align:right;margin-left:-1px}.tot span{display:block;font-size:8pt;color:#6B7280}.tot b{font-size:11.5pt}
-      .sig{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}.sig>div{border:1px solid #164698;border-radius:6px;padding:8px 10px}.ln{border-bottom:1px solid #94A3B8;height:24px;margin-bottom:2px}.lb{font-size:8pt;color:#6B7280;margin-bottom:6px}
-      .note{font-size:8.6pt;color:#334155;margin-top:8px;line-height:1.45}.ft{margin-top:14px;font-size:7.6pt;color:#6B7280;border-top:1px solid #164698;padding-top:4px}.pb{page-break-before:always}
-    </style></head><body>
-      <div class="hd"><img src="${base}assets/compton-logo.png" alt="Compton Tankers"><div class="r"><b style="color:#E4611D">Tanker hire · Sales · Specialist workshops</b><br>Compton’s Yard, Grovebury Road, Leighton Buzzard LU7 4TS<br>T 01525 371 707 · E info@comptontankers.com · W www.comptontankers.com</div></div>
-      <h1>Hire agreement</h1><div class="sub">Agreement ${esc(a.ref || '(draft)')} · issued ${fd(today())}${a.quote_id ? ' · following our quotation' : ''}</div>
-      <div class="two"><div><h2>Hirer</h2><table>${row('Company', '<b>' + esc(a.customer) + '</b>' + (a.company_no ? ' (No. ' + esc(a.company_no) + ')' : ''))}${row('Address', esc(a.customer_address || '').replace(/\n/g, '<br>'))}${row('Contact', esc([a.contact_name, a.contact_phone].filter(Boolean).join(' · ')))}${row('Email', esc(a.contact_email || ''))}${row('Invoices to', esc(a.invoice_email || a.contact_email || ''))}</table></div>
-        <div><h2>Owner</h2><table>${row('Company', '<b>Tanker Rent UK Ltd</b> (No. 04432719), trading as Compton Tankers')}${row('Address', 'Compton’s Yard, Grovebury Road, Leighton Buzzard, Bedfordshire LU7 4TS')}${row('Contact', '01525 371 707')}${row('Email', 'info@comptontankers.com')}</table></div></div>
-      <h2>1. Equipment</h2><table class="eq"><thead><tr><th>Fleet no.</th><th>Description and key specification</th><th>Year / condition</th><th>Serial numbers</th><th class="n">Replacement value</th><th class="n">£ per week</th></tr></thead><tbody>
-        ${(a.units || []).map((u) => `<tr><td><b>${esc(u.unit || 'TBC')}</b>${u.reg ? '<br><span class="sm">' + esc(u.reg) + '</span>' : ''}</td><td><b>${esc(u.description || u.category || '')}</b>${u.category && u.description && u.category !== u.description ? '<br><span class="sm">' + esc(u.category) + '</span>' : ''}${u.spec ? '<br>' + esc(u.spec) : ''}</td>
-          <td>${esc([u.year, u.condition].filter(Boolean).join(' · ')) || '–'}</td><td class="sm">${u.chassis_no ? 'Chassis ' + esc(u.chassis_no) : ''}${u.chassis_no && u.tank_serial ? '<br>' : ''}${u.tank_serial ? 'Tank ' + esc(u.tank_serial) : ''}${!u.chassis_no && !u.tank_serial ? '–' : ''}</td>
-          <td class="n">${u.replacement_value ? gbp(u.replacement_value) : '–'}</td><td class="n"><b>${u.weekly_rate !== '' && u.weekly_rate != null ? gbp(u.weekly_rate) : '–'}</b></td></tr>`).join('')}</tbody></table>
-      <div class="two"><div><h2>2. Hire period</h2><table>${row('Hire type', esc(a.hire_type))}${row('Start date', fd(a.start_date))}${row('Minimum term', a.min_term_months ? a.min_term_months + ' months' : 'None')}${row('Initial term ends', fd(a.initial_term_end) || 'N/A')}
-          ${row('After the initial term', a.rolls === false ? 'The hire ends and the equipment is returned' : 'Continues month to month until notice is given')}${row('Return notice', a.notice_days ? a.notice_days + ' days' : 'N/A')}${row('Delivery to', esc(a.delivery_location || 'To be confirmed'))}${row('Return to', esc(a.collection_location || YARD))}</table></div>
-        <div><h2>3. Rentals (ex VAT)</h2><table>${row('Contract weekly rate', '<b>' + gbp(wk) + '</b>')}${row('Contract monthly rate', '<b>' + gbp(wk * 52 / 12) + '</b> <span class="sm">(weekly × 52 ÷ 12)</span>')}${row('Deposit / security', gbp(a.deposit || 0))}${row('Delivery charge', gbp(a.delivery_charge || 0))}${row('Collection charge', gbp(a.collection_charge || 0))}${row('Payment terms', esc(a.payment_terms || ''))}</table></div></div>
-      <div class="two"><div><h2>4. Additional charges (ex VAT)</h2><table>${list(a.additional_charges) || '<tr><td>None</td></tr>'}</table></div><div><h2>5. Options and add-ons</h2><table>${list(a.options) || '<tr><td>None</td></tr>'}</table>
-        <h2>6. Special terms</h2><table><tr><td>The equipment may only be used in</td><td class="n">${esc(a.countries || 'United Kingdom')}</td></tr>${list(a.special_terms)}</table></div></div>
-      <div class="note">This hire is made under the Tanker Rent UK Ltd Master Hire Agreement terms and conditions. By signing, the Hirer agrees to those terms.</div>
-      <h2>7. Signatures</h2><div class="sig"><div><b>For and on behalf of the Hirer – ${esc(a.customer)}</b><div class="ln">${a.signed_name ? esc(a.signed_name) : ''}</div><div class="lb">Name</div><div class="ln">${a.signed_position ? esc(a.signed_position) : ''}</div><div class="lb">Position</div><div class="ln"></div><div class="lb">Signature</div><div class="ln">${a.signed_at ? fd(a.signed_at) : ''}</div><div class="lb">Date</div><div class="ln">${a.signed_po ? esc(a.signed_po) : ''}</div><div class="lb">Purchase order no.</div></div>
-        <div><b>For and on behalf of Tanker Rent UK Ltd</b><div class="ln"></div><div class="lb">Name</div><div class="ln"></div><div class="lb">Position</div><div class="ln"></div><div class="lb">Signature</div><div class="ln"></div><div class="lb">Date</div></div></div>
-      <div class="pb"></div><h2>8. Handover record (completed at delivery / collection)</h2><table class="eq"><thead><tr><th>Fleet no.</th><th>Date and time out</th><th>Odometer / hours</th><th>Condition noted and photos taken</th><th>Driver / receiver signature</th></tr></thead><tbody>
-        ${(a.units || []).map((u) => `<tr><td><b>${esc(u.unit || 'TBC')}</b></td><td style="height:34px"></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
-      <table class="eq" style="margin-top:10px"><thead><tr><th>Fleet no.</th><th>Date and time returned</th><th>Odometer / hours</th><th>Condition on return / damage</th><th>Received by</th></tr></thead><tbody>${(a.units || []).map((u) => `<tr><td><b>${esc(u.unit || 'TBC')}</b></td><td style="height:34px"></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
-      <div class="ft">Compton Tankers is a trading name of Tanker Rent UK Limited. Registered in England and Wales, company number 04432719. Registered office: Comptons Yard, Grovebury Road, Leighton Buzzard, Bedfordshire, LU7 4TS. · ${esc(a.ref || '')}</div>
-      <script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
-    w.document.close();
+    const doc = signedCopy && a.signed_snapshot ? Object.assign({}, a.signed_snapshot, { signature: a.signature, signed_at: a.signed_at, signed_name: a.signed_name, signed_position: a.signed_position, signed_po: a.signed_po, ref: a.ref }) : a;
+    w.document.write(X.agreementDoc(doc, { base, style: a.doc_style || 'pack' })); w.document.close();
   }
+  const signUrl = (a) => location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '') + 'sign/#' + a.sign_token;
 })();

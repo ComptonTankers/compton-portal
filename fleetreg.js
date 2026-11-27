@@ -93,16 +93,17 @@
       <label>Chassis / VIN<input id="fu_chassis_no" value="${f('chassis_no')}"></label><label>Tank / barrel serial no.<input id="fu_tank_serial" value="${f('tank_serial')}"></label>
       <label>Other serial no. (pump, plant, equipment)<input id="fu_serial_no" value="${f('serial_no')}"></label>
       <label>Full replacement value £<input id="fu_replacement_value" type="number" step="1" value="${f('replacement_value')}"></label>
-      <label style="grid-column:span 4">Internal notes<input id="fu_notes" value="${f('notes')}"></label></div>
+      <label style="grid-column:span 4">Internal notes<input id="fu_notes" value="${f('notes')}"></label>${sheetFields('fu', v, true)}</div>
       ${u && con(u) ? `<div class="small muted" style="margin-top:6px">On hire to ${esc(con(u).customer)} – status shows “On hire” while the contract is live.</div>` : ''}
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="pri2" id="fu_save">Save</button><button id="fu_x">Cancel</button>
       ${u ? (removed ? '<button id="fu_restore">Put back on the fleet</button>' : `<span style="margin-left:auto" class="small">Remove from fleet: <select id="fu_why">${REMOVE.map((r) => `<option>${r}</option>`).join('')}</select> <input id="fu_when" type="date" value="${new Date().toISOString().slice(0, 10)}"> <button id="fu_rm" style="border-color:#DC2626;color:#B91C1C">Remove</button></span>`) : ''}
       <span id="fu_msg" class="small muted"></span></div></div>`;
     $('fu_x').onclick = () => ($('fr_form').innerHTML = '');
     const done = async () => { await load(); draw(el); };
+    wirePhoto('fu', 'unit-' + norm((v && v.unit) || 'new'));
     $('fu_save').onclick = async () => {
       const g = (k) => $('fu_' + k).value.trim(), body = { unit: g('unit'), reg: g('reg') || null, category_id: +g('cat'), status: g('status'), make: g('make') || null, model: g('model') || null, year: g('year') ? +g('year') : null,
-        capacity: g('capacity') || null, location: g('location') || null, weekly_rate: g('rate') === '' ? null : +g('rate'), notes: g('notes') || null, description: g('description') || null, spec: g('spec') || null, condition: g('condition') || null, chassis_no: g('chassis_no') || null, tank_serial: g('tank_serial') || null, serial_no: g('serial_no') || null, division: g('division') || null, replacement_value: g('replacement_value') === '' ? null : +g('replacement_value'), updated_at: new Date().toISOString() };
+        capacity: g('capacity') || null, location: g('location') || null, weekly_rate: g('rate') === '' ? null : +g('rate'), notes: g('notes') || null, description: g('description') || null, spec: g('spec') || null, condition: g('condition') || null, chassis_no: g('chassis_no') || null, tank_serial: g('tank_serial') || null, serial_no: g('serial_no') || null, division: g('division') || null, replacement_value: g('replacement_value') === '' ? null : +g('replacement_value'), spec_sections: (() => { const x = parseSpec($('fu_sheet').value); return x.length ? x : null; })(), photo_url: $('fu_photo_url').value || null, updated_at: new Date().toISOString() };
       if (!body.unit) { $('fu_msg').textContent = 'Give the unit a fleet number.'; return; }
       if (!u && UNITS.some((x) => norm(x.unit) === norm(body.unit))) { $('fu_msg').textContent = body.unit + ' is already on the register.'; return; }
       const dup = [['chassis_no', 'chassis / VIN'], ['tank_serial', 'tank serial'], ['serial_no', 'serial no.']].map(([k, t]) => { const x = body[k] && UNITS.find((o) => o.id !== (u && u.id) && [o.chassis_no, o.tank_serial, o.serial_no].some((y) => y && norm(y) === norm(body[k]))); return x ? 'The ' + t + ' ' + body[k] + ' is already recorded on ' + x.unit : ''; }).filter(Boolean);
@@ -132,6 +133,21 @@
     box.querySelectorAll('[data-ce]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); catForm(CATS.find((c) => c.id === +a.dataset.ce), el); }));
     box.querySelectorAll('[data-rate]').forEach((i) => (i.onchange = async () => { await api('asset_categories?id=eq.' + i.dataset.rate, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ default_weekly_rate: i.value === '' ? null : +i.value, updated_at: new Date().toISOString() }) }); const c = CATS.find((x) => x.id === +i.dataset.rate); c.default_weekly_rate = i.value === '' ? null : +i.value; }));
   }
+  // ---- product sheet: spec boxes written as "Title" lines followed by "- item" lines, plus a photo ----
+  const specText = (S) => (S || []).map((x) => x.title + '\n' + (x.items || []).map((i) => '- ' + i).join('\n')).join('\n\n');
+  const parseSpec = (t) => { const out = []; String(t || '').split('\n').forEach((l) => { const v = l.trim(); if (!v) return; const m = /^[-•*]\s*(.+)$/.exec(v);
+    if (m) { if (!out.length) out.push({ title: 'Key specification', items: [] }); out[out.length - 1].items.push(m[1]); } else out.push({ title: v.replace(/:$/, ''), items: [] }); }); return out.filter((x) => x.items.length); };
+  async function uploadPhoto(file, prefix) {
+    const ss = await X.session(), cfg = window.SUPABASE_CONFIG, path = prefix + '-' + Date.now() + '.' + ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg');
+    const r = await fetch(cfg.url + '/storage/v1/object/product/' + path, { method: 'POST', headers: { apikey: cfg.anonKey, Authorization: 'Bearer ' + ss.access_token, 'Content-Type': file.type || 'image/jpeg', 'x-upsert': 'true' }, body: file });
+    if (!r.ok) throw new Error('Upload failed (' + r.status + ')'); return cfg.url + '/storage/v1/object/public/product/' + path;
+  }
+  const sheetFields = (pre, v, forUnit) => `<div style="grid-column:1/-1;border-top:1px solid #E3E7EE;margin-top:6px;padding-top:8px"><b>Product sheet</b> <span class="small muted">– shown on quotes, hire agreements and the customer's signing page${forUnit ? '. Leave blank to use the category\'s' : ''}</span></div>
+      ${forUnit ? '' : `<label>Code (MCS asset type)<input id="${pre}_code" value="${esc(v.code || '')}" placeholder="e.g. CTR26"></label><label style="grid-column:span 2">Headline<input id="${pre}_headline" value="${esc(v.headline || '')}" placeholder="e.g. 26T jetvac combination unit"></label>`}
+      <label style="grid-column:span ${forUnit ? 3 : 2}">Specification boxes<textarea id="${pre}_sheet" rows="7" placeholder="Tank\n- 4,500 L waste\n- 7,250 L clean water\nVacuum and jetting\n- Samson 1450 cfm liquid ring\n- Orca 500R 220 L/min at 138 bar">${esc(specText(v.spec_sections))}</textarea><span class="small muted">A line on its own is a box title; lines starting with - are the points in it.</span></label>
+      <label>Photo<input type="file" id="${pre}_photo" accept="image/*"><span id="${pre}_pv" style="display:block;margin-top:4px">${v.photo_url ? `<img src="${esc(v.photo_url)}" style="max-width:160px;border-radius:6px">` : '<span class="small muted">none yet</span>'}</span><input type="hidden" id="${pre}_photo_url" value="${esc(v.photo_url || '')}"></label>`;
+  const wirePhoto = (pre, prefix) => { const i = $(pre + '_photo'); if (!i) return; i.onchange = async () => { const f = i.files[0]; if (!f) return; $(pre + '_pv').textContent = 'Uploading…';
+    try { const u = await uploadPhoto(f, prefix); $(pre + '_photo_url').value = u; $(pre + '_pv').innerHTML = `<img src="${u}" style="max-width:160px;border-radius:6px">`; } catch (e) { $(pre + '_pv').textContent = e.message; } }; };
   function catForm(c, el) {
     const v = c || {}, f = (k) => esc(v[k] ?? ''), used = c ? UNITS.filter((u) => u.category_id === c.id).length : 0;
     $('fc_form').innerHTML = `<div class="box2" style="padding:12px;margin-bottom:12px"><h3 style="margin-top:0">${c ? 'Edit ' + esc(c.name) : 'Add a category'}</h3><div class="form" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
@@ -139,12 +155,13 @@
       <label>Division<select id="fk_division">${DIVS.map((d) => `<option ${d === (v.division || 'Other assets') ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
       <label>Part of the hire fleet?<select id="fk_hire"><option value="1">Yes – counts in utilisation and quotes</option><option value="0" ${v.for_hire === false ? 'selected' : ''}>No – e.g. vans, workshop kit</option></select></label>
       <label>Standard £/wk<input id="fk_rate" type="number" step="0.01" value="${f('default_weekly_rate')}"></label><label>Min term (months)<input id="fk_min" type="number" value="${f('min_term_months')}"></label>
-      <label style="grid-column:span 3">Spec (shown on quotes)<input id="fk_spec" value="${f('spec')}" placeholder="e.g. 38,000 L aluminium, 5 compartments, API couplings"></label></div>
+      <label style="grid-column:span 3">Spec (shown on quotes)<input id="fk_spec" value="${f('spec')}" placeholder="e.g. 38,000 L aluminium, 5 compartments, API couplings"></label>${sheetFields('fk', v, false)}</div>
       <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><button class="pri2" id="fk_save">Save</button><button id="fk_x">Cancel</button>
       ${c ? (used ? `<span class="small muted" style="margin-left:auto">${used} units use this category – move them first to delete it, or hide it:</span><button id="fk_hide">${c.active === false ? 'Show again' : 'Hide'}</button>` : '<button id="fk_del" style="margin-left:auto;border-color:#DC2626;color:#B91C1C">Delete category</button>') : ''}<span id="fk_msg" class="small muted"></span></div></div>`;
     const done = async () => { await load(); draw(el); };
     $('fk_x').onclick = () => ($('fc_form').innerHTML = '');
-    $('fk_save').onclick = async () => { const g = (k) => $('fk_' + k).value.trim(), body = { name: g('name'), sector: g('sector') || null, division: g('division'), for_hire: g('hire') === '1', default_weekly_rate: g('rate') === '' ? null : +g('rate'), min_term_months: g('min') ? +g('min') : null, spec: g('spec') || null, updated_at: new Date().toISOString() };
+    wirePhoto('fk', 'cat-' + ((c && c.id) || 'new'));
+    $('fk_save').onclick = async () => { const g = (k) => $('fk_' + k).value.trim(), body = { code: g('code') || null, headline: g('headline') || null, spec_sections: parseSpec($('fk_sheet').value), photo_url: $('fk_photo_url').value || null, name: g('name'), sector: g('sector') || null, division: g('division'), for_hire: g('hire') === '1', default_weekly_rate: g('rate') === '' ? null : +g('rate'), min_term_months: g('min') ? +g('min') : null, spec: g('spec') || null, updated_at: new Date().toISOString() };
       if (!body.name) { $('fk_msg').textContent = 'Give it a name.'; return; }
       try { await api(c ? 'asset_categories?id=eq.' + c.id : 'asset_categories', { method: c ? 'PATCH' : 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); await done(); } catch (e) { $('fk_msg').textContent = 'Could not save: ' + e.message; } };
     if ($('fk_del')) $('fk_del').onclick = async () => { if (!confirm('Delete the category ' + c.name + '?')) return; await api('asset_categories?id=eq.' + c.id, { method: 'DELETE' }); await done(); };

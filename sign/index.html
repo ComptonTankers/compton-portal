@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Sign your hire agreement – Compton Tankers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--navy:#082956;--orange:#F15C16;--grey:#82868C;--line:#E6E9EE}
+  *{box-sizing:border-box}body{margin:0;font-family:Poppins,Arial,sans-serif;color:var(--navy);background:#F3F5F8}
+  header{background:#fff;border-bottom:3px solid var(--orange);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px}header img{height:40px}header span{color:var(--grey);font-size:13px}
+  main{max-width:900px;margin:0 auto;padding:16px}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(8,41,86,.08);padding:18px;margin-bottom:14px}
+  h1{font-size:22px;margin:0 0 4px}.muted{color:var(--grey);font-size:14px}
+  .steps{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.steps div{background:#EEF3FB;border-radius:20px;padding:5px 12px;font-size:13px}.steps b{color:var(--orange)}
+  iframe{width:100%;height:70vh;border:1px solid var(--line);border-radius:10px;background:#fff}
+  label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}input[type=text]{width:100%;padding:11px 12px;border:1px solid #CBD2DC;border-radius:8px;font:16px Poppins,Arial,sans-serif;color:var(--navy)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:640px){.grid{grid-template-columns:1fr}iframe{height:60vh}}
+  .pad{border:2px dashed #9AA7BA;border-radius:10px;background:#fff;position:relative;touch-action:none}.pad canvas{width:100%;height:180px;display:block;cursor:crosshair}
+  .pad .hint{position:absolute;left:12px;top:10px;color:#AEB6C2;font-size:13px;pointer-events:none}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .agree{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:14px}.agree input{width:22px;height:22px;margin-top:2px;flex:none}
+  button{font:600 15px Poppins,Arial,sans-serif;border-radius:9px;border:2px solid var(--navy);background:#fff;color:var(--navy);padding:10px 16px;cursor:pointer}
+  button.go{background:var(--orange);border-color:var(--orange);color:#fff;font-size:17px;padding:13px 26px}button:disabled{opacity:.5;cursor:not-allowed}
+  .err{color:#B91C1C;font-size:14px;margin-top:10px}.ok{font-size:44px}.c{text-align:center}
+  footer{color:var(--grey);font-size:11px;text-align:center;padding:16px}
+</style></head>
+<body>
+<header><img src="../assets/compton-logo.png" alt="Compton Tankers"><span>Secure e-signature</span></header>
+<main id="app"><div class="card c muted">Loading your agreement…</div></main>
+<footer>Compton Tankers is a trading name of Tanker Rent UK Limited · Registered in England and Wales No. 04432719 · Comptons Yard, Grovebury Road, Leighton Buzzard LU7 4TS · 01525 371 707</footer>
+<script src="../terms.js"></script>
+<script src="../agreement-doc.js"></script>
+<script>
+(function(){
+  const CFG={url:'https://swqpnumuqtsgwpqowxid.supabase.co',key:'sb_publishable_n25KLWM-u9E0t6whfWMgew_uYWquUJT'};
+  const token=(location.hash||'').replace(/^#/,'').trim(), app=document.getElementById('app'), base=location.href.replace(/[#?].*$/,'').replace(/sign\/[^/]*$/,'');
+  const esc=(s)=>String(s??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const rpc=(fn,body)=>fetch(CFG.url+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:CFG.key,Authorization:'Bearer '+CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)}).then(async(r)=>{const j=await r.json().catch(()=>null);if(!r.ok)throw new Error((j&&(j.message||j.hint))||'Something went wrong');return j;});
+  const fail=(t)=>{app.innerHTML=`<div class="card c"><h1>${esc(t)}</h1><p class="muted">If you think this is a mistake, call Compton Tankers on 01525 371 707.</p></div>`};
+  const showDoc=(a)=>{const f=document.getElementById('doc');f.onload=()=>{try{const w=f.clientWidth,z=Math.min(1,(w-8)/820);if(z<1)f.contentDocument.body.style.zoom=z;}catch(e){}};f.srcdoc=window.CT.agreementDoc(a,{base,print:false,style:a.doc_style||'pack'});};
+  if(!/^[0-9a-f-]{36}$/i.test(token)){fail('This signing link is not complete');return;}
+  rpc('agreement_to_sign',{t:token}).then((a)=>{ if(!a){fail('This signing link is not valid any more');return;} a.signed_at?done(a):render(a); }).catch((e)=>fail('Could not open the agreement: '+e.message));
+
+  function done(a){
+    app.innerHTML=`<div class="card c"><div class="ok">✅</div><h1>Signed – thank you</h1><p class="muted">Hire agreement ${esc(a.ref)} was signed by ${esc(a.signed_name)} on ${new Date(a.signed_at).toLocaleString('en-GB')}. Compton Tankers has a copy. You can save or print yours below.</p>
+      <div class="row" style="justify-content:center"><button id="pr">Save or print a copy</button></div></div><div class="card"><iframe id="doc" title="Signed hire agreement"></iframe></div>`;
+    showDoc(a); document.getElementById('pr').onclick=()=>{const f=document.getElementById('doc');f.contentWindow.focus();f.contentWindow.print();};
+  }
+
+  function render(a){
+    const units=(a.units||[]).map((u)=>u.unit||u.description).filter(Boolean).join(', ');
+    app.innerHTML=`<div class="card"><h1>Hire agreement ${esc(a.ref)}</h1><div class="muted">${esc(a.customer)}${units?' · '+esc(units):''}</div>
+        <div class="steps"><div><b>1</b> Read the agreement</div><div><b>2</b> Add your details</div><div><b>3</b> Sign and submit</div></div></div>
+      <div class="card"><iframe id="doc" title="Hire agreement"></iframe><div class="row"><button id="pr">Print or save a copy</button><span class="muted">The Master Hire Agreement terms are at the end.</span></div></div>
+      <div class="card"><h1 style="font-size:19px">Sign for ${esc(a.customer)}</h1>
+        <div class="grid"><div><label for="nm">Your full name</label><input type="text" id="nm" autocomplete="name"></div><div><label for="ps">Position</label><input type="text" id="ps" autocomplete="organization-title" placeholder="e.g. Director, Transport Manager"></div></div>
+        <label for="po">Purchase order number (if you use them)</label><input type="text" id="po">
+        <label>Signature</label><div class="pad"><span class="hint" id="ph">Sign here with your finger or mouse</span><canvas id="cv"></canvas></div><div class="row"><button type="button" id="clr">Clear signature</button></div>
+        <label class="agree"><input type="checkbox" id="ag"><span>I am authorised to sign for ${esc(a.customer)}, and I agree to this hire agreement and the Tanker Rent UK Ltd Master Hire Agreement terms.</span></label>
+        <div class="row" style="margin-top:16px"><button class="go" id="go" disabled>Sign agreement</button></div><div class="err" id="er"></div></div>`;
+    showDoc(a);
+    document.getElementById('pr').onclick=()=>{const f=document.getElementById('doc');f.contentWindow.focus();f.contentWindow.print();};
+    // signature pad
+    const cv=document.getElementById('cv'),ctx=cv.getContext('2d');let drawing=false,inked=false,last=null;
+    const size=()=>{const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1,img=inked?cv.toDataURL():null;cv.width=r.width*d;cv.height=r.height*d;ctx.scale(d,d);ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#0B1F44';if(img){const i=new Image();i.onload=()=>ctx.drawImage(i,0,0,r.width,r.height);i.src=img;}};
+    size();window.addEventListener('resize',size);
+    const pt=(e)=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
+    cv.addEventListener('pointerdown',(e)=>{drawing=true;last=pt(e);cv.setPointerCapture(e.pointerId);});
+    cv.addEventListener('pointermove',(e)=>{if(!drawing)return;const p=pt(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;if(!inked){inked=true;document.getElementById('ph').style.display='none';}check();});
+    ['pointerup','pointercancel','pointerleave'].forEach((ev)=>cv.addEventListener(ev,()=>{drawing=false;}));
+    document.getElementById('clr').onclick=()=>{ctx.clearRect(0,0,cv.width,cv.height);inked=false;document.getElementById('ph').style.display='';check();};
+    const v=(id)=>document.getElementById(id).value.trim(),go=document.getElementById('go');
+    const check=()=>{go.disabled=!(inked&&v('nm').length>1&&document.getElementById('ag').checked);};
+    ['nm','ag'].forEach((id)=>document.getElementById(id).addEventListener('input',check));document.getElementById('ag').addEventListener('change',check);
+    go.onclick=async()=>{go.disabled=true;go.textContent='Signing…';document.getElementById('er').textContent='';
+      // trim the signature to its ink and save it as a PNG
+      const t=document.createElement('canvas'),w=cv.width,h=cv.height,d=ctx.getImageData(0,0,w,h).data;let x0=w,y0=h,x1=0,y1=0;
+      for(let y=0;y<h;y+=2)for(let x=0;x<w;x+=2)if(d[(y*w+x)*4+3]>0){if(x<x0)x0=x;if(y<y0)y0=y;if(x>x1)x1=x;if(y>y1)y1=y;}
+      x0=Math.max(0,x0-8);y0=Math.max(0,y0-8);x1=Math.min(w,x1+8);y1=Math.min(h,y1+8);t.width=Math.max(10,x1-x0);t.height=Math.max(10,y1-y0);t.getContext('2d').drawImage(cv,x0,y0,t.width,t.height,0,0,t.width,t.height);
+      try{const r=await rpc('sign_agreement',{t:token,p_name:v('nm'),p_position:v('ps'),p_po:v('po'),p_signature:t.toDataURL('image/png'),p_ua:navigator.userAgent});
+        if(!r||!r.ok)throw new Error((r&&r.error)||'Could not sign');const a2=await rpc('agreement_to_sign',{t:token});done(a2||a);window.scrollTo(0,0);}
+      catch(e){document.getElementById('er').textContent=e.message;go.disabled=false;go.textContent='Sign agreement';}};
+  }
+})();
+</script>
+</body></html>
