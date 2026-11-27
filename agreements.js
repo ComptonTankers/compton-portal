@@ -103,7 +103,7 @@
       <div class="card"><h3>7. Special terms</h3><div class="form" style="display:grid;gap:8px"><label>Equipment may only be used in${inp('countries')}</label><div id="ag_special"></div>${locked ? '' : '<button class="mini" id="ag_adds">+ Add a special term</button>'}</div></div></div>
       <div class="grid2"><div class="card"><h3>5. Additional charges</h3><div id="ag_charges"></div>${locked ? '' : '<button class="mini" id="ag_addc">+ Add a charge</button>'}</div><div class="card"><h3>6. Options and add-ons</h3><div id="ag_options"></div>${locked ? '' : '<button class="mini" id="ag_addo">+ Add an option</button>'}</div></div>
       <div class="card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${locked ? '' : '<button class="pri2" id="ag_save">Save</button>'}
-        <label class="small" style="display:flex;gap:6px;align-items:center">Look <select id="ag_style">${[['standard', 'Compton standard'], ['pack', 'Compton sales-pack style'], ['classic', 'MCS contract layout']].map(([k, t]) => `<option value="${k}" ${(a.doc_style || 'standard') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="small" style="display:flex;gap:6px;align-items:center">Look <select id="ag_style">${[['pack', 'Compton style'], ['standard', 'Compton plain (Arial)'], ['classic', 'MCS contract layout']].map(([k, t]) => `<option value="${k}" ${(a.doc_style || 'pack') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         <button id="ag_pdf">${a.signed_at ? 'Unsigned copy (PDF)' : 'Agreement PDF'}</button>
         ${a.id && ['Draft', 'Sent'].includes(a.status) ? '<button class="pri2" id="ag_esign">Send for e-signature</button><button id="ag_sign" style="border-color:#7C3AED;color:#6D28D9">Signed on paper</button>' : ''}
         ${a.signed_at && a.signature ? '<button class="pri2" id="ag_signed">Signed copy (PDF)</button>' : ''}
@@ -179,7 +179,7 @@
       read(); if (!(CUR.units || []).length) { msg('Add the equipment first.'); return; }
       if (!CUR.sign_token) CUR.sign_token = crypto.randomUUID();
       const to = CUR.sent_to || CUR.contact_email || '';
-      if (!(await save({ sign_token: CUR.sign_token, status: 'Sent', sent_at: CUR.sent_at || new Date().toISOString(), sent_to: to || null, doc_style: CUR.doc_style || 'standard' }))) return;
+      if (!(await save({ sign_token: CUR.sign_token, status: 'Sent', sent_at: CUR.sent_at || new Date().toISOString(), sent_to: to || null, doc_style: CUR.doc_style || 'pack' }))) return;
       const link = signUrl(CUR), subj = 'Hire agreement ' + CUR.ref + ' – ' + CUR.customer + ' – please sign', body = `Hello${CUR.contact_name ? ' ' + CUR.contact_name.split(' ')[0] : ''},\n\nPlease find your hire agreement ${CUR.ref} for ${(CUR.units || []).map((u) => u.unit || u.description).join(', ')}. You can read it and sign it online here:\n\n${link}\n\nIt takes a couple of minutes on a phone or computer. Any questions, call us on 01525 371 707.\n\nKind regards,\nCompton Tankers`;
       $('ag_msg').innerHTML = `<div class="box2" style="padding:10px;margin-top:6px"><b>E-signature link for ${esc(CUR.customer)}</b> – send it to whoever signs for them. It works until they sign.
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="es_link" readonly value="${esc(link)}" style="flex:1;min-width:280px" onclick="this.select()"><button class="mini" id="es_copy">Copy link</button>
@@ -219,7 +219,7 @@
   function pdf(a, signedCopy) {
     const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, ''), w = window.open('', '_blank'); if (!w) { alert('Allow pop-ups for the portal to open the agreement.'); return; }
     const doc = signedCopy && a.signed_snapshot ? Object.assign({}, a.signed_snapshot, { signature: a.signature, signed_at: a.signed_at, signed_name: a.signed_name, signed_position: a.signed_position, signed_po: a.signed_po, ref: a.ref }) : a;
-    w.document.write(X.agreementDoc(doc, { base, style: a.doc_style || 'standard' })); w.document.close();
+    w.document.write(X.agreementDoc(doc, { base, style: a.doc_style || 'pack' })); w.document.close();
   }
   const signUrl = (a) => location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '') + 'sign/#' + a.sign_token;
 })();
