@@ -463,4 +463,16 @@ side.querySelectorAll('.nh').forEach(function(h){h.onclick=function(){var g=h.pa
 function cur(){var h=location.hash.replace(/^#\/?/,'').split('?')[0]||'home',a=side.querySelector('.nb a[data-r="'+h+'"]');if(a){var g=a.closest('.ng').dataset.g;if(open.indexOf(g)<0){open.push(g);save()}}paint()}
 var q=document.getElementById('navq');q.oninput=function(){var v=q.value.trim().toLowerCase();side.querySelectorAll('.ng').forEach(function(g){var n=0;g.querySelectorAll('.nb a').forEach(function(a){var m=!v||a.textContent.toLowerCase().indexOf(v)>=0||g.querySelector('.nh').textContent.toLowerCase().indexOf(v)>=0;a.style.display=m?'':'none';if(m)n++});g.style.display=v&&!n?'none':'';g.classList.toggle('hit',!!v&&n>0)})};
 q.onkeydown=function(e){if(e.key==='Enter'){var a=[].slice.call(side.querySelectorAll('.nb a')).filter(function(a){return a.style.display!=='none'})[0];if(a){location.hash=a.getAttribute('href');q.value='';q.oninput()}}if(e.key==='Escape'){q.value='';q.oninput()}};
-cur();addEventListener('hashchange',cur)})();</script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script></body></html>
+cur();addEventListener('hashchange',cur)})();</script><script>(function(){var R=window.CT.routes;R["classic-home"]=R.home;R.home=R["p-overview"];})();</script><script>(function(){ /* tells everyone when a newer version of the portal has been published */
+var mine=function(d){return [].slice.call(d.querySelectorAll('script[src]')).map(function(s){return s.getAttribute('src')}).filter(function(x){return /\.js\?v=/.test(x)}).sort().join('|')};
+var here=mine(document),shown=false;
+function bar(){if(shown)return;shown=true;var b=document.createElement('div');b.id='updbar';b.setAttribute('role','status');
+b.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#E4611D;color:#fff;padding:10px 12px 10px 18px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);display:flex;gap:14px;align-items:center;font:600 14px system-ui,sans-serif;max-width:92vw';
+b.innerHTML='<span>A newer version of the portal is available.</span><button type="button" id="updgo" style="background:#fff;color:#B8470F;border:0;border-radius:7px;padding:7px 14px;font:700 14px system-ui,sans-serif;cursor:pointer">Update now</button><button type="button" id="updx" aria-label="Later" style="background:none;border:0;color:#fff;font-size:18px;cursor:pointer;padding:0 4px">×</button>';
+document.body.appendChild(b);document.getElementById('updx').onclick=function(){b.remove();shown=false;later=Date.now()};
+document.getElementById('updgo').onclick=function(){var u=location.pathname+'?u='+Date.now()+location.hash;location.replace(u)}}
+var later=0;function check(){if(document.hidden||shown||Date.now()-later<30*60*1000)return;
+fetch(location.pathname+'?chk='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():''}).then(function(t){if(!t)return;var d=new DOMParser().parseFromString(t,'text/html'),theirs=mine(d);if(theirs&&theirs!==here)bar()}).catch(function(){})}
+setTimeout(check,8000);setInterval(check,3*60*1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)check()});
+if(/[?&]u=\d/.test(location.search))history.replaceState(null,'',location.pathname+location.hash);})();</script>
+</body></html>
