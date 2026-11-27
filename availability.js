@@ -9,7 +9,7 @@
   const add = (s, n) => iso(new Date(s).getTime() + n * DAY);
   const fd = (s) => (s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '');
   const C = { hire: '#164698', booked: '#7C3AED', shop: '#D97706', sale: '#94A3B8', free: '#16A34A' };
-  const HU = () => FR.units().filter((u) => !FR.forHire || FR.forHire(u));
+  const HU = () => (FR = FR || X.fleetReg).units().filter((u) => !FR.forHire || FR.forHire(u));
   let FR, QUOTES = [], CUSTS = [], F = { cat: '', show: 'all', q: '', weeks: 26 }, EL;
 
   async function load() {
@@ -19,6 +19,7 @@
   }
   // every period a unit is tied up: [{kind, from, to (null = open-ended), label, ref}]
   function spans(u) {
+    FR = FR || X.fleetReg;   // used by hire agreements and quotes before this page has loaded
     const out = [], n = FR.norm(u.unit);
     FR.contracts().filter((c) => FR.norm(c.unit) === n).forEach((c) => out.push({ kind: 'hire', from: c.start_date || '2000-01-01', to: c.rolling || !c.end_date ? null : c.end_date, label: c.customer, c }));
     FR.allBookings().filter((b) => FR.norm(b.unit) === n && b.status !== 'Cancelled').forEach((b) => out.push({ kind: b.status === 'On hire' ? 'hire' : 'booked', from: b.start_date, to: b.end_date, label: b.customer, b }));
