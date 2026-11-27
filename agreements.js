@@ -25,7 +25,7 @@
     const u = FR() && FR().units().find((x) => FR().norm(x.unit) === FR().norm(unit)); if (!u) return { unit, description: '', weekly_rate: rate ?? '' };
     const d = FR().fullDesc(u), c = FR().cat(u.category_id);
     return { unit: u.unit, reg: d.reg, category: c.name || '', code: c.code || '', description: d.title, spec: d.lines.join(' · '), year: u.year || '', condition: u.condition || '', chassis_no: u.chassis_no || '', tank_serial: u.tank_serial || '',
-      replacement_value: u.replacement_value ?? '', weekly_rate: rate ?? FR().stdRate(u) ?? '', photo_url: u.photo_url || c.photo_url || '', spec_sections: (u.spec_sections && u.spec_sections.length ? u.spec_sections : c.spec_sections) || null };
+      replacement_value: u.replacement_value ?? '', weekly_rate: rate ?? FR().stdRate(u) ?? '', long_description: u.long_description || c.long_description || '', photo_url: u.photo_url || c.photo_url || '', spec_sections: (u.spec_sections && u.spec_sections.length ? u.spec_sections : c.spec_sections) || null };
   }
 
   // ---- create from an accepted quote: agreement + a booking for each unit ----
