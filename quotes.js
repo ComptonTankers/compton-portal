@@ -145,7 +145,7 @@
       <div class="card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${locked ? '' : '<button class="pri2" id="qe_save">Save</button>'}<button id="qe_pdf">Quote PDF${q.status === 'Draft' && !locked ? ' and mark as sent' : ''}</button>
         ${q.id && !locked ? '<button id="qe_acc" style="border-color:#16A34A;color:#15803D">Customer accepted</button><button id="qe_dec" style="border-color:#DC2626;color:#B91C1C">Declined</button>' : ''}
-        ${q.id ? '<button id="qe_ver">New version</button>' : ''}${q.status === 'Accepted' && (q.lines || []).some((l) => l.type !== 'hire') ? (q.invoice_no ? `<span class="small" style="color:#15803D"><b>Invoiced ${esc(q.invoice_no)}</b> ${new Date(q.invoiced_at).toLocaleDateString('en-GB')}${q.paid_at ? ' · paid ' + new Date(q.paid_at).toLocaleDateString('en-GB') : ''}</span>${q.paid_at ? '' : '<button id="qe_paid">Mark as paid</button>'}` : '<button class="pri2" id="qe_inv">Mark as invoiced</button>') : ''}${q.status === 'Accepted' && (q.lines || []).some((l) => l.type === 'hire') ? (HA.find((h) => h.quote_id === q.id) ? `<a class="small" href="#/p-agreements?a=${HA.find((h) => h.quote_id === q.id).id}">Hire agreement ${esc(HA.find((h) => h.quote_id === q.id).ref)} (${esc(HA.find((h) => h.quote_id === q.id).status)})</a>` : '<button class="pri2" id="qe_ha">Raise hire agreement</button>') : ''}${q.id && q.status === 'Draft' ? '<button id="qe_del" style="margin-left:auto">Delete draft</button>' : ''}
+        ${q.id ? '<button id="qe_ver">New version</button>' : ''}${q.status === 'Accepted' && (q.lines || []).some((l) => l.type !== 'hire') ? (q.invoice_no ? `<span class="small" style="color:#15803D"><b>Invoiced ${esc(q.invoice_no)}</b> ${new Date(q.invoiced_at).toLocaleDateString('en-GB')}${q.paid_at ? ' · paid ' + new Date(q.paid_at).toLocaleDateString('en-GB') : ''}</span>${q.paid_at ? '' : '<button id="qe_paid">Mark as paid</button>'}` : '<button id="qe_dep">Deposit invoice</button><button class="pri2" id="qe_fin">Final invoice</button><a href="#" class="small" id="qe_inv" title="If the invoice was raised in Xero by hand">already invoiced in Xero?</a>') + '<span id="qe_invs" class="small"></span>' : ''}${q.status === 'Accepted' && (q.lines || []).some((l) => l.type === 'hire') ? (HA.find((h) => h.quote_id === q.id) ? `<a class="small" href="#/p-agreements?a=${HA.find((h) => h.quote_id === q.id).id}">Hire agreement ${esc(HA.find((h) => h.quote_id === q.id).ref)} (${esc(HA.find((h) => h.quote_id === q.id).status)})</a>` : '<button class="pri2" id="qe_ha">Raise hire agreement</button>') : ''}${q.id && q.status === 'Draft' ? '<button id="qe_del" style="margin-left:auto">Delete draft</button>' : ''}
         ${deal ? `<a href="#/p-pipeline" class="small" style="margin-left:auto">Open in pipeline (${esc(deal.ref)})</a>` : ''}<span id="qe_msg" class="small muted"></span></div>`;
     lines(); wire(locked);
   }
@@ -206,7 +206,10 @@
     if ($('qe_acc')) $('qe_acc').onclick = async () => { const who = prompt('Who accepted it? (name, and PO number if they gave one)', CUR.contact_name || ''); if (who === null) return; read(); if (!(await save())) return;
       await setStatus('Accepted', { accepted_at: new Date().toISOString(), accepted_by: who || null }, { stage: 'Agreed', next_action: 'Raise hire agreement / order for ' + CUR.ref, next_action_date: today() }); afterAccept(); };
     if ($('qe_ha')) $('qe_ha').onclick = raisePanel;
-    if ($('qe_inv')) $('qe_inv').onclick = invoiceDialog;
+    if ($('qe_inv')) $('qe_inv').onclick = (e) => { e.preventDefault(); invoiceDialog(); };
+    if ($('qe_dep') && X.invoices) $('qe_dep').onclick = () => X.invoices.deposit(CUR, () => editor());
+    if ($('qe_fin') && X.invoices) $('qe_fin').onclick = () => X.invoices.final(CUR, null);
+    if ($('qe_invs') && X.invoices && CUR.id) X.invoices.forQuote(CUR.id).then((L) => { const b = $('qe_invs'); if (b && L.length) b.innerHTML = ' · ' + L.map((i) => `<a href="#/p-invoices">${esc(i.kind)} ${esc(i.number || 'draft')} ${gbp(i.total)}${i.status === 'PAID' ? ' paid' : ''}</a>`).join(' · '); });
     if ($('qe_paid')) $('qe_paid').onclick = async () => { const d = prompt('Date the payment was received', today()); if (d === null) return; const dt = d || today();
       await api('quotes?id=eq.' + CUR.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ paid_at: dt }) });
       for (const l of (CUR.lines || []).filter((l) => l.stock_id)) await api('stock?id=eq.' + l.stock_id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ paid_at: dt }) });
@@ -239,6 +242,7 @@
       const done = await invoiced(q, no, dt, am); msg(done);
     });
   }
+  X.quoteInvoiced = (q, no, dt, net) => invoiced(q, no, dt, net);
   async function invoiced(q, no, dt, net) {
     const notes = [], sales = (q.lines || []).filter((l) => l.type === 'sale');
     await api('quotes?id=eq.' + q.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ invoice_no: no, invoiced_at: dt, invoice_total: net }) });
