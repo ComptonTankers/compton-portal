@@ -14,6 +14,7 @@
   let REC = [], CATS = [];
 
   async function load() {
+    if (X.tax) await X.tax.load(true);
     [REC, CATS] = await Promise.all([api('asset_receipts?select=*&order=arrived_at.desc').catch(() => []), api('asset_categories?select=id,name,division&active=is.true&order=name').catch(() => [])]);
     return REC;
   }
@@ -30,7 +31,8 @@
       <label>Arrival date (depreciation starts from this date)</label><input id="pr_dt" type="date" value="${today()}">
       <label>How many have arrived?</label><input id="pr_n" type="number" min="1" max="${left}" value="${left}">
       <label>Fleet number and serials for each unit</label><div id="pr_units">${unitRows(left)}</div>
-      <label>Category</label><select id="pr_cat">${CATS.map((c) => `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+      <label>Group › subgroup</label>${X.tax.pickHtml('pr_cat', catId, o.subgroup_id, { blank: false })}
+      <label>Location (where it is kept)</label>${X.tax.locHtml('pr_loc', (X.tax.locs()[0] || {}).id)}
       <label>Cost per unit £ (ex VAT)</label><input id="pr_cost" type="number" step="0.01" value="${+o.unit_price || ''}">
       <label>Where is it going?</label><select id="pr_dest">${['Hire', 'Sale', 'Hire or sale'].map((d) => `<option value="${d}" ${d === (o.destination || 'Hire') ? 'selected' : ''}>${d === 'Hire' ? 'Hire fleet' : d === 'Sale' ? 'Dealership stock (for sale)' : 'Both – hire or sale'}</option>`).join('')}</select>
       <label>How is it held in the accounts?</label><select id="pr_tr"><option value="Capitalise" ${o.treatment !== 'Sales stock' ? 'selected' : ''}>Capitalise – fixed asset register, depreciated</option><option value="Sales stock" ${o.treatment === 'Sales stock' ? 'selected' : ''}>Sales stock – not capitalised, cost comes off when sold</option></select>
@@ -39,7 +41,7 @@
       <label>Payment due</label><input id="pr_due" type="date" value="${addDays(today(), +o.terms_days || 0)}">
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pr_paid" style="width:auto"> Already paid (by us, or by the finance company to the supplier)</label>
       <div class="note" id="pr_note"></div>`, 'Record arrival', async () => {
-      const q = (id) => bg.querySelector('#' + id), dt = q('pr_dt').value, cost = parseFloat(q('pr_cost').value) || null, dest = q('pr_dest').value, tr = q('pr_tr').value, fund = q('pr_fund').value, cat = CATS.find((c) => c.id === +q('pr_cat').value) || {};
+      const q = (id) => bg.querySelector('#' + id), dt = q('pr_dt').value, cost = parseFloat(q('pr_cost').value) || null, dest = q('pr_dest').value, tr = q('pr_tr').value, fund = q('pr_fund').value, pk = X.tax.parse(q('pr_cat').value), cat = Object.assign({}, CATS.find((c) => c.id === pk.category_id) || {}, { sub: pk.subgroup_id, loc: q('pr_loc').value ? +q('pr_loc').value : null });
       const units = [...bg.querySelectorAll('.pr-u')].map((r) => Object.fromEntries([...r.querySelectorAll('input')].map((i) => [i.dataset.k, i.value.trim()])));
       if (!dt) throw new Error('Add the arrival date'); if (units.some((u) => !u.unit)) throw new Error('Every unit needs a fleet number');
       const dup = units.find((u, i) => units.findIndex((x) => norm(x.unit) === norm(u.unit)) !== i); if (dup) throw new Error('Fleet number ' + dup.unit + ' is used twice');
@@ -74,14 +76,14 @@
     // 2. fleet register (hire) – a fleet number issued at order time already has an "On order" record
     if (v.dest !== 'Sale') {
       const ex = (await api('assets?select=id,unit&active=is.true')).find((a) => norm(a.unit) === norm(u.unit));
-      const body = { unit: u.unit, reg: u.reg || null, category_id: v.cat.id || null, status: 'Workshop', chassis_no: u.chassis_no || null, tank_serial: u.tank_serial || null, fa_ref: fa ? u.unit : null, description: o.description, notes: 'Arrived ' + fd(v.dt) + ' – arrival inspection due' };
+      const body = { unit: u.unit, reg: u.reg || null, category_id: v.cat.id || null, subgroup_id: v.cat.sub || null, location_id: v.cat.loc || null, status: 'Workshop', chassis_no: u.chassis_no || null, tank_serial: u.tank_serial || null, fa_ref: fa ? u.unit : null, description: o.description, notes: 'Arrived ' + fd(v.dt) + ' – arrival inspection due' };
       if (ex) { await api('assets?id=eq.' + ex.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); asset = ex; }
       else [asset] = await api('assets', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(Object.assign({ active: true }, body)) });
     }
     // 3. stock record – the inspection hangs off it; it shows in dealership stock unless it is hire only
     const avail = v.dest === 'Hire' ? 'hire' : v.dest === 'Sale' ? 'sale' : 'both';
     const exS = (await api('stock?select=id,reg,status,advert&status=not.in.(sold,written_off,moved_to_hire)')).find((s) => norm(String(s.reg).split(/\s+-\s+/)[0]) === norm(u.unit) || (u.reg && norm(String(s.reg).split(/\s+-\s+/)[0]) === norm(u.reg)));
-    const sBody = { source: fa ? 'ex_fleet' : 'purchased', fa_id: fa ? fa.id : null, cost: v.cost };
+    const sBody = { source: fa ? 'ex_fleet' : 'purchased', fa_id: fa ? fa.id : null, cost: v.cost, category_id: v.cat.id || null, subgroup_id: v.cat.sub || null, location_id: v.cat.loc || null };
     if (exS) { stock = exS; await api('stock?id=eq.' + exS.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ advert: Object.assign({}, exS.advert || {}, { avail }) }, sBody)) }); }
     else [stock] = await api('stock', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(Object.assign({ reg: u.unit, vehicle_type: vtype(o.description + ' ' + (v.cat.name || '')), status: 'awaiting_inspection', advert: { avail, cond: 'New' }, notes: 'Arrived ' + fd(v.dt) + ' from order #' + o.id }, sBody)) });
     // 4. arrival inspection (skip if the unit already has one)
@@ -89,7 +91,7 @@
     if (jobs.length) job = jobs[0];
     else { const id = crypto.randomUUID(); [job] = await api('jobs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ id, ref: 'J' + Date.now().toString(36).toUpperCase(), vehicle_type: vtype(o.description + ' ' + (v.cat.name || '')), reg: u.reg || u.unit, stock_ref: u.unit, notes: 'Arrival inspection – ' + o.description, stock_id: stock.id, status: 'assigned', data: { preset: { condition: 'New' } } }) }); }
     // 5. the receipt: payment, links
-    await api('asset_receipts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ order_id: o.id, unit: u.unit, reg: u.reg || null, chassis_no: u.chassis_no || null, tank_serial: u.tank_serial || null, description: o.description, category_id: v.cat.id || null, arrived_at: v.dt, cost: v.cost,
+    await api('asset_receipts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ order_id: o.id, unit: u.unit, reg: u.reg || null, chassis_no: u.chassis_no || null, tank_serial: u.tank_serial || null, description: o.description, category_id: v.cat.id || null, subgroup_id: v.cat.sub || null, arrived_at: v.dt, cost: v.cost,
       treatment: v.tr, destination: v.dest, funding: v.fund, finance_company: v.fc, due_date: v.due, paid_at: v.paid, paid_by: v.paid ? (v.fund === 'HP / finance' ? 'Finance company' : 'Us') : null, fa_id: fa ? fa.id : null, asset_id: asset ? asset.id : null, stock_id: stock.id, job_id: job ? job.id : null }) });
     return { unit: u.unit, link: job && !jobs.length ? inspLink(job.id) : null };
   }
