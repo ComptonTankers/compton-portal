@@ -25,6 +25,11 @@
     document.body.appendChild(bg); bg.addEventListener('click', (e) => { if (e.target === bg) bg.remove(); }); return bg;
   }
 
+  // the Compton-style invoice in a print window (save as PDF)
+  function showDoc(v, print) {
+    const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, ''), w = window.open('', '_blank'); if (!w) { alert('Allow pop-ups for the portal to open the invoice.'); return; }
+    w.document.write(X.invoiceDoc(Object.assign({ vat_rate: SET.tax_type === 'ZERORATEDOUTPUT' ? 0 : SET.tax_type === 'NONE' ? 0 : 20 }, v), { base, print })); w.document.close();
+  }
   // ---------- the invoice builder (used by deposit, final and one-off invoices) ----------
   // o: { kind, title, customer, email, reference, lines:[{desc,qty,rate,account}], quote_id, stock_id, deposit_ids, due_days, note, after(inv) }
   async function builder(o) {
@@ -36,11 +41,12 @@
         <label>Customer (as in Xero)<input id="iv_cu" list="iv_cl" value="${esc(o.customer || '')}" autocomplete="off"><datalist id="iv_cl"></datalist></label>
         <label>Email the invoice to<input id="iv_em" type="email" value="${esc(o.email || '')}" placeholder="accounts@customer.co.uk"></label>
         <label>Invoice date<input id="iv_dt" type="date" value="${today()}"></label><label>Due date<input id="iv_due" type="date" value="${addDays(today(), o.due_days ?? SET.due_days ?? 7)}"></label>
+        <label style="grid-column:span 2">Address<textarea id="iv_ad" rows="2">${esc(o.address || '')}</textarea></label>
         <label style="grid-column:span 2">Reference (shows on the invoice)<input id="iv_ref" value="${esc(o.reference || '')}"></label>
         <label style="grid-column:span 2;align-self:end" class="small"><input type="checkbox" id="iv_upd" style="width:auto"> Replace the email on the Xero contact if it already has one</label></div>
       <table style="margin-top:10px"><thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit £ (ex VAT)</th><th>Xero account</th><th class="n">Net</th><th></th></tr></thead><tbody id="iv_lines"></tbody></table>
       <button class="mini" id="iv_add" style="margin-top:6px">+ Line</button><div id="iv_tot" style="margin-top:10px;text-align:right"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button id="iv_x">Cancel</button><button id="iv_draft">Save as draft in Xero</button><button id="iv_make">Create in Xero</button><button class="pri2" id="iv_send">Create in Xero and email it</button></div>`, true);
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button id="iv_x">Cancel</button><button id="iv_pv">Preview</button><button id="iv_draft">Save as draft in Xero</button><button id="iv_make">Create in Xero</button><button class="pri2" id="iv_send">Create in Xero and email it</button></div>`, true);
     const q = (s) => bg.querySelector(s), err = q('.err');
     const draw = () => {
       q('#iv_lines').innerHTML = L.map((l, i) => `<tr><td><textarea data-i="${i}" data-k="desc" rows="2" style="width:100%;min-width:340px">${esc(l.desc || '')}</textarea></td><td class="n"><input data-i="${i}" data-k="qty" type="number" step="1" value="${l.qty}" style="width:60px;text-align:right"></td>
@@ -54,6 +60,8 @@
     draw();
     q('#iv_add').onclick = () => { L.push({ desc: '', qty: 1, rate: '', account: SET.sales_account || '' }); draw(); };
     q('#iv_x').onclick = () => bg.remove();
+    q('#iv_pv').onclick = () => { const lines = L.filter((l) => String(l.desc || '').trim()), net = r2(lines.reduce((t, l) => t + (+l.qty || 0) * (+l.rate || 0), 0));
+      showDoc({ kind: o.kind, customer: q('#iv_cu').value, customer_address: q('#iv_ad').value, contact_email: q('#iv_em').value, reference: q('#iv_ref').value, issue_date: q('#iv_dt').value, due_date: q('#iv_due').value, lines, status: 'DRAFT' }, false); };
     let tm; q('#iv_cu').oninput = () => { clearTimeout(tm); tm = setTimeout(async () => { try { const c = (await call('contacts', { q: q('#iv_cu').value })).contacts; bg._contacts = c;
       q('#iv_cl').innerHTML = c.map((x) => `<option value="${esc(x.name)}">${esc(x.email || '')}</option>`).join(''); const hit = c.find((x) => x.name === q('#iv_cu').value); if (hit && hit.email && !q('#iv_em').value) q('#iv_em').value = hit.email; } catch (e) {} }, 350); };
     const go = async (mode, btn) => {
@@ -68,7 +76,7 @@
         const hit = (bg._contacts || []).find((x) => x.name === cust);
         const net = r2(lines.reduce((t, l) => t + (+l.qty || 0) * (+l.rate || 0), 0));
         const ss = await X.session();
-        const [row] = await api('invoices', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ kind: o.kind || 'other', quote_id: o.quote_id || null, stock_id: o.stock_id || null, customer: cust, contact_email: email || null, xero_contact_id: hit ? hit.id : null,
+        const [row] = await api('invoices', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ kind: o.kind || 'other', quote_id: o.quote_id || null, stock_id: o.stock_id || null, customer: cust, customer_address: q('#iv_ad').value.trim() || null, contact_email: email || null, xero_contact_id: hit ? hit.id : null,
           reference: q('#iv_ref').value.trim() || null, issue_date: q('#iv_dt').value, due_date: q('#iv_due').value, lines, net, vat: r2(net * 0.2), total: r2(net * 1.2), deposit_invoice_ids: o.deposit_ids || null, created_by: (ss.user && ss.user.email) || null }) });
         let inv;
         try { inv = (await call('create', { id: row.id, draft: mode === 'draft', update_email: q('#iv_upd').checked })).invoice; }
@@ -93,7 +101,7 @@
     bg.querySelector('#dp_x').onclick = () => bg.remove();
     bg.querySelector('#dp_go').onclick = () => { const a = parseFloat(bg.querySelector('#dp_am').value); if (!a) { bg.querySelector('.err').textContent = 'Enter the deposit'; return; }
       const net = bg.querySelector('[name=dp_v]:checked').value === 'inc' ? r2(a / 1.2) : a; bg.remove();
-      builder({ kind: 'deposit', title: 'Deposit invoice – ' + esc(q.ref), customer: q.customer, email: q.contact_email, reference: q.ref + ' deposit', quote_id: q.id, due_days: SET.deposit_due_days ?? 7,
+      builder({ kind: 'deposit', title: 'Deposit invoice – ' + esc(q.ref), customer: q.customer, address: q.customer_address, email: q.contact_email, reference: q.ref + ' deposit', quote_id: q.id, due_days: SET.deposit_due_days ?? 7,
         lines: [{ desc: 'Deposit to secure the purchase of ' + summary(q) + ' (our quote ' + q.ref + '). The balance is due before collection.', qty: 1, rate: net, account: SET.deposit_account || SET.sales_account || '' }],
         after: async () => { done && done(); } }); };
   }
@@ -104,7 +112,7 @@
     const lines = (q.lines || []).filter((l) => l.type !== 'hire').map((l) => ({ desc: [l.desc, l.notes].filter(Boolean).join('\n'), qty: +l.qty || 1, rate: +l.rate || 0, account: l.type === 'sale' ? SET.sales_account || '' : SET.charges_account || SET.sales_account || '' }));
     deps.forEach((d) => lines.push({ desc: 'Less deposit paid – invoice ' + d.number + ' of ' + fd(d.issue_date), qty: 1, rate: -r2(d.net), account: SET.deposit_account || SET.sales_account || '' }));
     const full = r2((q.lines || []).filter((l) => l.type !== 'hire').reduce((t, l) => t + (+l.qty || 1) * (+l.rate || 0), 0));
-    builder({ kind: 'final', title: 'Invoice – ' + esc(q.ref), customer: q.customer, email: q.contact_email, reference: q.ref, quote_id: q.id, stock_id: ((q.lines || []).find((l) => l.stock_id) || {}).stock_id, deposit_ids: deps.map((d) => d.id),
+    builder({ kind: 'final', title: 'Invoice – ' + esc(q.ref), customer: q.customer, address: q.customer_address, email: q.contact_email, reference: q.ref, quote_id: q.id, stock_id: ((q.lines || []).find((l) => l.stock_id) || {}).stock_id, deposit_ids: deps.map((d) => d.id),
       note: deps.length ? `Takes off ${deps.length > 1 ? 'the deposits' : 'the deposit'} already invoiced (${deps.map((d) => esc(d.number) + ' ' + gbp(d.total) + (d.status === 'PAID' ? ' paid' : ' <b style="color:#b3261e">not paid yet</b>')).join(', ')}).` : 'No deposit invoice on this quote.',
       lines, after: async (inv, mode) => { if (mode !== 'draft' && X.quoteInvoiced) await X.quoteInvoiced(q, inv.number, inv.issue_date || today(), full); done && done(); } });
   }
@@ -129,7 +137,7 @@
       ${INV.map((i) => `<tr><td><b>${esc(i.number || '–')}</b></td><td>${esc(i.kind)}</td><td>${esc(i.customer)}</td><td class="small">${esc(i.reference || '')}${i.quote_id ? ` <a href="#/p-quotes?q=${i.quote_id}">quote</a>` : ''}</td><td>${fd(i.issue_date)}</td>
         <td style="${i.status !== 'PAID' && i.due_date < today() && live(i) ? 'color:#b3261e;font-weight:600' : ''}">${fd(i.due_date)}</td><td class="n">${gbp(i.total)}</td><td class="n">${i.status === 'PAID' ? '–' : gbp(i.amount_due ?? i.total)}</td>
         <td><span style="color:${SCOL[i.status] || '#334155'};font-weight:600">${esc(i.status === 'AUTHORISED' ? 'Awaiting payment' : i.status === 'PAID' ? 'Paid ' + fd(i.paid_at) : (i.status || '').toLowerCase())}</span>${i.sent_at ? `<div class="small muted">emailed ${fd(i.sent_at)}</div>` : ''}</td>
-        <td style="white-space:nowrap">${i.xero_invoice_id ? `<button class="mini" data-pdf="${i.id}">PDF</button> ${i.status === 'AUTHORISED' ? `<button class="mini" data-em="${i.id}">${i.sent_at ? 'Email again' : 'Email'}</button>` : ''} ${i.online_url ? `<a class="mini" href="${esc(i.online_url)}" target="_blank" rel="noopener">Online</a>` : ''}` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">No invoices yet.</td></tr>'}</tbody></table></div>`;
+        <td style="white-space:nowrap"><button class="mini" data-cdoc="${i.id}" title="Compton-style invoice">Compton PDF</button> ${i.xero_invoice_id ? `<button class="mini" data-pdf="${i.id}">Xero PDF</button> ${i.status === 'AUTHORISED' ? `<button class="mini" data-em="${i.id}">${i.sent_at ? 'Email again' : 'Email'}</button>` : ''} ${i.online_url ? `<a class="mini" href="${esc(i.online_url)}" target="_blank" rel="noopener">Online</a>` : ''}` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">No invoices yet.</td></tr>'}</tbody></table></div>`;
     wire(el, st, INV);
   };
   function xeroCard(st) {
@@ -160,10 +168,11 @@
       try { await api('xero_settings?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ [k]: v, updated_at: new Date().toISOString() }) }); SET[k] = v; i.style.background = '#ECFDF3'; } catch (e) { say('#xr_msg', 'Could not save: ' + e.message); } }));
     if ($('#in_ref')) $('#in_ref').onclick = async (e) => { e.target.disabled = true; e.target.textContent = 'Updating…'; try { await call('refresh'); again(); } catch (er) { say('#in_msg', er.message); e.target.disabled = false; } };
     if ($('#in_new')) $('#in_new').onclick = () => builder({ kind: 'other', title: 'New invoice', lines: [{ desc: '', qty: 1, rate: '' }], after: async () => again() });
+    el.querySelectorAll('[data-cdoc]').forEach((b) => (b.onclick = () => showDoc(INV.find((x) => x.id === +b.dataset.cdoc), true)));
     el.querySelectorAll('[data-em]').forEach((b) => (b.onclick = async () => { const i = INV.find((x) => x.id === +b.dataset.em); if (!confirm('Have Xero email ' + i.number + ' to ' + (i.contact_email || 'the contact') + '?')) return;
       b.disabled = true; try { await call('email', { id: i.id }); again(); } catch (e) { say('#in_msg', e.message); b.disabled = false; } }));
     el.querySelectorAll('[data-pdf]').forEach((b) => (b.onclick = async () => { b.disabled = true; b.textContent = '…'; try { const r = await call('pdf', { id: +b.dataset.pdf });
       const bin = atob(r.base64), u8 = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
-      window.open(URL.createObjectURL(new Blob([u8], { type: 'application/pdf' })), '_blank'); } catch (e) { say('#in_msg', e.message); } b.disabled = false; b.textContent = 'PDF'; }));
+      window.open(URL.createObjectURL(new Blob([u8], { type: 'application/pdf' })), '_blank'); } catch (e) { say('#in_msg', e.message); } b.disabled = false; b.textContent = 'Xero PDF'; }));
   }
 })();
