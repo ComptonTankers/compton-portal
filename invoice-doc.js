@@ -33,7 +33,7 @@
     const L = v.lines || [], net = L.reduce((t, l) => t + (+l.qty || 0) * (+l.rate || 0), 0), vatRate = v.vat_rate ?? 20;
     const vat = v.vat != null ? +v.vat : Math.round(net * vatRate) / 100, total = v.total != null ? +v.total : net + vat, paid = +v.amount_paid || 0, due = v.amount_due != null ? +v.amount_due : total - paid;
     return `${!v.number || v.status === 'DRAFT' ? '<div class="draft">DRAFT</div>' : ''}
-      <div class="ph"><img src="${o.base}assets/compton-logo.png" alt="Compton Tankers"><span>Tanker hire · Sales · Specialist workshops<br>${CO.phone} · ${CO.email}</span></div>
+      <div class="ph"><span style="display:flex;align-items:center;gap:14px"><img src="${o.base}assets/compton-logo.png" alt="Compton Tankers"><img src="${o.base}assets/tanker-rent-logo.png" alt="Tanker Rent UK" style="height:36px;width:auto;padding-left:14px;border-left:1px solid #D5DBE5"></span><span><b style="color:#082956">Tanker Rent UK Ltd</b>, trading as Compton Tankers<br>${CO.phone} · ${CO.email}</span></div>
       <div class="pt"><div><div class="eyb">${TITLE[v.kind] || 'Tax invoice'}</div><h1>${esc(v.number || 'Draft')}</h1></div>
         <dl class="facts"><dt>Invoice date</dt><dd>${fd(v.issue_date)}</dd><dt>Payment due</dt><dd>${fd(v.due_date)}</dd>${v.reference ? `<dt>Reference</dt><dd>${esc(v.reference)}</dd>` : ''}</dl></div>
       <div class="two"><div class="box"><h4>Invoice to</h4><dl class="kv"><dt>Customer</dt><dd><b>${esc(v.customer)}</b></dd>${v.customer_address ? `<dt>Address</dt><dd>${nl(v.customer_address)}</dd>` : ''}${v.contact_email ? `<dt>Email</dt><dd>${esc(v.contact_email)}</dd>` : ''}</dl></div>

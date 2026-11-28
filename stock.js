@@ -40,6 +40,7 @@
           ${j && ['submitted', 'reviewed'].includes(j.status) ? `<button class="mini pri2" data-view="${s.id}">View inspection</button>` : ''}
           ${!j || ['submitted', 'reviewed', 'cancelled'].includes(j.status) ? `<button class="mini" data-newjob="${s.id}">${j ? 'New inspection' : 'Create link'}</button>` : ''}
           ${j ? `<button class="mini" data-deljob="${s.id}" title="Remove this inspection request">${['assigned', 'in_progress'].includes(j.status) ? 'Cancel request' : 'Delete inspection'}</button>` : ''}
+          <button class="mini" data-dup="${s.id}" title="Make a copy of this vehicle – same details, inspection answers and photos – for another one the same">Duplicate</button>
           <button class="mini" data-delveh="${s.id}" title="Remove this vehicle from sales stock" style="color:#b3261e">✕</button></td></tr>`;
     }).join('');
     el.innerHTML = X.head('Sales stock', 'Vehicles held for sale and their inspections') +
@@ -89,6 +90,7 @@
           const jobs = await api('jobs?stock_id=eq.' + s.id + '&select=id,data');
           for (const jb of jobs || []) { const body = { vehicle_type: nt }; const d = jb.data || {}; if (Array.isArray(d.rows)) { const keep = d.rows.filter((r) => { const f = SD.find((x) => x[1].toLowerCase() === String(r[1]).toLowerCase()); return !f || applies(f, nt) || okVal(String(r[2] == null ? '' : r[2]).trim()); }); body.data = Object.assign({}, d, { rows: keep }); } await api('jobs?id=eq.' + jb.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); }
           await load(); draw(el); } catch (er) { alert('Could not change the type: ' + er.message); } }; }));
+    el.querySelectorAll('[data-dup]').forEach((b) => b.addEventListener('click', () => duplicate(ST.find((x) => x.id == b.dataset.dup), el)));
     el.querySelectorAll('[data-delveh]').forEach((b) => b.addEventListener('click', async () => { const s = ST.find((x) => x.id == b.dataset.delveh); if (!s) return;
       if (!confirm('Remove ' + s.reg + ' from sales stock, including its inspection requests and reports? This cannot be undone.')) return;
       try { await api('jobs?stock_id=eq.' + s.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await api('stock?id=eq.' + s.id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await load(); draw(el); } catch (e) { alert('Could not remove: ' + e.message); } }));
@@ -114,6 +116,50 @@
     const r = await fetch(window.SUPABASE_CONFIG.url + '/storage/v1/object/authenticated/inspections/' + path, { headers: { apikey: window.SUPABASE_CONFIG.anonKey, Authorization: 'Bearer ' + s.access_token } });
     if (!r.ok) return null; return URL.createObjectURL(await r.blob());
   }
+  /* ---- duplicate a vehicle: copies the stock record, the inspection answers and the photos (as new files), so a batch of identical units
+     can be listed from one inspection. The unit-specific answers (reg, VIN, serials, mileage) are cleared to fill in. ---- */
+  const UNIQUE = /registration|\breg\b|trailer id|\bvin\b|chassis|serial|fleet n|mileage|odometer|km reading|hours|plate no|tank no|mot expiry|test date|tacho/i;
+  async function copyFiles(d, prefix, say) {
+    const cfg = window.SUPABASE_CONFIG, ss = await X.session(), list = [];
+    const walk = (o) => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') { if (typeof o.path === 'string' && o.path) list.push(o); Object.values(o).forEach(walk); } };
+    walk(d); let n = 0;
+    for (const o of list) { say && say('Copying photos ' + (++n) + ' of ' + list.length + '…');
+      const dest = prefix + '/copy-' + n + '-' + o.path.split('/').pop();
+      try { const r = await fetch(cfg.url + '/storage/v1/object/copy', { method: 'POST', headers: { apikey: cfg.anonKey, Authorization: 'Bearer ' + ss.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketId: 'inspections', sourceKey: o.path, destinationKey: dest }) });
+        if (r.ok) o.path = dest; } catch (e) { /* keep pointing at the original photo */ } }
+    return list.length;
+  }
+  function duplicate(s, el) {
+    if (!s || !X.dispose) return; const j = JOBS[s.id], d0 = (j && j.data) || {};
+    const uniq = (d0.rows || []).filter((r) => UNIQUE.test(String(r[1] || ''))).map((r) => r[1]);
+    const bg = X.dispose.dialog('Duplicate ' + esc(s.reg), `<div class="note">Makes a new stock record with the same type, prices, group and location${j ? ', a copy of the inspection answers and copies of all ' + (((d0.photos || []).filter((p) => p.path).length) + ((d0.cutouts || []).length)) + ' photos' : ''}. Then change whatever is different on the new one.</div>
+      <label>Registration / trailer ID of the new one *</label><input id="du_reg" style="text-transform:uppercase"><label>Stock ref</label><input id="du_ref" value="">
+      <label>Cost £</label><input id="du_cost" type="number" step="0.01" value="${s.cost ?? ''}"><label>Asking price £</label><input id="du_ask" type="number" step="0.01" value="${s.asking_price ?? ''}">
+      ${j ? `<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="du_ph" checked style="width:auto"> Copy the photos</label><label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="du_cl" checked style="width:auto;margin-top:3px"><span>Clear the answers that are different on every unit${uniq.length ? ': <span class="small">' + uniq.map(esc).join(', ') + '</span>' : ''}</span></label>` : '<div class="note">This one has no inspection yet – only the stock details are copied.</div>'}
+      <div id="du_msg" class="small muted"></div>`, 'Duplicate', async () => {
+      const reg = bg.querySelector('#du_reg').value.trim().toUpperCase(); if (!reg) throw new Error('Enter the registration or ID of the new one');
+      if (ST.some((x) => String(x.reg).split(/\s+[-–]\s+/)[0].toUpperCase() === reg && !['sold', 'written_off'].includes(x.status))) throw new Error(reg + ' is already in stock');
+      const say = (t) => { bg.querySelector('#du_msg').textContent = t; };
+      const keep = ['vehicle_type', 'location', 'location_id', 'category_id', 'subgroup_id', 'source', 'advert', 'notes', 'expected_sale'];
+      const body = Object.fromEntries(keep.filter((k) => k in s).map((k) => [k, s[k]]));
+      Object.assign(body, { reg, stock_ref: bg.querySelector('#du_ref').value.trim() || null, cost: bg.querySelector('#du_cost').value === '' ? null : +bg.querySelector('#du_cost').value, asking_price: bg.querySelector('#du_ask').value === '' ? null : +bg.querySelector('#du_ask').value,
+        status: j && ['submitted', 'reviewed'].includes(j.status) ? 'inspected' : 'awaiting_inspection', fa_id: null, enquiries: 0, notes: [s.notes, 'Copied from ' + s.reg].filter(Boolean).join(' · ') });
+      if (body.source === 'ex_fleet') body.source = 'purchased';
+      say('Creating the stock record…');
+      const [ns] = await api('stock', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+      if (j) {
+        const d = JSON.parse(JSON.stringify(d0)), id = crypto.randomUUID();
+        if (bg.querySelector('#du_cl').checked && Array.isArray(d.rows)) d.rows = d.rows.map((r) => (UNIQUE.test(String(r[1] || '')) ? [r[0], r[1], /registration|trailer id|\breg\b/i.test(r[1]) ? reg : ''].concat(r.slice(3)) : r));
+        if (bg.querySelector('#du_ph').checked) await copyFiles(d, id, say); else { d.photos = []; d.cutouts = []; d.defects = []; }
+        d.copied_from = { stock_id: s.id, reg: s.reg, job_id: j.id };
+        say('Saving the inspection copy…');
+        await api('jobs', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ id, ref: 'J' + Date.now().toString(36).toUpperCase(), vehicle_type: j.vehicle_type, reg, stock_ref: ns.stock_ref, location: j.location, notes: 'Copy of the inspection of ' + s.reg + ' – check and change what is different', stock_id: ns.id, status: ['submitted', 'reviewed'].includes(j.status) ? 'submitted' : j.status, submitted_at: j.submitted_at || new Date().toISOString(), data: d }) });
+      }
+      await load(); draw(el, j ? ns.id : null);
+    });
+    setTimeout(() => bg.querySelector('#du_reg').focus(), 50);
+  }
+
   async function view(stockId) {
     await loadTpls();
     const s = ST.find((x) => x.id == stockId), j = JOBS[stockId]; const box = $('s_view'); if (!j || !box) return;

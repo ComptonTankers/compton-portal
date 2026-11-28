@@ -197,7 +197,7 @@
       .ft{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #164698;padding-top:6px;font-size:7.5pt;color:#6B7280}.ft b{color:#164698}
       .pb{margin-top:26px}.no{color:#222}@media screen{body{max-width:800px;margin:20px auto;padding:20px}.ft{position:static;margin-top:40px}}
       </style></head><body>
-      <div class="hd"><img src="${base + LOGO}" alt="Compton Tankers"><div class="r"><div class="tag">Tanker hire · Sales · Specialist workshops</div><b>T</b> 01525 371 707<br><b>E</b> info@comptontankers.com<br><b>W</b> www.comptontankers.com</div></div>
+      <div class="hd"><span style="display:flex;align-items:center;gap:14px"><img src="${base + LOGO}" alt="Compton Tankers"><img src="${base}assets/tanker-rent-logo.png" alt="Tanker Rent UK" style="height:36px;width:auto;padding-left:14px;border-left:1px solid #D5DBE5"></span><div class="r"><div class="tag">Tanker Rent UK Ltd, trading as Compton Tankers</div><b>T</b> 01525 371 707<br><b>E</b> info@comptontankers.com<br><b>W</b> www.comptontankers.com</div></div>
       <h1>Hire quotation</h1>
       <div class="meta"><div><span>Quote</span>${esc(d.ref)}</div><div><span>Date</span>${fd(qd)}</div><div><span>Valid until</span>${fd(valid)}</div><div><span>For</span>${esc(d.customer)}${d.contact_name ? '<br>FAO ' + esc(d.contact_name) : ''}</div></div>
       <p class="no">Thank you for your enquiry. We are pleased to quote as follows.</p>
