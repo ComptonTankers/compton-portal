@@ -462,7 +462,7 @@ if(document.readyState==='complete')boot();else addEventListener('load',boot);
 <script src="forecast.js?v=1"></script>
 <script src="monthend.js?v=1"></script>
 <script src="boardpack.js?v=3"></script>
-<script src="ma.js?v=15"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=9"></script><script src="users.js?v=2"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
+<script src="ma.js?v=15"></script><script src="assets.js?v=7"></script><script src="hpextra.js?v=3"></script><script src="preview.js?v=8"></script><script src="preview2.js?v=18"></script><script src="preview3.js?v=6"></script><script src="pages.js?v=10"></script><script src="users.js?v=2"></script><script>(function(){ // collapsible menu: remember open groups, open the current page's group, quick find
 var KEY='ct.nav.open',side=document.getElementById('side'),open;try{open=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){open=null}if(!Array.isArray(open))open=['hire','sales'];
 function save(){try{localStorage.setItem(KEY,JSON.stringify(open))}catch(e){}}
 function paint(){side.querySelectorAll('.ng').forEach(function(g){g.classList.toggle('open',open.indexOf(g.dataset.g)>=0)})}
